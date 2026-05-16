@@ -1,7 +1,39 @@
+# .gitignore (루트용)
+
+# 가상환경 폴더 무시
+.venv/
+venv/
+env/
+
+# 환경변수 및 키 파일 무시 (보안)
 .env
+*.ini
+*.key
+*.db*
+
+# 파이썬 캐시 무시
 __pycache__/
 *.pyc
-.venv/
 build/
 dist/
-*.egg-info/
+wheels/
+*.egg-info
+*.python-version
+.DS_Store
+
+# VS Code 설정 무시
+.vscode/
+resume.pdf
+
+#  [주요내용 보호] 
+materials/
+!materials/research_overview.docx
+
+
+*.pdf
+*.hwp
+*.docs
+*.xls*
+*.jpeg
+*.png
+*.docx
