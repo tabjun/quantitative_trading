@@ -28,44 +28,25 @@
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#ffffff', 'primaryBorderColor': '#333333', 'lineColor': '#666666', 'fontFamily': 'sans-serif'}}}%%
-graph LR
-    classDef data fill:#f3e5f5,stroke:#8e24aa,stroke-width:2px,rx:5px,ry:5px;
-    classDef db fill:#e1f5fe,stroke:#039be5,stroke-width:2px,rx:5px,ry:5px;
-    classDef proc fill:#fff3e0,stroke:#fbc02d,stroke-width:2px,rx:5px,ry:5px;
-    classDef engine fill:#e8f5e9,stroke:#43a047,stroke-width:2px,rx:5px,ry:5px;
-    classDef ui fill:#fce4ec,stroke:#d81b60,stroke-width:2px,rx:5px,ry:5px;
+graph TD
+    classDef data fill:#b3e5fc,stroke:#039be5,stroke-width:2px,rx:5px,ry:5px;
+    classDef proc fill:#ffe0b2,stroke:#fbc02d,stroke-width:2px,rx:5px,ry:5px;
+    classDef engine fill:#c8e6c9,stroke:#43a047,stroke-width:2px,rx:5px,ry:5px;
+    classDef ui fill:#e1bee7,stroke:#d81b60,stroke-width:2px,rx:5px,ry:5px;
 
-    subgraph Layer1 ["1. Data Acquisition Layer (수집)"]
-        direction TB
-        A1[MTS / Upbit API]:::data
-        A2[News / SNS / Macro]:::data
-        A1 --> B1[(Raw DB)]:::db
-        A2 --> B1
-    end
+    L1["1. Data Acquisition Layer (수집)<br/>- MTS / Upbit API (실시간 거래가)<br/>- News / SNS / Macro (거시 데이터)"]:::data
+    L2["2. Data Engineering Layer (전처리/마트 구축)<br/>- 과거 데이터 섹터별 심층 분석<br/>- 정제된 섹터/이슈 DB"]:::proc
+    L3["3. Multivariate Analysis Layer (다변량 분석)<br/>- Situation Analyzer<br/>- Similarity Matcher<br/>- 최하방 방어 백테스트"]:::engine
+    L4["4. Execution Layer (결과 도출 및 실행)<br/>- Visual Dashboard<br/>- AI 매매 규칙 생성<br/>- 퀀트 자동 매매 실행"]:::ui
 
-    subgraph Layer2 ["2. Data Engineering Layer (전처리 및 마트 구축)"]
-        direction TB
-        B1 --> C1[과거 데이터 섹터별 심층 분석<br/>Batch Processing]:::proc
-        C1 --> C2[(Data Mart<br/>정제된 섹터/이슈 DB)]:::db
-    end
-
-    subgraph Layer3 ["3. Multivariate Analysis Layer (다변량 분석)"]
-        direction TB
-        C2 --> D1[Situation Analyzer<br/>현재 상황 텍스트 분석]:::engine
-        C2 --> D2[Similarity Matcher<br/>DTW 과거 패턴 매칭]:::engine
-        D1 --> E1{Multivariate<br/>Prediction Engine}:::engine
-        D2 --> E1
-        E1 --> F1[Strategy Validation<br/>최하방 방어 백테스트]:::engine
-    end
-
-    subgraph Layer4 ["4. Execution Layer (결과 도출 및 실행)"]
-        direction TB
-        F1 --> G1[Visual Dashboard<br/>Streamlit / Dash]:::ui
-        F1 --> G2[AI Rule Generator<br/>매매 규칙 생성]:::ui
-        G2 --> H1([Automated Trading<br/>퀀트 트레이딩 자동 매매 실행]):::ui
-        G1 --> H1
-    end
+    L1 -- "시장/거시 데이터 전달 (분석 데이터 활용)" --> L2
+    L1 -- "타겟 종목 실시간 거래가 전달" --> L3
+    L2 -- "과거 유사 패턴 통계치 제공 (독립변수 활용)" --> L3
+    L3 -- "최종 투자 판단 및 규칙" --> L4
 ```
+
+### 🖼️ System Architecture Image
+![System Architecture](materials/quant_architecture.png)
 
 ## 4. 환경 설정 및 실행 방법 (Setup & Execution)
 

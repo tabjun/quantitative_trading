@@ -27,6 +27,7 @@ resume.pdf
 
 #  [주요내용 보호] 
 !materials/
+!materials/quant_architecture.png
 materials/research_overview.docx
 
 
@@ -35,5 +36,4 @@ materials/research_overview.docx
 *.docs
 *.xls*
 *.jpeg
-*.png
 *.docx
