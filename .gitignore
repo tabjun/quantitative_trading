@@ -26,8 +26,9 @@ wheels/
 resume.pdf
 
 #  [주요내용 보호] 
-materials/
-!materials/research_overview.docx
+!materials/
+!materials/quant_architecture.png
+materials/research_overview.docx
 
 
 *.pdf
@@ -35,5 +36,4 @@ materials/
 *.docs
 *.xls*
 *.jpeg
-*.png
 *.docx

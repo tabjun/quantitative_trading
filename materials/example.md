@@ -1,0 +1,1 @@
+퀀트 트레이딩(Quantitative Trading) 혹은 알고리즘 트레이딩(Algorithmic Trading)이라 불리는 트레이딩 분야의 한 갈래는 수학(Mathematics), 통계학(Statistics), 시계열 분석(Time-Series Analysis), 머신 러닝(Machine Learning)과 같은 과학적 방법론(Scientific Methods)들을 트레이딩 분야에 적용하여 "안정적으로 지속적인 수익을 창출하는 시스템"(알고리즘 트레이딩은 일확천금을 위한 도박이 '절대' 아니다.)을 창조하는 일련의 과정을 통칭한다.
