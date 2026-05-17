@@ -10,7 +10,20 @@
 - **Data Mart 기반 분석:** 매번 API를 호출하는 비효율을 제거하기 위해, 섹터별/이슈별로 정제된 데이터 마트를 구축(DB/AWS)하여 즉각적인 백테스트 환경을 조성합니다.
 - **AI-Agentic Workflow:** 연구의 전 과정(데이터 수집, 코딩, 분석, 리포트)을 Claude Code, Codex 등의 AI 에이전트와 완벽히 통제된 환경에서 협업하여 수행합니다.
 
-## 3. 시스템 아키텍처 (Architecture)
+## 3. 도메인 지식 자료 (Domain Knowledge Materials)
+
+본 프로젝트는 알고리즘 트레이딩 시스템 구축을 위한 도메인 지식 강화를 위해 [WikiDocs: Cherry Quant](https://wikidocs.net/148475)의 내용을 정리하여 `materials/quant_and_stock.md`에 반영하였습니다. 이 자료는 AI 에이전트와 연구원이 프로젝트 수행 중 참고해야 할 필수 지식 베이스이자 연구 방향의 이탈을 막는 가드레일 역할을 합니다.
+
+### 3.1. 활용 방법 (Usage for Agents & AI Tools)
+- **컨텍스트 주입:** AI 에이전트(Claude Code 등)는 분석이나 코드 작성 전 반드시 `materials/quant_and_stock.md`를 읽고 퀀트 트레이딩의 기본 프로세스(전략 인식 -> 백테스트 -> 실행 -> 리스크 관리)를 준수해야 합니다.
+- **용어 일관성:** 프로젝트 내의 변수 명명, 리포트 작성 시 `018. 주식 용어 정리` 섹션에 정의된 표준 용어 및 은어를 사용하여 의사소통의 명확성을 유지합니다.
+- **지식 베이스 쿼리:** 특정 퀀트 전략(예: 에드워드 소프의 랜덤워크, 로보어드바이저 유형 등)에 대한 이론적 근거가 필요할 때 해당 문서를 우선적으로 참조합니다.
+
+### 3.2. 가드레일 역할 (Guardrails)
+- **연구 방향성 유지:** 본 프로젝트의 목표인 '최하방 방어' 전략 수립 시, `002. 알고리즘 트레이딩 프로세스`와 `015. 월가아재의 허와실`에 언급된 '과최적화 방지', '리스크 관리' 원칙을 위반하지 않도록 체크리스트로 활용합니다.
+- **검증 기준 제공:** 백테스팅 결과 분석 시 샤프 지수(Sharpe Ratio), 최대 낙폭(MDD) 등 `002` 섹션에서 정의된 계량적 지표를 반드시 포함하도록 강제합니다.
+
+## 4. 시스템 아키텍처 (Architecture)
 아래는 본 프로젝트의 데이터 수집부터 분석, 시각화까지의 전체 데이터 파이프라인입니다.
 
 ```mermaid
@@ -45,12 +58,12 @@ graph LR
         E1 --> F1[Strategy Validation<br/>최하방 방어 백테스트]:::engine
     end
 
-    subgraph Layer4 ["4. Presentation Layer (결과 도출)"]
+    subgraph Layer4 ["4. Execution Layer (결과 도출 및 실행)"]
         direction TB
         F1 --> G1[Visual Dashboard<br/>Streamlit / Dash]:::ui
-        F1 --> G2[AI Report Generator<br/>감성 복기 리포트]:::ui
-        G1 --> H1([Final Decision<br/>투자자 멘탈 케어]):::ui
-        G2 --> H1
+        F1 --> G2[AI Rule Generator<br/>매매 규칙 생성]:::ui
+        G2 --> H1([Automated Trading<br/>퀀트 트레이딩 자동 매매 실행]):::ui
+        G1 --> H1
     end
 ```
 
