@@ -22,6 +22,8 @@
 ## Phase 2: 다변량 분석 엔진 개발 (Multivariate Engine)
 목표: 단일 시계열(가격) 분석을 넘어, 과거 유사 패턴과 तत्कालीन의 감성(Context)을 융합합니다.
 
+- **Step 2.0: 기초 시계열 모델 성능 비교 (Completed)**
+  - RNN, LSTM, GRU, Transformer, ODE-RNN 등 주요 알고리즘의 성능을 업비트 데이터를 통해 벤치마킹합니다.
 - **Step 2.1: 시계열 패턴 매칭 (DTW 구현)**
   - `fastdtw` 등을 활용하여 현재 주가 하락 파동과 가장 유사한 과거 폭락장 사례를 추출하는 모듈을 개발합니다.
 - **Step 2.2: 상황 및 감성 분석 (NLP Context)**

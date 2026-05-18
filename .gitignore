@@ -29,7 +29,7 @@ resume.pdf
 !materials/
 !materials/quant_architecture.png
 materials/research_overview.docx
-
+!test/images
 
 *.pdf
 *.hwp
