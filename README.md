@@ -95,6 +95,13 @@ npx skills@latest add mattpocock/skills
 *   **/grill-me [주제]:** 특정 모듈이나 로직에 대해 제미나이와 인터뷰 모드로 진입하여 구체적인 기준점과 엣지 케이스를 논의합니다.
 *   **/grill-with-docs [주제]:** 작업 경로의 파일들을 먼저 분석한 뒤 문맥에 맞는 날카로운 질문을 던지며, 합의된 내용을 바탕으로 `CONTEXT.md` 및 `ADR` 문서를 자동 생성합니다.
 
+### 4.4. 테스트 및 분석 환경 (Test & Analysis Environment)
+`test/` 디렉토리는 엄격한 학술적/실무적 검증을 위해 아래와 같이 구조화되어 있습니다.
+- **`models/`**: 실제 모델 학습 및 성능 분석을 수행하는 Jupyter Notebook 파일들.
+- **`results/`**: 분석 결과 리포트(`analysis_report.md`) 및 최종 성능 지표 저장.
+- **`research_materials/`**: Mamba, mTAND 등 분석에 사용된 최신 논문 및 이론적 배경 정리.
+- **`skills.md`**: 테스트 환경 전용 분석 가이드라인 및 운영 수칙.
+
 ---
 
 ## 5. AI 에이전트(Claude Code / Codex) 협업 가이드
