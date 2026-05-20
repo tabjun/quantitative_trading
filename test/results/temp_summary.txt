@@ -1,0 +1,100 @@
+
+>>> Testing Preprocessing: MinMax
+  Fold 1 분석 중...
+[Linear] Early stopping at epoch 7
+    - Linear 완료 (RMSE: 1,189,577.79)
+[LSTM] Early stopping at epoch 8
+    - LSTM 완료 (RMSE: 534,983.86)
+[GRU] Early stopping at epoch 7
+    - GRU 완료 (RMSE: 614,013.99)
+[TCN] Early stopping at epoch 8
+    - TCN 완료 (RMSE: 10,170,725.90)
+[Transformer] Early stopping at epoch 12
+    - Transformer 완료 (RMSE: 20,238,132.75)
+[Informer] Early stopping at epoch 15
+    - Informer 완료 (RMSE: 19,278,906.63)
+[Autoformer] Early stopping at epoch 7
+    - Autoformer 완료 (RMSE: 320,017.69)
+[PatchTST] Early stopping at epoch 8
+    - PatchTST 완료 (RMSE: 404,392.79)
+[Mamba] Early stopping at epoch 7
+    - Mamba 완료 (RMSE: 3,388,126.28)
+[mTAND] Early stopping at epoch 8
+    - mTAND 완료 (RMSE: 2,078,859.05)
+[ODE-RNN] Early stopping at epoch 7
+    - ODE-RNN 완료 (RMSE: 915,447.03)
+[N-BEATS] Early stopping at epoch 7
+    - N-BEATS 완료 (RMSE: 1,703,481.63)
+[NonStat-TF] Early stopping at epoch 10
+    - NonStat-TF 완료 (RMSE: 1,465,318.98)
+[DeepAR] Early stopping at epoch 7
+    - DeepAR 완료 (RMSE: 2,898,594.68)
+[Linear-Decomp] Early stopping at epoch 8
+    - Linear-Decomp 완료 (RMSE: 1,066,683.05)
+
+>>> Testing Preprocessing: Standard
+  Fold 1 분석 중...
+[Linear] Early stopping at epoch 11
+    - Linear 완료 (RMSE: 1,303,863.44)
+[LSTM] Early stopping at epoch 8
+    - LSTM 완료 (RMSE: 3,918,121.37)
+[GRU] Early stopping at epoch 8
+    - GRU 완료 (RMSE: 4,835,263.70)
+[TCN] Early stopping at epoch 10
+    - TCN 완료 (RMSE: 3,515,189.30)
+[Transformer] Early stopping at epoch 30
+    - Transformer 완료 (RMSE: 26,065,074.12)
+[Informer] Early stopping at epoch 27
+    - Informer 완료 (RMSE: 26,222,012.34)
+[Autoformer] Early stopping at epoch 8
+    - Autoformer 완료 (RMSE: 320,346.26)
+[PatchTST] Early stopping at epoch 8
+    - PatchTST 완료 (RMSE: 405,932.04)
+[Mamba] Early stopping at epoch 8
+    - Mamba 완료 (RMSE: 21,596,480.87)
+[mTAND] Early stopping at epoch 8
+    - mTAND 완료 (RMSE: 2,074,432.46)
+[ODE-RNN] Early stopping at epoch 8
+    - ODE-RNN 완료 (RMSE: 3,792,068.51)
+[N-BEATS] Early stopping at epoch 11
+    - N-BEATS 완료 (RMSE: 70,762,601.07)
+[NonStat-TF] Early stopping at epoch 12
+    - NonStat-TF 완료 (RMSE: 1,255,855.33)
+[DeepAR] Early stopping at epoch 13
+    - DeepAR 완료 (RMSE: 15,051,127.13)
+[Linear-Decomp] Early stopping at epoch 9
+    - Linear-Decomp 완료 (RMSE: 1,249,361.66)
+
+=== 전수 분석 결과 요약 (Sorted by RMSE) ===
+                                RMSE    DA   MASE
+P_Type   Model                                   
+MinMax   Autoformer       320,017.69 47.71   2.15
+Standard Autoformer       320,346.26 47.71   2.16
+MinMax   PatchTST         404,392.79 47.68   2.78
+Standard PatchTST         405,932.04 47.70   2.78
+MinMax   LSTM             534,983.86 47.31   4.06
+         GRU              614,013.99 47.61   4.86
+         ODE-RNN          915,447.03 47.29   7.24
+         Linear-Decomp  1,066,683.05 50.00   7.90
+         Linear         1,189,577.79 49.34   8.86
+Standard Linear-Decomp  1,249,361.66 49.51   9.14
+         NonStat-TF     1,255,855.33 49.63   9.61
+         Linear         1,303,863.44 49.22   9.64
+MinMax   NonStat-TF     1,465,318.98 49.64  12.62
+         N-BEATS        1,703,481.63 49.83  14.39
+Standard mTAND          2,074,432.46 49.90  15.80
+MinMax   mTAND          2,078,859.05 49.90  15.85
+         DeepAR         2,898,594.68 47.27  22.25
+         Mamba          3,388,126.28 47.61  29.76
+Standard TCN            3,515,189.30 47.60  27.39
+         ODE-RNN        3,792,068.51 47.17  29.07
+         LSTM           3,918,121.37 47.45  23.61
+         GRU            4,835,263.70 47.37  37.50
+MinMax   TCN           10,170,725.90 46.48  81.42
+Standard DeepAR        15,051,127.13 47.65 112.71
+MinMax   Informer      19,278,906.63 48.38 169.93
+         Transformer   20,238,132.75 48.15 175.18
+Standard Mamba         21,596,480.87 47.67 168.07
+         Transformer   26,065,074.12 49.72 205.39
+         Informer      26,222,012.34 48.27 214.71
+         N-BEATS       70,762,601.07 48.00 545.67
