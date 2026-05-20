@@ -1,74 +1,93 @@
 # 에이전트 기술 셋 및 워크플로우 가이드 (Skills & AI Guidelines)
 
-이 문서는 본 프로젝트에서 활용할 핵심 통계/분석 기술과, **Claude Code 및 Codex(Cursor)와 같은 AI 에이전트 도구를 200% 활용하기 위한 마크다운 세팅 및 운용 방안**을 담고 있습니다.
+본 문서는 프로젝트에서 활용할 핵심 통계/분석 기술과, **Antigravity CLI (`agy`) 에이전트 도구를 200% 활용하기 위한 마크다운 세팅, 전사 규칙 및 세션 초기화 대응 방안**을 담고 있습니다.
 
 ---
 
 ## 1. 다변량 퀀트 분석 핵심 기술 (Technical Skills)
 
-코드를 생성할 때 AI는 아래의 라이브러리와 개념을 최우선적으로 활용해야 합니다.
+코드를 생성하거나 분석을 진행할 때 에이전트는 아래의 라이브러리와 개념을 최우선적으로 활용해야 합니다.
 
 - **Multivariate Time Series Analysis (다변량 시계열):**
-  - 주가(Price, Volume) 트렌드와 함께, 외부 요인(금리, 감성 지수)을 결합하여 분석합니다.
+  - 주가(Price, Volume) 트렌드와 함께, 외부 요인(뉴스 감성 지수, 매크로 경제 지표)을 결합하여 분석합니다.
   - *관련 라이브러리:* `pandas`, `statsmodels`, `scikit-learn`
 - **Dynamic Time Warping (DTW):**
   - 유클리디안 거리의 한계를 극복하고 파동의 '형태(Shape)'적 유사성을 비교하여 과거 폭락장 사례를 매칭합니다.
   - *관련 라이브러리:* `fastdtw`, `scipy`
 - **Sentiment & Macro NLP (문맥 감성 분석):**
   - 뉴스, 증권사 리포트, SNS 데이터의 텍스트를 임베딩 공간으로 매핑하여 특정 국면의 시장 분위기를 수치화합니다.
-  - *관련 라이브러리:* `openai`, `sentence-transformers`
+  - *관련 라이브러리:* `sentence-transformers` (로컬 CPU/GPU 리소스 또는 로컬 Hugging Face Skills 활용)
 - **Defense-First Backtesting (방어 우선 백테스트):**
   - 교수님의 핵심 요구사항인 '최하방 방어'를 달성하기 위해, 수익 최적화보다는 MDD(Maximum Drawdown) 제어와 승률 방어에 초점을 맞춘 시뮬레이터를 작성합니다.
 
 ---
 
-## 2. AI 코딩 에이전트 활용 및 마크다운 세팅 방안 (AI Tool Guidelines)
+## 2. Antigravity CLI (agy) 기반의 전사적 규칙 표준 (Corporate Guidelines)
 
-본 프로젝트는 AI 에이전트(Claude Code, Cursor/Codex 등)가 주도적으로 개발을 진행합니다. 에이전트의 환각(Hallucination)을 막고 컨텍스트를 유지하기 위해 아래의 환경 세팅을 강력히 권장합니다.
+본 프로젝트는 `agy` 에이전트의 오작동 및 환각을 방지하고, 다중 연구원 간의 정밀한 세션 초기화와 인계를 보장하기 위해 다음과 같은 엄격한 표준을 적용합니다.
 
-### 2.1. 프로젝트 룰 파일 구성 (`.cursorrules` / `.clauderules` 추천)
-에이전트 도구가 디렉토리를 열었을 때 자동으로 전역 컨텍스트를 인지할 수 있도록 프로젝트 루트에 룰 파일을 생성하는 것이 좋습니다.
-- **룰 파일 내용 추천:**
-  - *"항상 작업을 시작하기 전에 `history.md`와 `process.md`를 읽어 현재 Step을 파악하라."*
-  - *"의존성 설치 및 실행은 반드시 `uv` 패키지 매니저(`uv run`, `uv add`)를 사용하라."*
-  - *"코드를 변경하기 전, 문서는 `npx -y @chrisryugj/kordoc ./materials/...`로 파싱하여 참고하라."*
-  - *"모든 매매 로직의 기준점은 '수익 극대화'가 아닌 '하방 방어'다."*
+### 2.1. 최우선 전사 룰북 (.antigravityrules)
+- 프로젝트 루트의 `.antigravityrules` 파일은 `agy`가 기동될 때마다 자동으로 임포트되어 내재적 규칙으로 적용됩니다.
+- 에이전트에게 수동으로 분석 기준을 일일이 상기시키지 않아도, 시작 시 자동으로 `history.md`와 `process.md`를 스캔하고 아래의 학술 및 분석 보고 표준 규격을 일관되게 고수하도록 설계되었습니다.
 
-### 2.2. 컨텍스트 주입 프롬프트 (세션 초기화 시)
-Claude Code를 터미널에서 실행하거나 Cursor 채팅 창을 열었을 때, 첫 질문으로 아래 프롬프트를 복사하여 붙여넣으면 매우 효과적입니다.
+### 2.2. 최신 학술 탐색 연동 규격
+- SOTA(State-of-the-Art) 모델 아키텍처나 파라미터 튜닝 시, `agy`에 내장/연동된 **ArXiv MCP 서버** 및 로컬 `.agents/skills/`에 구성된 **Hugging Face Skills**를 적극적으로 활용합니다.
+- 탐색된 모든 논문 요약은 `test/research_materials/` 디렉토리에 마크다운(`.md`) 파일로 저장하되, 반드시 **요약 -> 서론 -> 분석 기법 -> 결과 -> 결론(및 [핵심 인용] 구문)**의 표준 5단계 형식을 엄격하게 적용하여 문서화해야 합니다.
 
-> "현재 이 프로젝트는 다변량 데이터와 AI를 결합한 퀀트 트레이딩 '하방 방어' 모델을 구축 중이야. 
-> 네가 현재 어떤 상황인지 파악할 수 있도록 `README.md`, `process.md`, `history.md`를 우선적으로 읽어줘. 
-> 다 읽었다면 `history.md`의 'Next Step'에 해당하는 작업을 바로 시작할 구체적인 계획과 실행 코드를 제시해줘."
-
-### 2.3. 토큰 효율성 및 모듈화 전략
-- **세션 분리:** 코드를 수십 번 핑퐁하며 수정하다 보면 에이전트의 컨텍스트 윈도우(기억력)가 오염됩니다. `process.md`에 정의된 Step 하나가 끝나면 과감히 세션을 초기화(`/clear` 또는 새 탭 열기) 하십시오.
-- **결과 캐싱:** 작업이 끝날 때마다 에이전트에게 **"지금까지 완성한 코드의 핵심 구조와 다음 세션을 위한 인계 사항을 `history.md`에 기록해줘"**라고 명령하여 영구 기억 공간을 업데이트합니다.
+### 2.3. 전사 분석 결과 보고 규격 (Standardized Reporting Guidelines)
+에이전트가 분석 결과를 바탕으로 `results/` 등에 리포트를 작성할 때는 반드시 다음 템플릿과 원칙을 예외 없이 100% 준수해야 합니다.
+1. **0. 실행 및 분석 환경 (Execution & Utility Environment)**
+   - OS 및 CPU/GPU 하드웨어 사양, 핵심 패키지 버전.
+   - 데이터 총 용량, 전처리 과정(스케일링 및 보간 방식) 및 테스트 케이스 스펙.
+2. **1. 기초 통계량 분석 (Descriptive Statistics)**
+   - 분석 데이터의 `describe()` 결괏값 기술 및 시계열의 통계적/정상성 검정 특징 명시.
+3. **2. 알고리즘 성능 지표 (Advanced Performance Metrics)**
+   - 비교 대상 모델(Mamba, mTAND, TCN 등) 전체의 오차 지표 기록.
+   - **원본 KRW 스케일 표기:** 예측가는 반드시 전처리 이전의 원본 가격 스케일로 **역변환(Inverse Transform)**하여 기재.
+   - **DA 및 MASE 필수 산출:** 2025년 이후 학술계 표준인 **DA (Directional Accuracy)** 및 **MASE (Mean Absolute Scaled Error)** 필수 포함.
+4. **3. 시각화 결과 및 상세 해석 (축 및 범례 텍스트 명시)**
+   - 그래프 해석 시 **X축(예: Time in 15-min intervals)**과 **Y축(예: Price in KRW)**의 설정과 범례를 텍스트로도 완벽히 매칭 설명.
+   - 추세 추종성과 지연 현상(Lagging) 해소 강도에 대해 기술적으로 논증.
+5. **4. 종합 결론 및 전략 제언**
+   - 최하방 방어 관점에서 실전에 적합한 알고리즘과 매매 임계값 제안.
+6. **5. 주요 도메인 용어 해설 (Glossary)**
+   - 보고서에 등장하는 전문 용어(예: 엣지(Edge), 라깅(Lagging), MDD 등)의 설명 첨부.
 
 ---
 
-## 3. DevOps 및 확장 인프라 가이드 (Future CI/CD & Automation)
+## 3. 주기적 세션 초기화 및 full-auto 활용 가이드
 
-향후 시스템이 커지고 실시간 프로덕션 서비스로 확장될 경우를 대비한 DevOps 기술 스택 활용 방법입니다. AI 에이전트는 향후 아래의 시스템들과 연동하는 코드를 작성하게 될 수 있습니다.
+금융 분석 및 대규모 시계열 모델 훈련 프로세스 특성상, 토큰 한계 도달이나 캐시 오염을 막기 위해 연구원은 주기적으로 세션을 초기화해야 합니다. `agy` 환경에서는 이를 다음과 같은 팁으로 손쉽게 극복할 수 있습니다.
 
-### 3.1. n8n (워크플로우 자동화)
-- **사용처:** 파이프라인 오케스트레이션 및 알림 자동화
-- **사용 방법 (예시):**
-  1. n8n을 Docker로 서버에 띄웁니다 (`docker run -it --rm --name n8n -p 5678:5678 n8nio/n8n`).
-  2. **Trigger Node:** 매일 오후 3시 30분(장 마감 후) 실행되도록 Cron 노드를 설정합니다.
-  3. **Action Node:** Python 스크립트(`uv run main.py`)를 서버에서 실행하는 HTTP Request 또는 Execute Command 노드를 연결합니다.
-  4. **Output Node:** 생성된 최종 분석 리포트(JSON/Markdown)를 Slack이나 Telegram 노드로 전송하여 모바일로 받아볼 수 있도록 구성합니다.
+### 🚀 Tip 1: full-auto (자동 승인) 모드 구동
+매 파일 읽기/쓰기나 명령어 실행 시 일일이 "허용"을 마우스 클릭이나 엔터로 입력하는 번거로움을 생략하려면, 터미널 실행 시 **`--dangerously-skip-permissions`** 플래그를 추가하십시오.
+```bash
+agy --dangerously-skip-permissions "학습 데이터 정제하고 SQLite 적재해줘"
+```
+> [!WARNING]
+> 이 옵션은 모든 시스템 제어와 도구 작동을 자동 승인하므로, 신뢰할 수 있는 퀀트 트레이딩 프로젝트 폴더 내부에서만 실행하는 것을 권장합니다.
 
-### 3.2. Docker & Kubernetes (컨테이너 오케스트레이션)
-- **사용처:** 다중 에이전트 독립 배포 및 리소스 스케일링
-- **사용 방법 (예시):**
-  1. **Dockerize:** `uv` 환경이 세팅된 베이스 이미지를 기반으로, `Situation Analyzer`, `Similarity Matcher` 등 각각의 에이전트 모듈을 독립된 `Dockerfile`로 빌드합니다.
-  2. **K8s Deployment:** `deployment.yaml`을 작성하여 쿠버네티스 클러스터에 배포합니다. 
-  3. 시장 폭락 등의 이슈로 분석 요청이 몰릴 때, 패턴 매칭 엔진(Pod)의 개수를 자동으로 늘리도록 HPA(Horizontal Pod Autoscaler) 정책을 적용합니다.
+### 🚀 Tip 2: 세션 리셋 후 원클릭 맥락 복원 및 실행
+주기적으로 세션을 초기화(`/clear` 또는 터미널 재실행)한 뒤, 이전 작업을 완벽히 계승하여 다음 Step을 곧바로 실행하게 만드는 매직 프롬프트 팁입니다.
+```bash
+agy --dangerously-skip-permissions "history.md와 process.md를 읽고 현재 Next Step 작업을 바로 실행해줘"
+```
+이 한 줄의 명령만 실행하면, `agy`는 `.antigravityrules`에 명시된 규칙에 따라 `history.md`와 `process.md`를 스캔하고, 현재 어느 Phase의 어떤 Step에 머무르고 있는지 파악한 뒤, ToDo 리스트의 다음 미완료 항목을 기계적으로 자동 이행하기 시작합니다.
 
-### 3.3. Sonatype Nexus (아티팩트 관리)
-- **사용처:** 프라이빗 Docker Registry 및 모델 가중치(Pickle), 내부 Python 패키지 캐싱
-- **사용 방법 (예시):**
-  1. 사내망 또는 클라우드에 Nexus를 구축하고 Docker Hosted Repository를 생성합니다.
-  2. GitHub Actions 등의 CI 파이프라인에서 분석 엔진 이미지를 빌드한 뒤 `docker push <nexus-url>/quant-engine:v1.0` 명령어로 업로드합니다.
-  3. K8s 클러스터는 서비스 배포 시, 외부 퍼블릭 망(Docker Hub)이 아닌 안전하고 빠른 내부 Nexus 저장소에서 이미지를 가져와(`imagePullSecrets` 활용) 실행하도록 구성합니다.
+---
+
+## 4. DevOps 및 확장 인프라 가이드 (Future CI/CD & Automation)
+
+향후 시스템이 실시간 프로덕션 매매 서비스로 확장될 경우, AI 에이전트는 아래의 DevOps 기술 스택과 연동할 수 있습니다.
+
+### 4.1. n8n (워크플로우 자동화)
+- **사용처:** 파이프라인 오케스트레이션 및 리포트 Telegram/Slack 자동 발송.
+- **연동 예시:** 매일 오후 3시 30분(장 마감 후) 실행되는 Cron 노드를 설정하여, `uv run main.py`를 호출하고 그 결과 생성된 표준 리포트 Markdown을 연구원의 Slack으로 즉시 발송합니다.
+
+### 4.2. Docker & Kubernetes (MSA 배포)
+- **사용처:** 에이전트 독립 배포 및 리소스 스케일링.
+- **연동 예시:** `uv` 기반의 시계열 분석 엔진을 컨테이너로 빌드하고, 시장 폭락장 등 분석 요청이 급증하는 시점에 Kubernetes의 HPA(Horizontal Pod Autoscaler)를 통해 패턴 매칭 Pod 개수를 자동으로 증가시킵니다.
+
+### 4.3. Sonatype Nexus (아티팩트 및 가중치 관리)
+- **사용처:** 프라이빗 Docker Registry 및 모델 가중치(Pickle, GGUF), 내부 패키지 캐싱.
+- **연동 예시:** 학습이 완료된 딥러닝 모델 가중치나 비공개 패키지 등을 사내 Nexus 저장소에 Push하여 안전하게 보존하고, 프로덕션 배포 시 보안성 높은 내부 Nexus 망에서 이를 Pull하여 빠르게 서비스를 구동합니다.

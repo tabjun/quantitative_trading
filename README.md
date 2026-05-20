@@ -1,29 +1,28 @@
 # AI 퀀트 트레이딩 연구: 다변량 분석 기반 최하방 방어 모델
 
+<div align="center">
+  <img src="https://img.shields.io/badge/Agent-Antigravity--CLI%20(agy)-purple?style=for-the-badge&logo=ai" alt="Antigravity CLI Badge"/>
+  <img src="https://img.shields.io/badge/Environment-uv-green?style=for-the-badge&logo=python" alt="uv Badge"/>
+  <img src="https://img.shields.io/badge/Database-DuckDB%20%2F%20SQLite-orange?style=for-the-badge&logo=sqlite" alt="DB Badge"/>
+</div>
+
+---
+
 ## 1. 연구 개요 (Research Overview)
 본 연구는 전통적인 통계학적 시계열 모델의 한계를 극복하고, 거대언어모델(LLM)과 다변량 분석(Multivariate Analysis)을 결합하여 '**최하방 지지선 방어**'에 특화된 퀀트 매매 전략을 탐색합니다. 
 단순히 수익률을 극대화하는 것이 아니라, 역사적 패턴 유사도(DTW)와 거시적 감성 분석(Sentiment)을 결합하여 하락장에서의 손실을 원천 차단하는 **'절대로 잃지 않는' 모델** 구축이 핵심 목표입니다.
 
+---
+
 ## 2. 핵심 연구 방향 (Strategic Direction)
 - **Univariate to Multivariate:** 주가 데이터(단변량)에 의존하지 않고 뉴스, 전쟁, 매크로 지표, SNS 반응 등 외부 변수를 포함한 다변량 분석을 수행합니다.
 - **Pattern & Sentiment Matcher:** 현재의 주가 모양과 비슷한 과거 시점을 찾고, 당시의 '뉴스 맥락(감성)'까지 비교하여 현재 흐름을 예측합니다.
-- **Data Mart 기반 분석:** 매번 API를 호출하는 비효율을 제거하기 위해, 섹터별/이슈별로 정제된 데이터 마트를 구축(DB/AWS)하여 즉각적인 백테스트 환경을 조성합니다.
-- **AI-Agentic Workflow:** 연구의 전 과정(데이터 수집, 코딩, 분석, 리포트)을 Claude Code, Codex 등의 AI 에이전트와 완벽히 통제된 환경에서 협업하여 수행합니다.
+- **Data Mart 기반 분석:** 매번 API를 호출하는 비효율을 제거하기 위해, 섹터별/이슈별로 정제된 데이터 마트를 구축(DuckDB/SQLite)하여 즉각적인 백테스트 환경을 조성합니다.
+- **AI-Agentic Workflow:** 연구의 전 과정(데이터 수집, 코딩, 분석, 리포트)을 **Antigravity CLI (`agy`) 에이전트**와 완벽히 통제된 환경에서 협업하여 수행합니다.
 
-## 3. 도메인 지식 자료 (Domain Knowledge Materials)
+---
 
-본 프로젝트는 알고리즘 트레이딩 시스템 구축을 위한 도메인 지식 강화를 위해 [WikiDocs: Cherry Quant](https://wikidocs.net/148475)의 내용을 정리하여 `materials/quant_and_stock.md`에 반영하였습니다. 이 자료는 AI 에이전트와 연구원이 프로젝트 수행 중 참고해야 할 필수 지식 베이스이자 연구 방향의 이탈을 막는 가드레일 역할을 합니다.
-
-### 3.1. 활용 방법 (Usage for Agents & AI Tools)
-- **컨텍스트 주입:** AI 에이전트(Claude Code 등)는 분석이나 코드 작성 전 반드시 `materials/quant_and_stock.md`를 읽고 퀀트 트레이딩의 기본 프로세스(전략 인식 -> 백테스트 -> 실행 -> 리스크 관리)를 준수해야 합니다.
-- **용어 일관성:** 프로젝트 내의 변수 명명, 리포트 작성 시 `018. 주식 용어 정리` 섹션에 정의된 표준 용어 및 은어를 사용하여 의사소통의 명확성을 유지합니다.
-- **지식 베이스 쿼리:** 특정 퀀트 전략(예: 에드워드 소프의 랜덤워크, 로보어드바이저 유형 등)에 대한 이론적 근거가 필요할 때 해당 문서를 우선적으로 참조합니다.
-
-### 3.2. 가드레일 역할 (Guardrails)
-- **연구 방향성 유지:** 본 프로젝트의 목표인 '최하방 방어' 전략 수립 시, `002. 알고리즘 트레이딩 프로세스`와 `015. 월가아재의 허와실`에 언급된 '과최적화 방지', '리스크 관리' 원칙을 위반하지 않도록 체크리스트로 활용합니다.
-- **검증 기준 제공:** 백테스팅 결과 분석 시 샤프 지수(Sharpe Ratio), 최대 낙폭(MDD) 등 `002` 섹션에서 정의된 계량적 지표를 반드시 포함하도록 강제합니다.
-
-## 4. 시스템 아키텍처 (Architecture)
+## 3. 시스템 아키텍처 (Architecture)
 아래는 본 프로젝트의 데이터 수집부터 분석, 시각화까지의 전체 데이터 파이프라인입니다.
 
 ```mermaid
@@ -35,89 +34,84 @@ graph TD
     classDef ui fill:#e1bee7,stroke:#d81b60,stroke-width:2px,rx:5px,ry:5px;
 
     L1["1. Data Acquisition Layer (수집)<br/>- MTS / Upbit API (실시간 거래가)<br/>- News / SNS / Macro (거시 데이터)"]:::data
-    L2["2. Data Engineering Layer (전처리/마트 구축)<br/>- 과거 데이터 섹터별 심층 분석<br/>- 정제된 섹터/이슈 DB"]:::proc
-    L3["3. Multivariate Analysis Layer (다변량 분석)<br/>- Situation Analyzer<br/>- Similarity Matcher<br/>- 최하방 방어 백테스트"]:::engine
+    L2["2. Data Engineering Layer (전처리/마트 구축)<br/>- 과거 데이터 DuckDB/SQLite 심층 정제<br/>- 섹터/이슈 기반 타임라인 스키마 구축"]:::proc
+    L3["3. Multivariate Analysis Layer (다변량 분석)<br/>- Situation Analyzer (뉴스 임베딩)<br/>- Similarity Matcher (FastDTW 형태 비교)<br/>- 최하방 방어 백테스트"]:::engine
     L4["4. Execution Layer (결과 도출 및 실행)<br/>- Visual Dashboard<br/>- AI 매매 규칙 생성<br/>- 퀀트 자동 매매 실행"]:::ui
 
-    L1 -- "시장/거시 데이터 전달 (분석 데이터 활용)" --> L2
+    L1 -- "시장/거시 데이터 전달" --> L2
     L1 -- "타겟 종목 실시간 거래가 전달" --> L3
-    L2 -- "과거 유사 패턴 통계치 제공 (독립변수 활용)" --> L3
+    L2 -- "과거 유사 패턴 통계치 제공 (독립변수)" --> L3
     L3 -- "최종 투자 판단 및 규칙" --> L4
 ```
 
 ### 🖼️ System Architecture Image
 ![System Architecture](materials/quant_architecture.png)
 
-## 4. 환경 설정 및 실행 방법 (Setup & Execution)
+---
 
-### 4.1. 레포지토리 클론 및 의존성 설치
-본 프로젝트는 속도와 의존성 관리에 최적화된 `uv` 패키지 매니저를 기반으로 작성되었습니다.
+## 4. Antigravity CLI (agy) 환경 설정 및 실행 방법
 
+본 프로젝트는 속도와 의존성 관리에 최적화된 `uv` 패키지 매니저와, 플러그인/스킬이 극대화된 `Antigravity CLI (agy)`를 기반으로 구동됩니다.
+
+### 4.1. 가상환경 및 종속성 동기화
 ```bash
-# 1. 저장소 클론
-git clone <repository_url>
-cd stock
-
-# 2. uv를 활용한 가상환경 생성 및 종속성 동기화
+# 1. uv를 활용한 가상환경 생성 및 종속성 동기화
 uv sync
 
-# 3. 메인 분석 스크립트 실행
+# 2. 메인 분석 스크립트 실행
 uv run main.py
 ```
-### 4.2. Kordoc MCP 활용 (문서 파싱)
-연구 자료나 참고 문서를 AI 에이전트가 완벽하게 숙지할 수 있도록 `kordoc`을 활용합니다. 에이전트 세션 시작 시 아래 명령어를 통해 컨텍스트를 주입하세요.
 
-```bash
-# npx를 통한 kordoc 실행 (문서 파싱 및 요약)
-npx -y @chrisryugj/kordoc ./materials/research_overview.docx
-```
-*에이전트는 위 명령의 출력을 읽어 프로젝트의 세부 목적을 잊지 않고 분석 코드를 작성해야 합니다.*
-
-### 4.3. grill-me 스킬 설치 및 사용 방법
-
-본 프로젝트는 기획 및 분석의 엣지 케이스를 발굴하고 완성도를 높이기 위해 `grill-me` 스킬을 활용합니다.
-
-#### 1. 스킬 설치
-터미널에 다음 명령어를 입력하여 스킬 패키지 설치를 시작합니다.
-
-```bash
-npx skills@latest add mattpocock/skills
-```
-
-설치 명령어를 실행하면 상호작용 형태의 선택 창이 나타납니다.
-1. **스킬 선택:** 방향키를 이용해 `grill-me`와 `grill-with-docs`를 찾아 스페이스바로 체크하고 엔터를 누릅니다.
-2. **에이전트 선택:** 대상 에이전트를 묻는 메시지가 나오면, 목록에서 `Gemini CLI`를 찾아 선택합니다. (Universal 그룹에 기본 포함되어 있습니다.)
-3. **설치 범위(Installation scope):** `Global`을 선택하여 모든 프로젝트에서 사용할 수 있도록 설정하는 것을 권장합니다.
-
-#### 2. 사용 방법
-설치가 완료되면 제미나이 CLI 프롬프트에서 슬래시 명령어를 입력하여 스킬을 호출합니다.
-
-*   **/grill-me [주제]:** 특정 모듈이나 로직에 대해 제미나이와 인터뷰 모드로 진입하여 구체적인 기준점과 엣지 케이스를 논의합니다.
-*   **/grill-with-docs [주제]:** 작업 경로의 파일들을 먼저 분석한 뒤 문맥에 맞는 날카로운 질문을 던지며, 합의된 내용을 바탕으로 `CONTEXT.md` 및 `ADR` 문서를 자동 생성합니다.
+### 4.2. MCP 및 로컬 스킬 마이그레이션 구성
+본 프로젝트는 `agy` 가동 시 자동으로 로드되는 로컬 에이전트 설정을 완비하고 있습니다.
+- **ArXiv 학술 논문 MCP 서버:** `.agents/mcp_config.json`에 등록되어 있으며, `npx -y @mcp/arxiv-server`를 통해 논문 자료를 즉각적으로 색인합니다.
+- **Hugging Face Skills 라이브러리:** `.agents/skills/`에 14가지 정형 스킬(데이터셋 다운로드, 모델 탐색, Sentence Transformer 훈련, 가중치 최적화 등)이 마이그레이션되어 `agy`가 기본 툴 세트로 활용합니다.
 
 ---
 
-## 5. AI 에이전트(Claude Code / Codex) 협업 가이드
+## 🔥 5. AI 에이전트(agy) 활용법 & 생산성 극대화 꿀팁 (AI-Agentic Tips)
 
-이 레포지토리는 AI 에이전트가 컨텍스트를 잃지 않고 작업을 이어갈 수 있도록 설계되었습니다. 에이전트 도구 실행 시 다음 수칙을 따르십시오.
+> [!NOTE]
+> 본 프로젝트는 주기적인 세션 초기화(리셋) 환경에서도 에이전트가 이전의 기억과 분석 기조를 즉시 복원하고, 번거로운 클릭 승인 없이 100% 자동 구동할 수 있도록 정교한 **AI 자가 치유 및 상태 보존 아키텍처**를 채택했습니다.
 
-1. **초기화:** Claude Code나 Cursor(Codex)를 열었을 때 가장 먼저 `history.md`와 `process.md`를 읽도록 지시합니다.
-   - *Prompt ex: "현재 진행 상황을 파악하기 위해 history.md와 process.md를 읽고 다음 스텝을 제안해줘."*
-2. **도구 최적화:** `skills.md`에 작성된 가이드라인을 바탕으로 에이전트가 어떤 라이브러리(e.g., fastdtw, transformers)를 사용할지 제한하고 최적화합니다.
-3. **세션 종료:** 단일 작업(Step)이 끝나면 반드시 `history.md`에 결과를 요약 기록하게 하여 다음 세션으로 컨텍스트를 안전하게 인계합니다.
+### 🚀 Tip 1. full-auto (자동 승인) 모드 구동
+작업 지시나 분석 명령을 실행할 때마다 에이전트가 파일 읽기/쓰기, 터미널 실행에 관해 허용 여부를 묻는 팝업을 거치는 것이 번거롭다면, `agy`를 구동할 때 **`--dangerously-skip-permissions`** 플래그를 추가하십시오.
+```bash
+agy --dangerously-skip-permissions "test/models/에 있는 시계열 모델 앙상블 분석하고 결과를 results에 적재해줘"
+```
+*이 플래그를 사용하면 모든 파일 수정 및 명령어 동작이 에이전트의 판단에 따라 **자동 승인(Full-Auto)**되어 백그라운드 태스크나 오랜 연산이 필요한 퀀트 분석 자동화에 최적화됩니다.*
+
+### 🚀 Tip 2. 주기적인 세션 초기화 및 '원클릭 맥락 복원' 시나리오
+컨텍스트 토큰 누적에 따른 성능 저하나 캐시 오염을 막기 위해 세션을 초기화(`/clear` 또는 터미널 재실행)한 뒤, **이전 작업의 맥락과 완료 목록을 원클릭으로 주입하여 Next Step을 자동 실행하게 하는 방법**입니다.
+
+1. **상태 관리의 주축 (`history.md` & `process.md` & `.antigravityrules`):**
+   - 프로젝트 루트의 `.antigravityrules` 파일은 `agy` 기동 시 자동으로 로드되어, 에이전트가 시작 시 무조건 `history.md`(수행 이력)와 `process.md`(연구 프로세스 ToDo 리스트)를 스캔하도록 강제합니다.
+2. **세션 리셋 후 복원 Magic Command:**
+   ```bash
+   agy --dangerously-skip-permissions "history.md와 process.md를 읽고 현재 Next Step 작업을 바로 실행해줘"
+   ```
+   *이 단 한 줄의 명령만 실행하면, `agy`는 이전 세션의 마지막 종료 지점(예: Phase 2 / Step 2.1)을 정밀 인지하고, ToDo 목록 상의 다음 미완료 분석 모듈 개발 및 학습을 알아서 기계적으로 시작합니다.*
+
+### 🚀 Tip 3. SOTA 학술 연동 및 결과 리포트 자동 생성 팁
+- "~~ 찾아줘" 혹은 "특정 예측 모델 조사해줘"와 같은 명령이 내려지면, 에이전트는 `.antigravityrules`에 명시된 규칙에 의거해 ArXiv MCP와 Hugging Face Local Skills를 연동하여 최신(SOTA) 연구를 탐색합니다.
+- 탐색을 마친 분석 보고서는 다음과 같은 **엄격한 전사적 6대 규격**에 맞춰 루트 또는 `test/results/` 경로에 Markdown으로 자동 생성됩니다.
+  1. **실행 환경 명시:** 사용된 OS, CPU/GPU, 패키지 버전 및 데이터 스케일링/결측치 처리 방식 공개.
+  2. **기초 통계량 분석:** 학습/예측 데이터의 `describe()` 결괏값 및 시계열 정상성 검정.
+  3. **알고리즘 지표의 가격 역변환:** 예측 수치를 스케일링 그대로 표기하지 않고, **원본 KRW 스케일로 역변환**하여 표기.
+  4. **고급 학술 지표 산출:** 2025년 이후 학술계 표준인 **DA (Directional Accuracy)** 및 **MASE (Mean Absolute Scaled Error)** 필수 포함.
+  5. **그래프 시각화의 명확한 텍스트 맵핑:** 모든 시각화 시 **X축(예: Time in 15-min intervals)**과 **Y축(예: Price in KRW)**의 정보를 텍스트로도 완벽히 설명 및 지연 현상(Lagging) 진단.
+  6. **종합 결론 및 용어 해설(Glossary):** 최하방 방어(MDD 제어) 퀀트 전략 제언 및 핵심 용어집 수록.
+
+### 🚀 Tip 4. "Shallow but Wide" 모델 설계 팁
+- 시계열 금융 데이터는 극심한 노이즈를 동반하므로 모델이 깊어질수록(Deep) 과거 가격을 단순히 완벽히 암기하는 과적합(Overfitting)의 늪에 빠집니다.
+- 에이전트와 모델 아키텍처를 토론할 때(예: `/grill-me` 슬래시 명령어 활용 시) 반드시 **"1~2개 층으로 얕게(Shallow) 설계하고, 한 층의 퍼셉트론 노드 수를 64~128개로 넓게(Wide) 구성하여 핵심 추세에 집중하도록 강제"**하는 기조를 준수하십시오.
+
+---
 
 ## 6. 향후 확장 및 배포 파이프라인 (Future Scalability)
 
-본 프로젝트는 연구 단계를 넘어 실제 프로덕션(Production) 환경의 실시간 분석 시스템으로 확장될 수 있도록 다음과 같은 DevOps 인프라 연동을 염두에 두고 있습니다.
+본 프로젝트는 연구 단계를 넘어 실제 프로덕션(Production) 환경의 실시간 분석 시스템으로 확장될 수 있도록 다음과 같은 DevOps 인프라 연동을 설계에 반영하고 있습니다.
 
-### 6.1. Workflow Automation (n8n)
-- **목적:** 데이터 수집, 파이프라인 트리거, 결과 알림 전송을 자동화합니다.
-- **연동 방안:** MTS API에서 데이터를 주기적으로 수집하는 스케줄러(Cron)나 분석된 AI 리포트를 Telegram/Slack으로 전송하는 파이프라인을 n8n의 노드 형태로 시각화하고 자동화합니다.
-
-### 6.2. Containerization & Orchestration (Docker & Kubernetes)
-- **목적:** 다수의 에이전트(상황 분석기, 패턴 매칭기 등)를 독립적인 마이크로서비스(MSA)로 분리하고 무중단 운영을 보장합니다.
-- **연동 방안:** `uv` 기반의 파이썬 앱을 최적화된 Docker 이미지로 빌드합니다. 이후 시장 변동성이 심해져 분석 요청이 폭증할 경우, Kubernetes(K8s)의 HPA(Horizontal Pod Autoscaler)를 통해 매칭 엔진 Pod을 자동으로 스케일 아웃합니다.
-
-### 6.3. Artifact Management (Sonatype Nexus)
-- **목적:** 프라이빗 Docker 이미지, 학습이 완료된 딥러닝 모델 파일, 파이썬 패키지 등을 안전하게 저장하고 버전 관리합니다.
-- **연동 방안:** CI/CD 파이프라인(GitHub Actions 등)을 통해 빌드된 Docker 이미지를 Nexus Repository에 Push하고, Kubernetes 클러스터 배포 시 외부 퍼블릭 망이 아닌 내부 Nexus 망에서 이미지를 Pull하여 보안과 속도를 향상시킵니다.
+- **Workflow Automation (n8n):** 데이터 수집, 파이프라인 트리거, 결과 표준 Markdown 리포트 Slack/Telegram 자동 전송 오케스트레이션.
+- **Containerization & Orchestration (Docker & Kubernetes):** `uv` 기반의 독립적 에이전트 컨테이너 배포 및 시장 폭락장 시 분석 트래픽 급증에 대처하기 위한 패턴 매칭 엔진 Pod의 HPA(Autoscale-out) 연동.
+- **Artifact Management (Sonatype Nexus):** 학습이 완료된 딥러닝 모델 파일, 프라이빗 Docker 이미지, 패키지 가중치를 내부 망에 보안성과 속도 중심 배포.

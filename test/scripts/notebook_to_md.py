@@ -11,8 +11,18 @@ def extract_notebook_to_md(ipynb_path, output_md_path):
         print(f"Error: 파일을 찾을 수 없습니다 - {ipynb_path}")
         return
 
-    # 이미지 저장 폴더 생성
-    image_dir = os.path.join(os.path.dirname(output_md_path), "images")
+    # 이미지 저장 폴더 결정 (test/images가 존재하면 최우선으로 사용하여 프로젝트 일관성 유지)
+    workspace_test_images = r"C:\Users\jun99\OneDrive\바탕 화면\Analysis\toy_agent_project\quantitative_trading\test\images"
+    if os.path.exists(workspace_test_images):
+        image_dir = workspace_test_images
+    else:
+        parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(output_md_path)))
+        test_images_dir = os.path.join(parent_dir, "images")
+        if os.path.exists(test_images_dir):
+            image_dir = test_images_dir
+        else:
+            image_dir = os.path.join(os.path.dirname(output_md_path), "images")
+            
     os.makedirs(image_dir, exist_ok=True)
     
     # 노트북 파일명 기반 이미지 접두사
@@ -76,7 +86,7 @@ def extract_notebook_to_md(ipynb_path, output_md_path):
                             img_f.write(img_bytes)
                             
                         # 마크다운에 이미지 링크 추가 (상대 경로)
-                        rel_img_path = os.path.join("images", img_filename).replace("\\", "/")
+                        rel_img_path = os.path.relpath(img_filepath, os.path.dirname(output_md_path)).replace("\\", "/")
                         md_content.append(f"![Plot {image_counter}]({rel_img_path})\n\n")
                         image_counter += 1
 
