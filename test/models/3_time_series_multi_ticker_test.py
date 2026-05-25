@@ -37,8 +37,106 @@ print(f"🎉 Using device: {device} 🎉")
 # %%
 start_block1 = time.time()
 
+def fetch_and_save_all_krw_tickers_pyupbit(db_path='upbit_data.db', days=365):
+    import pyupbit
+    
+    con = duckdb.connect(db_path)
+    tables = con.execute("SHOW TABLES").df()
+    
+    # 만약 테이블이 이미 있고 충분한 데이터가 들어있다면 스킵
+    if "upbit_krw_candle" in tables['name'].values:
+        row_count = con.execute("SELECT COUNT(*) FROM upbit_krw_candle").fetchone()[0]
+        if row_count > 50000:
+            print(f"✅ upbit_krw_candle 테이블에 {row_count}개의 데이터가 존재하므로 신규 수집을 건너뜁니다.")
+            con.close()
+            return
+            
+    print("🌐 pyupbit를 사용하여 업비트 전체 KRW 마켓 고빈도 15분봉 데이터 전수 수집을 시작합니다...")
+    
+    # 1. 모든 KRW 마켓 티커 목록 확보
+    try:
+        tickers = pyupbit.get_tickers(fiat="KRW")
+        print(f"📊 총 {len(tickers)}개의 KRW 종목이 감지되었습니다.")
+    except Exception as e:
+        print(f"❌ pyupbit 티커 로드 실패: {e}")
+        con.close()
+        raise e
+
+    # 2. 테이블 생성
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS upbit_krw_candle (
+            timestamp TIMESTAMP,
+            open DOUBLE,
+            high DOUBLE,
+            low DOUBLE,
+            close DOUBLE,
+            volume DOUBLE,
+            value DOUBLE,
+            ticker VARCHAR
+        )
+    """)
+    
+    # 3. 15분봉 개수 계산 (1년 = 365일 * 24시간 * 4캔들 = 35040개)
+    target_count = int(days * 24 * 4)
+    print(f"⏳ 각 종목별 {days}일 분량 (최대 {target_count}개 캔들) 수집을 시작합니다...")
+    
+    for idx, ticker in enumerate(tickers):
+        print(f"📥 [{idx+1}/{len(tickers)}] {ticker} 데이터 다운로드 중...")
+        df_list = []
+        curr_to = None
+        collected = 0
+        
+        while collected < target_count:
+            limit = min(200, target_count - collected)
+            try:
+                if curr_to:
+                    df = pyupbit.get_ohlcv(ticker, interval="minute15", to=curr_to, count=limit)
+                else:
+                    df = pyupbit.get_ohlcv(ticker, interval="minute15", count=limit)
+                
+                if df is None or df.empty:
+                    break
+                    
+                df_list.append(df)
+                collected += len(df)
+                curr_to = df.index[0]
+                time.sleep(0.12) # 초당 10회 요청 제한 방지 딜레이
+            except Exception as ex:
+                print(f"⚠️ {ticker} API 요청 오류 발생: {ex}. 1초 대기 후 재시도...")
+                time.sleep(1.0)
+                continue
+                
+        if df_list:
+            ticker_df = pd.concat(df_list).sort_index()
+            ticker_df = ticker_df[~ticker_df.index.duplicated(keep='first')]
+            ticker_df.reset_index(inplace=True)
+            ticker_df.rename(columns={'index': 'timestamp'}, inplace=True)
+            ticker_df['ticker'] = ticker
+            
+            # DuckDB에 즉각 밀어넣기
+            con.execute("INSERT INTO upbit_krw_candle SELECT * FROM ticker_df")
+            
+    # 전체 인덱스 생성 및 중복 제거
+    print("🧹 데이터 중복 제거 및 최종 정합성 정리 중...")
+    con.execute("CREATE TABLE temp_table AS SELECT DISTINCT * FROM upbit_krw_candle")
+    con.execute("DROP TABLE upbit_krw_candle")
+    con.execute("ALTER TABLE temp_table RENAME TO upbit_krw_candle")
+    
+    final_count = con.execute("SELECT COUNT(*) FROM upbit_krw_candle").fetchone()[0]
+    print(f"🎉 전수 수집 완료! 총 적재 데이터 행 수: {final_count}")
+    con.close()
+
 def load_all_tickers_data():
     db_path = 'upbit_data.db'
+    
+    # pyupbit를 통한 자동 데이터 구축 실행 (데이터가 없을 경우에만 활성화됨)
+    try:
+        # 실전 구동 시간을 고려하여 기본적으로 최근 90일(3개월) 데이터를 전수 조사 구축
+        # 1년 전체를 원하실 경우 days=365로 자유롭게 파라미터 조절이 가능합니다.
+        fetch_and_save_all_krw_tickers_pyupbit(db_path, days=90)
+    except Exception as e:
+        print(f"⚠️ pyupbit를 통한 자동 데이터 전수 수집에 실패했습니다: {e}")
+        
     con = None
     try:
         con = duckdb.connect(db_path)
@@ -54,7 +152,6 @@ def load_all_tickers_data():
         print(f"✅ DuckDB 데이터 로드 완료. 총 행수: {len(df)}")
     except Exception as e:
         print(f"ℹ️ DB 로드 불가로 가상 다중 종목 1년치 15분봉 시뮬레이션 데이터를 자동 생성합니다. ({e})")
-        # 테스트를 위해 종목 수를 10개로 제한하여 생성 (실제 환경에서는 250여 개)
         tickers = ['KRW-BTC', 'KRW-ETH', 'KRW-SOL', 'KRW-XRP', 'KRW-ADA', 'KRW-DOGE', 'KRW-AVAX', 'KRW-SUI', 'KRW-NEAR', 'KRW-LINK']
         dates = pd.date_range(start="2025-05-09", end="2026-05-09", freq="15T")
         dummy_list = []
@@ -80,7 +177,6 @@ def load_all_tickers_data():
             })
             dummy_list.append(ticker_df)
         df = pd.concat(dummy_list, ignore_index=True)
-        print(f"✅ 가상 다중 종목 데이터 생성 완료. 종목 수: {df['ticker'].nunique()}, 행수: {len(df)}")
     return df
 
 df_all = load_all_tickers_data()
