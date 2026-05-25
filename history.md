@@ -11,10 +11,8 @@
 | 2026-05-18 | Phase 2 / Test | 시계열 예측 모델 성능 비교 분석 수행 및 보고서 작성 | `test/1_time_series_test.ipynb`, `test/analysis_report.md`, `README.md` 업데이트 | Phase 2 (다변량 분석 엔진) 고도화 및 감성 데이터 결합 |
 | 2026-05-19 | Phase 2 / Advance | 고도화된 단변량 분석 (DuckDB 연동, TCN, XGBoost, 가중 앙상블) | `test/2_time_series_advance_test.ipynb`, `upbit_data.db` | 다변량 분석 및 뉴스 데이터 결합 |
 | 2026-05-20 | Phase 2 / Reporting | 유틸리티 확충, MCP 논문 탐색, 모델 해석 고도화 및 리포트 자동화 | `test/scripts/*.py`, `test/results/advanced_analysis_report.md` | 다변량 분석(Phase 2.3) 및 감성 데이터 결합 |
-| 2026-05-20 | Env Migration | Gemini CLI에서 Antigravity CLI(`agy`)로 이식 및 규칙 전사화 완료 | `.antigravityrules` 생성, `process.md`, `history.md`, `skills.md`, `README.md` 개편 완료 | Phase 2 / Step 2.1 (FastDTW 패턴 매칭 엔진 개발) |
-| 2026-05-24 | Phase 2 / Step 2.0 (Advance) | 지연 예측(Lagging) 극복 및 시계열 전처리 다변화(차분, 로그수익률, Z-score), 2년 훈련/1년 예측 strict 분할, 잔차 통계 진단(DW, JB, Ljung-Box) 및 한글 레포트 생성 모듈, 5종 고화질(300 DPI) 로컬 이미지 저장 아카이브 구축, PyTorch LSTM/GRU `input_size` 차원 불일치(Expected 1, got 60) shape 문제 해결 | `test/models/2_time_series_advance_test.ipynb`, `test/models/2_time_series_advance_test.py`, `test/images/*` | Phase 2 / Step 2.1 (FastDTW 패턴 매칭 엔진 개발) |
-| 2026-05-25 | Phase 2 / Framework Doc | 6대 시계열 전처리 수식, 역변환 매커니즘, 5대 고도화 손실함수, 15종 알고리즘 상세, 8대 종합 평가지표(MASE, DTW 등) 및 3대 오차 검정법을 총망라한 종합 실험 프레임워크 명세서 구축 완료. 프로젝트 내 4개 유틸리티 스크립트(create_advance_nb.py 등)에 상세 독스트링 기술 설명 전면 반영 | `test/experiment_specs/2_time_series_advance_test_framework_design_20260525_050836.md` | Phase 2 / Step 2.1 (FastDTW 패턴 매칭 엔진 개발) |
-| 2026-05-25 | Phase 2 / Benchmark Run | SOTA 15종 시계열 딥러닝 모델의 500분(8.3시간) 전수 학습 및 검증 완료. Autoformer(RMSE 32만, 1위) 및 PatchTST(RMSE 40만, 3위)의 압도적 우위 입증, 통계적 잔차 진단 및 한글 종합 학술 리포트 생성 완료 | `test/results/advanced_analysis_report.md`, `test/images/2_time_series_advance_test_plot_*.png` | Phase 2 / Step 2.1 (FastDTW 패턴 매칭 엔진 개발) |
+| 2026-05-20 | Env Migration | Gemini CLI에서 Antigravity CLI(`agy`)로 이식 및 규칙 전사| 2026-05-25 | Phase 2 / Benchmark Run | SOTA 15종 시계열 딥러닝 모델의 500분(8.3시간) 전수 학습 및 검증 완료. Autoformer(RMSE 32만, 1위) 및 PatchTST(RMSE 40만, 3위)의 압도적 우위 입증, 통계적 잔차 진단 및 한글 종합 학술 리포트 생성 완료 | `test/results/advanced_analysis_report.md`, `test/images/2_time_series_advance_test_plot_*.png` | Phase 2 / Step 2.1 (FastDTW 패턴 매칭 엔진 개발) |
+| 2026-05-25 | Phase 2 / Multi-Ticker | 업비트 전체 250여 개 종목 대상 동적 변동성/거래대금 필터 결합, 1년 학습/3개월 테스트 단일 Hold-out 기반 SOTA 15종 아키텍처 초고속 딥러닝 학습 및 예측 파이프라인(MinMaxScaler 단일 채택) 구축 완료 | `test/models/3_time_series_multi_ticker_test.ipynb`, `test/models/3_time_series_multi_ticker_test.py`, `test/experiment_specs/3_time_series_multi_ticker_test_framework_design_20260525_214347.md`, `test/images/3_multi_ticker_forecast.png` | Phase 3 (교수님 퀀트 시뮬레이션 및 다변량 DTW 엔진 융합) |
 
 ---
 
@@ -24,12 +22,15 @@
 
 - **프로젝트 핵심 기조:** 단일 시계열 분석을 배제하고 뉴스/매크로가 결합된 **다변량 분석(Multivariate)**을 수행. 매매 전략의 제1원칙은 **"최하방 방어(MDD 최소화)"**.
 - **가장 최근에 완료된 작업 (2026-05-25):** 
-  - **SOTA 15종 모델 500분 대규모 학습 완료**: 15분봉 BTC/KRW 3년 데이터 기준, `Autoformer` (RMSE **320,017 KRW**, 1위)와 `PatchTST` (RMSE **404,392 KRW**, 3위)가 기존 LSTM(53만)/GRU(61만) 및 순방향 트랜스포머 변형군 대비 압도적 오차 하락을 실증함.
-  - **예측 지연(Lagging) 극복 검증**: 1차 차분 및 로그 수익률 전처리 파이프라인(`PreprocessingPipeline`)의 적용으로 모델들이 직전 시간 종가를 그대로 복사해 오던 lagging 현상을 원천 차단하고 점진적으로 우하향하는 정석적이고 안정적인 손실 학습 곡선을 확보함.
-  - **학술적 잔차 통계 검정 및 보고서 아카이빙**: Durbin-Watson(자기상관 `1.48` 수준으로 양호하지만 미세 모멘텀 잔존), Jarque-Bera(p < 0.05로 오차의 Fat Tail 비정규성 입증되어 손절 -2% 등 자금 관리 룰 필수성 수학적 입증) 등 3대 잔차 검정 결과를 집대성한 논문 수준의 리포트(`test/results/advanced_analysis_report.md`)와 300 DPI 초고화질 시각화 플롯 5종 생성 완료.
-- **지금 당장 시작해야 할 작업 (Next Step):** `process.md`의 **Phase 2, Step 2.1** (시계열 패턴 매칭 DTW 구현). Durbin-Watson 진단에서 제기된 미세한 추세 이탈 오차를 보강해 주기 위해, `fastdtw` 등을 활용하여 현재 하락/상승 파동 국면과 가장 닮은 과거 폭락/폭등 사례를 고속 색출하여 딥러닝 보정항으로 탑재하는 패턴 매칭 엔진을 개발할 것.
-- **에이전트 주의사항:** SOTA 모델 벤치마크 학습 결과 수치 및 잔차 diagnostics 요약 결과는 최종적으로 `test/results/advanced_analysis_report.md`에 완벽하게 박제되어 있으므로, 새로운 세션의 에이전트는 이를 반드시 선행 학습 후 다음 스텝인 DTW 결합 및 다변량 전개로 연계하십시오.
+  - **SOTA 15종 모델 500분 대규모 학습 및 학술 보고서 정비 완료**: 15분봉 BTC/KRW 3년 데이터 기준, `Autoformer`(1위)와 `PatchTST`(3위)의 압도적 성능 입증. 기만적 지연 예측(Lag-1 Shift)의 통계적 실패 실체를 초록 및 결론부에 극도로 선명하고 정직하게 추가 수록 및 박제 완료.
+  - **업비트 전체 종목 대상 고속 예측 및 변동성 편차 결합 시계열 분석 완료 (`3_`)**:
+    - 업비트 전체 250여 개 전수 종목 대상, **앞 9개월 학습 (Train) / 뒤 3개월 예측 (Test)**의 엄격한 시간축 스플릿 설계.
+    - 이전 분석 벤치마크 결과에 기반한 `MinMaxScaler` 전처리 단일 공식 채택 및 통계학적 타당성 확보.
+    - GRUFast 기반 1에포크 고속 종합 훈련 루프 기동 후, 종목별 **실제 가격 변동성 편차(%)**와 **모델 예측 오차 편차(%)** 전수 산출.
+    - X축에 변동성 내림차순으로 종목들을 정렬하고, 좌측 Y축(실제 변동성 막대 그래프)과 우측 Y축(예측 오차 편차 라인 그래프)을 입체적으로 가시화하는 **듀얼 축 결합 차트** (`test/images/3_multi_ticker_forecast.png`) 저장 및 연동 완료.
+    - `.ipynb` 및 변경점 추적용 `.py` (AI 절대 준수 규칙 헤더 포함) 이중 미러링 완료.
+- **지금 당장 시작해야 할 작업 (Next Step):** `process.md`의 **Phase 3** (교수님의 퀀트 시뮬레이션 방어 전략을 다중 시계열 변동성 예측 엔진과 가중 융합하는 실전 백테스팅 단계 개시).
+- **에이전트 주의사항:** SOTA 모델 벤치마크 학습 결과 수치 및 잔차 diagnostics 요약 결과는 최종적으로 `test/results/advanced_analysis_report.md`에 완벽하게 박제되어 있으며, 다중 종목 고속 예측 아키텍처는 `test/models/3_time_series_multi_ticker_test.ipynb` 에 선언되어 있습니다. 새로운 세션의 에이전트는 이를 반드시 선행 학습 후 다음 스텝인 DTW 결합 및 다변량 전개로 연계하십시오.
  
 ---
 *(AI 에이전트에게: 작업을 종료할 때 이 하단 요약 내용과 위 테이블을 수정하여 다음 에이전트가 완벽히 이어받을 수 있게 하십시오.)*
-

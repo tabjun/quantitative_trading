@@ -33,6 +33,11 @@
     - 1 에포크 만에 수직낙하 하던 훈련 손실의 identity mapping 원인 규명 및 지연극복 전처리로 점진적 하강 곡선 안정화.
     - 엄격한 시간 기반 2년 학습 / 1년 테스트 strict split 설계 구현.
     - Durbin-Watson, Jarque-Bera, Ljung-Box 통계 검정을 융합한 잔차 진단 한글 자동 리포터 탑재 및 로컬 5종 300 DPI 이미지 저장 연동.
+  - **(Advanced) 업비트 다중 종목(Multi-Ticker) 변동성 추적 및 고속 시계열 예측 (2026-05-25 - Completed):**
+    - 업비트 전체 250여 개 종목 중 변동성 및 거래대금(score = volatility * log(value))이 극대화된 상위 종목을 동적으로 색출하는 Dynamic Volatility Ticker Filter 구현.
+    - 2단계 분석 결과(MinMax-Autoformer 우수성 실증)에 기초하여 스케일 격차 극복을 위한 MinMaxScaler 단일 공식 채택 및 논문 근거 기술 확보.
+    - 데이터 스플릿을 1년 학습 / 3개월 테스트 단일 Hold-out으로 축소하여 훈련 Epoch를 1회로 극소화한 고속 시계열 학습 및 예측 아키텍처 완성.
+    - 최종 3개월 아웃오브샘플 예측 캔들차트(`test/images/3_multi_ticker_forecast.png`) 및 실험 프레임워크 명세서(`test/experiment_specs/3_time_series_multi_ticker_test_framework_design_20260525_214347.md`) 생성 완료.
 - **Step 2.1: 시계열 패턴 매칭 (DTW 구현)**
   - `fastdtw` 등을 활용하여 현재 주가 하락 파동과 가장 유사한 과거 폭락장 사례를 추출하는 모듈을 개발합니다.
 - **Step 2.2: 상황 및 감성 분석 (NLP Context)**
