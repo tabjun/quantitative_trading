@@ -79,3 +79,17 @@ Welcome to the Quantitative Trading & 시계열 (Time Series) Prediction Project
   - 만약 `.ipynb` 파일을 갱신하는 경우, 변경점 추적이 용이하도록 동명의 `.py` 파일로 미러링(Mirroring)하여 동기화할 것을 강력히 권장합니다.
 - **SQLite DB 확인**:
   - SQLite 클라이언트나 Python 스크립트를 사용하여 `upbit_data.db`에 있는 15분봉 등의 테이블 적재 현황을 직접 쿼리하여 검증할 수 있습니다.
+
+---
+
+## 6. Git 자동 커밋 및 GitHub 마크다운 렌더링 경로 전송 규칙 (Git Auto-Push & Rendered Link Delivery)
+
+> [!IMPORTANT]
+> **보고서 전달 자동화 필수 전제조건 (Delivery Aesthetics & Accessibility)**
+> 보고서 마크다운(`.md`) 파일을 이메일로 자동 전송할 때, 단순 날것(Raw Text) 형식의 첨부 방식은 열람 가독성을 저해하므로 금지합니다. 에이전트는 반드시 보고서를 원격 저장소에 자동 반영하고, GitHub 고유의 미려한 스타일시트 렌더링 경로를 추출하여 이메일 본문에 연동해야 합니다.
+
+- **자동 Git 라이프사이클 집행**:
+  - 보고서(`analysis_report.md` 등) 또는 모의 투자 결과 파일이 생성/갱신되면, 이메일 발송 스크립트는 백그라운드에서 `git add`, `git commit -m "..."`, `git push origin stock` 명령어 세트를 자동으로 집행하여 GitHub 원격 `stock` 브랜치에 코드를 즉각 푸시해야 합니다.
+- **GitHub 렌더링 URL 구성 및 이메일 본문 연동**:
+  - 푸시 완료 후, GitHub 원격 주소 체계를 판독하여 해당 브랜치(`stock`) 하위의 파일 경로 주소(예: `https://github.com/tabjun/personal_ai_project/blob/stock/quantitative_trading/analysis_report.md`)를 동적으로 구성하십시오.
+  - 구성된 깃허브 실시간 마크다운 렌더링 링크를 이메일 본문(Email Body) 상단에 명확하게 삽입하고, 해당 보고서 내의 핵심 개선점(수수료 차감 내역, AI 차트 판독 논리 등)을 메일 텍스트에 상세히 요약 소개하여 보고서 접근성과 열람 편의성을 극대화하십시오.
