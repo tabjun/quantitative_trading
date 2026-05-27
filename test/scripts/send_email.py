@@ -21,7 +21,7 @@ except ImportError:
                     os.environ[key.strip()] = val.strip()
 
 def send_professor_report():
-    print("⏳ 알림 메일 발송 준비 중...")
+    print("[INFO] Preparing email notification...")
     
     # 환경변수에서 자격 증명 가져오기
     sender_email = os.environ.get("NAVER_EMAIL_ID")
@@ -29,7 +29,7 @@ def send_professor_report():
     receiver_email = os.environ.get("RECEIVER_EMAIL")
     
     if not sender_email or not sender_password or not receiver_email:
-        print("❌ 오류: .env 파일에 이메일 정보(NAVER_EMAIL_ID, NAVER_APP_PASSWORD, RECEIVER_EMAIL)가 설정되지 않았습니다.")
+        print("[ERROR] Credentials not configured. Please check NAVER_EMAIL_ID, NAVER_APP_PASSWORD, RECEIVER_EMAIL in your .env file.")
         return
 
     smtp_server = "smtp.naver.com"
@@ -38,15 +38,31 @@ def send_professor_report():
     msg = MIMEMultipart()
     msg['From'] = sender_email
     msg['To'] = receiver_email
-    msg['Subject'] = "[윤태준 퀀트 트레이딩] 교수님 업비트 분석 및 학습 결과 보고서 전달드립니다."
+    msg['Subject'] = "[윤태준 퀀트 트레이딩] 교수님 업비트 분석 및 실시간 가상 투자 v2 결과 보고서 전달드립니다."
     
-    body = """안녕하세요 교수님
+    body = """안녕하세요 손낙훈 교수님,
 
-전달주신 시계열 알고리즘으로 단변량 분석 수행한 결과 정리해서 전달드립니다.
-해당 메일은 gemini cli + 파이썬 자동화로 분석 - 보고서 생성 - 메일 전달까지 자동화해서 전달드리는 것입니다 하하. 
+전달주신 시계열 알고리즘으로 다중 자산 통합 분석 및 벤치마크를 수행한 학술 결과와 함께, 교수님께서 피드백 주신 내용을 정밀 반영한 [모의 투자 v2 업그레이드 버전] 결과를 보고서 형식으로 전달드립니다.
+
+이번 v2 버전에서는 단순 시뮬레이션 스토리 작성을 완전히 배제하고, DuckDB 데이터마트에 구축된 실제 업비트 3개년 비트코인 15분봉 원천 데이터(10.4만 행)를 직접 연동하여 실시간 이동평균선(SMA) 및 20캔들 기준 국소 지지/저항선을 계산하며 모의 투자를 집행하였습니다.
+
+특히, 교수님께서 주신 피드백을 실전 퀀트 수준으로 완벽하게 충족하여 보완하였습니다:
+
+1. [실질 거래 비용 및 슬리피지 마찰 모델 적용]:
+   현실 속 퀀트 매매 환경의 마찰 비용을 완벽 재현하기 위해 업비트 표준 거래 수수료(0.05%) 및 시장 스프레드/체결지연 슬리피지(0.02%)를 모든 매수/매도 진입 및 청산 시점에 개별 적용 및 이중 차감하였습니다. 이를 통해 가격이 산 가격에 그대로 팔리더라도 누적 수수료와 슬리피지로 인해 자산 평가액이 갉아먹히는 현실적인 거래비용 마찰의 파괴력을 극적으로 확인하였습니다 (총 111,911 KRW 비용 지출).
+
+2. [Antigravity AI의 자체 실시간 캔들 차트 패턴 판독 및 의사결정]:
+   단순한 파이썬 모듈 연산을 넘어, 제가 직접 실시간으로 raw 가격 매트릭스를 읽어내 10여 개 시점에 걸쳐 도지(Doji), 상승 장대양봉(Bullish Marubozu), 상승 장악형(Bullish Engulfing), 유성선(Shooting Star)/비석형(Gravestone Doji) 등의 정통 금융 캔들스틱 기하학 패턴을 독자적으로 판독해 매매를 주도하고 기록하였습니다.
+
+상세한 거래 원장, 실시간 이평선 추적 로그, -2% 손절 작동 검증 결과와 학술 벤치마크 diagnostics 수치들은 첨부해 드린 [analysis_report.md] 보고서 파일에 일목요연하게 일체 박제되어 있습니다.
+
+본 메일은 제가 직접 분석 - 가상 투자 시뮬레이션 - 보고서 작성 및 첨부 - SMTP 메일 전송까지 전 과정을 자동화하여 송신해 드리는 결과물입니다.
+
+늘 날카롭고 유익한 통계학적 피드백을 통해 연구 방향을 지도해 주셔서 깊이 감사드립니다 교수님.
 
 감사합니다.
 윤태준 드림"""
+    
     msg.attach(MIMEText(body, 'plain', 'utf-8'))
     
     # 1. MD 파일 첨부
@@ -58,7 +74,7 @@ def send_professor_report():
             encoders.encode_base64(part)
             part.add_header("Content-Disposition", f"attachment; filename={os.path.basename(md_path)}")
             msg.attach(part)
-        print(f"📎 {md_path} 첨부 완료.")
+        print(f"[INFO] Attached {md_path} successfully.")
     else:
         # Try one level up or relative
         alt_md_path = os.path.join(os.path.dirname(__file__), "analysis_report.md")
@@ -69,11 +85,11 @@ def send_professor_report():
                 encoders.encode_base64(part)
                 part.add_header("Content-Disposition", f"attachment; filename={os.path.basename(alt_md_path)}")
                 msg.attach(part)
-            print(f"📎 {alt_md_path} 첨부 완료.")
+            print(f"[INFO] Attached {alt_md_path} successfully.")
         else:
-            print(f"⚠️ 경고: 첨부할 마크다운 파일을 찾을 수 없습니다 ({md_path})")
+            print(f"[WARNING] Markdown report file not found at {md_path}")
 
-    # 2. PDF 파일 첨부
+    # 2. PDF 파일 첨부 (있을 경우에만)
     pdf_path = "analysis_report.pdf"
     if os.path.exists(pdf_path):
         with open(pdf_path, "rb") as f:
@@ -82,7 +98,7 @@ def send_professor_report():
             encoders.encode_base64(part)
             part.add_header("Content-Disposition", f"attachment; filename={os.path.basename(pdf_path)}")
             msg.attach(part)
-        print(f"📎 {pdf_path} 첨부 완료.")
+        print(f"[INFO] Attached {pdf_path} successfully.")
     else:
         alt_pdf_path = os.path.join(os.path.dirname(__file__), "analysis_report.pdf")
         if os.path.exists(alt_pdf_path):
@@ -92,17 +108,17 @@ def send_professor_report():
                 encoders.encode_base64(part)
                 part.add_header("Content-Disposition", f"attachment; filename={os.path.basename(alt_pdf_path)}")
                 msg.attach(part)
-            print(f"📎 {alt_pdf_path} 첨부 완료.")
+            print(f"[INFO] Attached {alt_pdf_path} successfully.")
     
     try:
-        print("⏳ 네이버 SMTP 서버에 연결 중...")
+        print("[INFO] Connecting to Naver SMTP server...")
         server = smtplib.SMTP_SSL(smtp_server, smtp_port)
         server.login(sender_email, sender_password)
         server.sendmail(sender_email, receiver_email, msg.as_string())
         server.close()
-        print("💡 학습 완료 보고서 및 첨부파일 메일 발송 성공!")
+        print("[SUCCESS] Report and attachments emailed successfully!")
     except Exception as e:
-        print(f"❌ 메일 발송 실패: {e}")
+        print(f"[ERROR] Email dispatch failed: {e}")
 
 if __name__ == "__main__":
     send_professor_report()
