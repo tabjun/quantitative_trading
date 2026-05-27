@@ -1,0 +1,11 @@
+# Codex Configuration File (.codex/config.toml)
+# This file manages runtime controls, sandbox permissions, and MCP integrations for Codex agents.
+
+# Runtime Environment Constraints
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+
+# Model Context Protocol (MCP) Servers
+[mcp_servers.arxiv]
+command = "npx.cmd"
+args = ["-y", "@mcp/arxiv-server"]
