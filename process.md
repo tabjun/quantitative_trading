@@ -109,3 +109,11 @@
 - [x] Clarified that research `.ipynb` code generation/modification should be mirrored to a same-name `.py` file for traceability.
 - [x] Updated `AGENTS.md`, `skills.md`, and `conversation_l2_cache.md` with the separated rule.
 - [ ] When adding future automation, keep runnable commands documented; run only light local checks unless the user explicitly authorizes heavy local research execution.
+
+## 2026-06-08 Independent Variable Literature Review Addendum
+
+- [x] 조사 범위를 주식/코인 예측 독립변수 설계로 한정하고, 로컬 대용량 학습/백테스트/노트북 실행은 수행하지 않았다.
+- [x] arXiv 기반 논문을 참고하여 가격/변동성, 기술지표, 유동성, 오더북, 뉴스/리포트/SNS 감성, 한국어 금융 텍스트, 매크로/레짐, 글로벌 유동성, 온체인/파생상품, 크로스마켓, 이벤트 쇼크 독립변수 후보를 정리했다.
+- [x] `test/research_materials/independent_variables_literature_review_20260608.md`에 논문별 5단계 포맷(요약, 서론, 분석 기법, 결과, 결론 및 설계 결정)을 적용했다.
+- [x] 한글 깨짐 방지를 위해 `test/scripts/send_independent_variables_report_email_utf8.py`를 UTF-8/base64 MIME 본문 방식으로 작성했다.
+- [ ] `stock` 브랜치에만 커밋/푸시한 뒤 교수님께 GitHub 렌더링 링크를 이메일로 발송한다.
