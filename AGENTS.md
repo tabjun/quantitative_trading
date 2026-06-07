@@ -21,6 +21,7 @@ Welcome to the Quantitative Trading & 시계열 (Time Series) Prediction Project
 
 - **도구 및 플러그인 연동**:
   - 논문 조사 또는 SOTA(State-of-the-Art) 모델 연구 지시를 받으면, 수동 웹 서칭 대신 구성된 **ArXiv MCP 서버** 및 로컬 `.agents/skills/` 내의 **Hugging Face Skills**를 적극 활용하여 정밀하게 자료를 탐색하십시오.
+  - Hugging Face는 MCP 서버가 아니라 **로컬 skill 세트**로 취급합니다. 이 프로젝트에서는 우선 **논문/아카이브 탐색 보조 용도**로만 사용하고, 모델·데이터셋·훈련·평가 작업은 사용자가 명시적으로 요청할 때만 별도 범위로 다룹니다.
   - 2025~2026년 이후의 시계열 및 퀀트 최신 학술 동향을 우선 반영합니다.
 - **학술 자료 문서화 규격 (Standardized Research Paper Format)**:
   - 수집되거나 인용된 논문 내용은 `test/research_materials/` 디렉토리에 마크다운(`.md`) 파일로 저장해야 하며, 반드시 아래의 **표준 5단계 포맷**을 엄격히 적용하십시오:

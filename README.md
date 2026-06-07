@@ -66,6 +66,7 @@ uv run main.py
 본 프로젝트는 `Codex CLI` 가동 시 자동으로 로드되는 로컬 에이전트 설정을 완비하고 있습니다.
 - **ArXiv 학술 논문 MCP 서버:** `.agents/mcp_config.json`, `.mcp.json`, `.codex/config.toml`에 등록되어 있으며, `uv tool install 'arxiv-mcp-server[pdf]'` 후 `arxiv-mcp-server`를 통해 논문 자료를 즉각적으로 검색합니다.
 - **Hugging Face Skills 라이브러리:** `.agents/skills/`에 14가지 정형 스킬(데이터셋 다운로드, 모델 탐색, Sentence Transformer 훈련, 가중치 최적화 등)이 마이그레이션되어 `Codex CLI`가 기본 툴 세트로 활용합니다.
+- **중요:** Hugging Face는 MCP 서버가 아니라 **로컬 skill 세트**로 연동합니다. 즉, 논문 검색은 `arxiv-mcp-server`, 모델/데이터셋/훈련 작업은 Hugging Face skills로 분리해서 사용합니다.
 
 ---
 

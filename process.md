@@ -74,3 +74,13 @@
 - [x] Reconciled the migration docs by rewriting the test docs to match the current Codex / `arxiv-mcp-server` workflow.
 - [x] Cleaned obvious generated clutter under `test/` and kept only the useful experiment artifacts.
 - [ ] Re-run a quick file-tree review if more temporary outputs appear during the next research pass.
+
+## 2026-06-07 Temporary Mail Prep Addendum
+
+- [x] Generated the temporary Upbit spot backtest report in `quantitative_trading/AI_trading_temporary/analysis_report.md`.
+- [x] Committed and pushed the report to `origin/stock` so the GitHub link is available for email delivery.
+- [x] Dispatch the email with `test/scripts/send_email.py` after loading `test/.env`.
+- [x] Remove the temporary attachment copy under `test/` after dispatch.
+- [x] Replace the mojibake email template with a clean UTF-8 Korean link-only delivery message.
+- [x] Remove the old temporary report and resend the corrected email with `AI_trading_youtube_upbit_report_20260607.md`.
+- [x] Restore `test/scripts/send_email.py` after the resend so the only remaining temporary AI trading artifact is the committed markdown report.
