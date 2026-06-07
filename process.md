@@ -84,3 +84,12 @@
 - [x] Replace the mojibake email template with a clean UTF-8 Korean link-only delivery message.
 - [x] Remove the old temporary report and resend the corrected email with `AI_trading_youtube_upbit_report_20260607.md`.
 - [x] Restore `test/scripts/send_email.py` after the resend so the only remaining temporary AI trading artifact is the committed markdown report.
+
+## 2026-06-08 Realtime Text Context Addendum
+
+- [x] Added `text_context.py` for realtime text collection from RSS, optional Naver News API, and local report/SNS CSV exports.
+- [x] Added DuckDB mart tables `text_events_raw` and `text_features_15m` with 15-minute independent variables: event count, sentiment mean/sum, shock z-score, 1-hour sentiment momentum, and macro/risk/crypto/regulation/liquidity topic counts.
+- [x] Added `ingest_text_context.py` as the operational entrypoint: `uv run ingest_text_context.py`.
+- [x] Connected `simulate_and_send.py` to text factors and added `text_risk_guard` so strongly negative/risk-heavy text context can block new entries.
+- [x] Verified ingestion end-to-end: 90 RSS records refreshed, 91 total raw text rows retained, and 500 candle-aligned feature rows generated.
+- [ ] Next checkpoint: refresh or extend the realtime Upbit candle mart so 2026-06-08 text timestamps overlap price buckets, then run a text-aware backtest/report pass without triggering email delivery.
