@@ -117,3 +117,13 @@
 - [x] `test/research_materials/independent_variables_literature_review_20260608.md`에 논문별 5단계 포맷(요약, 서론, 분석 기법, 결과, 결론 및 설계 결정)을 적용했다.
 - [x] 한글 깨짐 방지를 위해 `test/scripts/send_independent_variables_report_email_utf8.py`를 UTF-8/base64 MIME 본문 방식으로 작성했다.
 - [x] `stock` 브랜치에만 커밋/푸시한 뒤 교수님께 GitHub 렌더링 링크를 UTF-8 한글 이메일로 발송했다.
+
+## 2026-06-08 Historical Flow Data Mart Addendum
+
+- [x] 과거 유사 사건/흐름 데이터마트를 `KRW-BTC` 단일 종목이 아니라 업비트 KRW 마켓 전체 `ticker` 축 기준으로 설계했다.
+- [x] 전체 KRW 원천 window는 저장하고, 기본 neighbor index는 거래대금 상위 유동성 종목 subset으로 구성하도록 했다.
+- [x] 단순 차트 형태 비교를 피하기 위해 `shape_distance`, `factor_distance`, `context_distance`를 합친 복합 유사도 구조를 반영했다.
+- [x] 변곡점 당시 원인/상황 파악을 위해 `text_features_15m`의 감성, 이벤트 수, shock z-score, 리스크/매크로/규제/유동성 토픽을 optional context vector로 결합했다.
+- [x] 리서치 보고서는 `test/research_materials/historical_flow_datamart_research_20260608.md`에 표준 5단계 포맷으로 작성했다.
+- [x] 문법 검사와 tiny synthetic KRW multi-ticker 검증으로 table build/query 및 `query_composite_distance` 생성을 확인했다.
+- [ ] `stock` 브랜치에만 커밋/푸시한 뒤 교수님께 UTF-8 한글 이메일로 보고한다.

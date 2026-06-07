@@ -138,3 +138,24 @@ uv run simulate_and_send.py
 - DuckDB raw table: `text_events_raw`.
 - DuckDB 15-minute feature table: `text_features_15m`.
 - Main factors: `text_event_count`, `text_sentiment_mean`, `text_shock_z`, `text_sentiment_momentum_1h`, `text_macro_count`, `text_risk_count`, `text_crypto_count`, `text_regulation_count`, `text_liquidity_count`.
+
+## 8. Historical Flow Data Mart
+Past analogs are matched across the full Upbit KRW universe, not BTC alone.
+The mart stores full KRW-market windows while using a liquid subset for the
+default neighbor index.
+
+```bash
+# Build on the school server or automation environment, not during local Codex sessions.
+uv run build_historical_flow_mart.py --window-lengths 16,48,96,288 --stride 4 --top-k 10 --liquid-top-n 50
+
+# Query similar historical flows for a ticker.
+uv run query_historical_flows.py --ticker KRW-SOL --window-length 96 --top-k 10
+```
+
+- Standard source table: `upbit_krw_candle` with `ticker`, `timestamp`, `open`, `high`, `low`, `close`, `volume`, `value`.
+- BTC fallback: `btc_15m_advance` is allowed only for lightweight development checks.
+- DuckDB tables: `historical_flow_windows`, `historical_flow_features`, `historical_flow_neighbors`, `historical_flow_event_stats`, `historical_regime_stats`, `historical_flow_run_log`.
+- Similarity score: `query_composite_distance = shape + factor + context`.
+- Shape factors: normalized return path and DTW/L2 path distance.
+- Independent-variable factors: return, volatility, MDD, trend slope, value/volume z-score, RSI, ROC, Bollinger Band Width, Amihud illiquidity.
+- Context factors: if `text_features_15m` exists, sentiment, text shock, risk, macro, crypto, regulation, and liquidity counts are attached so large turning points are matched by both flow and likely cause.
