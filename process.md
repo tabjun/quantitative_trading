@@ -104,7 +104,8 @@
 ## 2026-06-08 Execution Actor Boundary Addendum
 
 - [x] Clarified that repo-level automation code, `uv run ...` examples, n8n/Cron/CI/Docker/Kubernetes designs, and school-server execution procedures must remain in the repository for other researchers/operators.
-- [x] Clarified that the restriction applies to Codex running analysis/training/backtests/notebooks from the local terminal or `.venv` during the user's personal research session.
+- [x] Clarified that the restriction applies to Codex running heavy/long-running analysis, training, backtests, and notebook-result pipelines from the local terminal or `.venv` during the user's personal research session.
+- [x] Clarified that light local checks remain allowed: simple calculations, compile/syntax checks, import checks, and small unit tests.
 - [x] Clarified that research `.ipynb` code generation/modification should be mirrored to a same-name `.py` file for traceability.
 - [x] Updated `AGENTS.md`, `skills.md`, and `conversation_l2_cache.md` with the separated rule.
-- [ ] When adding future automation, keep runnable commands documented but do not execute them locally unless the user explicitly authorizes local execution.
+- [ ] When adding future automation, keep runnable commands documented; run only light local checks unless the user explicitly authorizes heavy local research execution.
