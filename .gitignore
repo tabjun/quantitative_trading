@@ -40,5 +40,5 @@ materials/research_overview.docx
 
 # 에이전트 설정 및 로컬 스킬 제외
 .agents/
-.antigravitycli/
-.gemini/
+
+

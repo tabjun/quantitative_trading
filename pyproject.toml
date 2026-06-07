@@ -10,6 +10,8 @@ dependencies = [
     "google-generativeai",
     "numpy",
     "fastdtw",
-    "scipy"
+    "scipy",
+    "duckdb",
+    "pandas"
 ]
 

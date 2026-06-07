@@ -1,0 +1,4 @@
+.env
+scripts/.env
+results/temp_summary.txt
+__pycache__/
