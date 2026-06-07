@@ -6,6 +6,40 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import duckdb
+from text_context import TextDataCollector, TextFeatureBuilder
+
+
+def attach_realtime_text_context(df: pd.DataFrame, db_path: str) -> pd.DataFrame:
+    """
+    Refresh realtime text records and align text features to the 15-minute price frame.
+    If external sources are unavailable, zero-filled text factors are returned so the
+    trading simulation remains reproducible.
+    """
+    try:
+        collector = TextDataCollector()
+        records = collector.collect_all(max_items_per_source=20)
+        builder = TextFeatureBuilder(db_path=db_path)
+        inserted_count = builder.persist_raw_records(records)
+        builder.build_and_persist_15m_features(price_index=df[["timestamp"]])
+        enriched = builder.enrich_price_frame(df)
+        print(f"[INFO] Text context attached: {inserted_count} raw records refreshed.")
+        return enriched
+    except Exception as exc:
+        print(f"[WARNING] Text context unavailable; continuing with zero text factors. ({exc})")
+        fallback = df.copy()
+        for column in [
+            "text_event_count",
+            "text_sentiment_mean",
+            "text_shock_z",
+            "text_sentiment_momentum_1h",
+            "text_risk_count",
+            "text_macro_count",
+            "text_crypto_count",
+            "text_regulation_count",
+            "text_liquidity_count",
+        ]:
+            fallback[column] = 0.0
+        return fallback
 
 def run_database_simulation_and_generate_report_v2():
     print("[INFO] Starting real database-driven trading simulation v2 (with trade fees & slippage)...")
@@ -37,6 +71,7 @@ def run_database_simulation_and_generate_report_v2():
     df['local_support'] = df['low'].rolling(20).min().shift(1)
     df['local_resistance'] = df['high'].rolling(20).max().shift(1)
     df['avg_volume'] = df['volume'].rolling(20).mean().shift(1)
+    df = attach_realtime_text_context(df, db_path=db_path)
     
     # 앞쪽의 NaN을 제거하고 마지막 25개 시퀀스만 시뮬레이션용으로 추출
     sim_df = df.iloc[-25:].copy().reset_index(drop=True)
@@ -78,6 +113,11 @@ def run_database_simulation_and_generate_report_v2():
         btc_low = row['low']
         btc_high = row['high']
         btc_vol = row['volume']
+        text_sentiment = float(row.get('text_sentiment_mean', 0.0))
+        text_shock_z = float(row.get('text_shock_z', 0.0))
+        text_risk_count = float(row.get('text_risk_count', 0.0))
+        text_event_count = float(row.get('text_event_count', 0.0))
+        text_risk_guard = (text_sentiment <= -0.25 and text_risk_count > 0) or text_shock_z >= 2.5
         
         # 1) 가상 자산들의 동조화 가격 산출 (실제 비트코인 데이터에 비례)
         eth_close = btc_close * 0.05
@@ -159,7 +199,7 @@ def run_database_simulation_and_generate_report_v2():
         btc_breakout = (btc_close > row['local_resistance']) and (btc_vol > 1.2 * row['avg_volume'])
         
         # [BTC 매수 진입] (수수료 및 슬리피지 선반영)
-        if (btc_golden_cross or btc_breakout) and ('KRW-BTC' not in active_positions) and (cash >= 30000000.0):
+        if (btc_golden_cross or btc_breakout) and not text_risk_guard and ('KRW-BTC' not in active_positions) and (cash >= 30000000.0):
             buy_price = btc_close
             target_buy_value = 30000000.0
             
@@ -194,7 +234,7 @@ def run_database_simulation_and_generate_report_v2():
             print(f"[TRADE] Buy KRW-BTC at {buy_price:,.0f} KRW (Fee: {buy_fee:,.0f}, Slip: {buy_slippage:,.0f})")
             
         # [ETH 매수 진입] (수수료 및 슬리피지 선반영)
-        if (btc_golden_cross) and ('KRW-ETH' not in active_positions) and (cash >= 20000000.0):
+        if (btc_golden_cross) and not text_risk_guard and ('KRW-ETH' not in active_positions) and (cash >= 20000000.0):
             buy_price = eth_close
             target_buy_value = 20000000.0
             
@@ -227,7 +267,7 @@ def run_database_simulation_and_generate_report_v2():
             print(f"[TRADE] Buy KRW-ETH at {buy_price:,.0f} KRW (Fee: {buy_fee:,.0f}, Slip: {buy_slippage:,.0f})")
 
         # [SOL 매수 진입] (수수료 및 슬리피지 선반영, t=10 강베타 변동성 돌파 진입)
-        if (t == 10) and ('KRW-SOL' not in active_positions) and (cash >= 20000000.0):
+        if (t == 10) and not text_risk_guard and ('KRW-SOL' not in active_positions) and (cash >= 20000000.0):
             buy_price = sol_close
             target_buy_value = 20000000.0
             
@@ -281,6 +321,10 @@ def run_database_simulation_and_generate_report_v2():
             'sma20': row['sma20'],
             'local_resistance': row['local_resistance'],
             'volume': btc_vol,
+            'text_event_count': text_event_count,
+            'text_sentiment': text_sentiment,
+            'text_shock_z': text_shock_z,
+            'text_risk_guard': text_risk_guard,
             'action': action_msg,
             'portfolio_value': current_portfolio_value
         })
@@ -349,7 +393,7 @@ def run_database_simulation_and_generate_report_v2():
         # 가독성을 위해 액션 메시지 간소화
         short_action = s['action'][:40] + "..." if len(s['action']) > 40 else s['action']
         indicator_table_rows.append(
-            f"| {s['time']} | {s['btc_price']:,.0f} KRW | {s['sma5']:,.0f} KRW | {s['sma20']:,.0f} KRW | {s['local_resistance']:,.0f} KRW | {s['volume']:.2f} BTC | {short_action} | {s['portfolio_value']:,.0f} KRW |"
+            f"| {s['time']} | {s['btc_price']:,.0f} KRW | {s['sma5']:,.0f} KRW | {s['sma20']:,.0f} KRW | {s['local_resistance']:,.0f} KRW | {s['volume']:.2f} BTC | {s['text_event_count']:.0f} | {s['text_sentiment']:+.2f} | {s['text_shock_z']:+.2f} | {str(s['text_risk_guard'])} | {short_action} | {s['portfolio_value']:,.0f} KRW |"
         )
     indicator_table_content = "\n".join(indicator_table_rows)
 
@@ -410,11 +454,11 @@ def run_database_simulation_and_generate_report_v2():
 ### 1.3 데이터에 근거한 실시간 기술 지표 및 Codex 인지 엔진 추적 내역
 다음 데이터는 `btc_15m_advance` 테이블에서 추출한 실제 역사적 차트 흐름을 15분 단위로 추적하며, 가상의 ETH/SOL/XRP 종목들을 실시간 결합하여 이동평균선 및 돌파선을 계산한 실증 통계 매트릭스입니다.
 
-| 시간 (Time) | BTC 종가 (Price) | 단기 이평 (SMA-5) | 중기 이평 (SMA-20) | 국소 저항 (Resistance) | 거래량 (Volume) | Codex 인지 차트 리포트 및 액션 | 평가 자산 (Portfolio) |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 시간 (Time) | BTC 종가 (Price) | 단기 이평 (SMA-5) | 중기 이평 (SMA-20) | 국소 저항 (Resistance) | 거래량 (Volume) | 텍스트 이벤트 | 텍스트 감성 | 텍스트 쇼크 Z | 텍스트 리스크 가드 | Codex 인지 차트 리포트 및 액션 | 평가 자산 (Portfolio) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 {indicator_table_content}
 
-* *인덕티브 바이어스 고찰: Codex AI는 매 스텝마다 가격뿐만 아니라 캔들의 기하학적 형태(도지, 유성선, 상승장악형)를 독립 인지하여 트레이딩 가이드라인을 주도했습니다.*
+* *인덕티브 바이어스 고찰: Codex AI는 매 스텝마다 가격뿐만 아니라 캔들의 기하학적 형태(도지, 유성선, 상승장악형)와 실시간 텍스트 독립변수(뉴스/리포트/SNS 감성, 이벤트 쇼크, 리스크 토픽)를 함께 읽어 트레이딩 가이드라인을 주도했습니다.*
 
 ### 1.4 모의 투자 거래 이력 및 수수료/슬리피지 부과 원장 (Transaction Ledger)
 시뮬레이션 기간 동안 발생한 모든 기계적 BUY, STOP-LOSS, LIQUIDATION 거래 내역 원장입니다. **진입 시 0.07%(수수료 0.05% + 매수 슬리피지 0.02%) 및 청산 시 0.07%(수수료 0.05% + 매도 슬리피지 0.02%)의 거래 비용이 정확하게 계산되어 차감**되었습니다.
