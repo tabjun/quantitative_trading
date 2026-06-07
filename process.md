@@ -100,3 +100,11 @@
 - [x] Defined compact log format: `Date`, `Req`, `Constraints`, `Action/Output`, `Next`.
 - [x] Seeded it with the realtime text-context request and the L2-cache logging request.
 - [ ] Keep appending one compact row after each meaningful user task or direction change; do not store full raw conversation text.
+
+## 2026-06-08 Execution Actor Boundary Addendum
+
+- [x] Clarified that repo-level automation code, `uv run ...` examples, n8n/Cron/CI/Docker/Kubernetes designs, and school-server execution procedures must remain in the repository for other researchers/operators.
+- [x] Clarified that the restriction applies to Codex running analysis/training/backtests/notebooks from the local terminal or `.venv` during the user's personal research session.
+- [x] Clarified that research `.ipynb` code generation/modification should be mirrored to a same-name `.py` file for traceability.
+- [x] Updated `AGENTS.md`, `skills.md`, and `conversation_l2_cache.md` with the separated rule.
+- [ ] When adding future automation, keep runnable commands documented but do not execute them locally unless the user explicitly authorizes local execution.
