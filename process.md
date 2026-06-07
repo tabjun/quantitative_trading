@@ -74,3 +74,38 @@
 - [x] Reconciled the migration docs by rewriting the test docs to match the current Codex / `arxiv-mcp-server` workflow.
 - [x] Cleaned obvious generated clutter under `test/` and kept only the useful experiment artifacts.
 - [ ] Re-run a quick file-tree review if more temporary outputs appear during the next research pass.
+
+## 2026-06-07 Temporary Mail Prep Addendum
+
+- [x] Generated the temporary Upbit spot backtest report in `quantitative_trading/AI_trading_temporary/analysis_report.md`.
+- [x] Committed and pushed the report to `origin/stock` so the GitHub link is available for email delivery.
+- [x] Dispatch the email with `test/scripts/send_email.py` after loading `test/.env`.
+- [x] Remove the temporary attachment copy under `test/` after dispatch.
+- [x] Replace the mojibake email template with a clean UTF-8 Korean link-only delivery message.
+- [x] Remove the old temporary report and resend the corrected email with `AI_trading_youtube_upbit_report_20260607.md`.
+- [x] Restore `test/scripts/send_email.py` after the resend so the only remaining temporary AI trading artifact is the committed markdown report.
+
+## 2026-06-08 Realtime Text Context Addendum
+
+- [x] Added `text_context.py` for realtime text collection from RSS, optional Naver News API, and local report/SNS CSV exports.
+- [x] Added DuckDB mart tables `text_events_raw` and `text_features_15m` with 15-minute independent variables: event count, sentiment mean/sum, shock z-score, 1-hour sentiment momentum, and macro/risk/crypto/regulation/liquidity topic counts.
+- [x] Added `ingest_text_context.py` as the operational entrypoint: `uv run ingest_text_context.py`.
+- [x] Connected `simulate_and_send.py` to text factors and added `text_risk_guard` so strongly negative/risk-heavy text context can block new entries.
+- [x] Verified ingestion end-to-end: 90 RSS records refreshed, 91 total raw text rows retained, and 500 candle-aligned feature rows generated.
+- [ ] Next checkpoint: refresh or extend the realtime Upbit candle mart so 2026-06-08 text timestamps overlap price buckets, then run a text-aware backtest/report pass without triggering email delivery.
+
+## 2026-06-08 Conversation L2 Cache Addendum
+
+- [x] Added `conversation_l2_cache.md` at project root.
+- [x] Defined compact log format: `Date`, `Req`, `Constraints`, `Action/Output`, `Next`.
+- [x] Seeded it with the realtime text-context request and the L2-cache logging request.
+- [ ] Keep appending one compact row after each meaningful user task or direction change; do not store full raw conversation text.
+
+## 2026-06-08 Execution Actor Boundary Addendum
+
+- [x] Clarified that repo-level automation code, `uv run ...` examples, n8n/Cron/CI/Docker/Kubernetes designs, and school-server execution procedures must remain in the repository for other researchers/operators.
+- [x] Clarified that the restriction applies to Codex running heavy/long-running analysis, training, backtests, and notebook-result pipelines from the local terminal or `.venv` during the user's personal research session.
+- [x] Clarified that light local checks remain allowed: simple calculations, compile/syntax checks, import checks, and small unit tests.
+- [x] Clarified that research `.ipynb` code generation/modification should be mirrored to a same-name `.py` file for traceability.
+- [x] Updated `AGENTS.md`, `skills.md`, and `conversation_l2_cache.md` with the separated rule.
+- [ ] When adding future automation, keep runnable commands documented; run only light local checks unless the user explicitly authorizes heavy local research execution.
