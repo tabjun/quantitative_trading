@@ -93,3 +93,10 @@
 - [x] Connected `simulate_and_send.py` to text factors and added `text_risk_guard` so strongly negative/risk-heavy text context can block new entries.
 - [x] Verified ingestion end-to-end: 90 RSS records refreshed, 91 total raw text rows retained, and 500 candle-aligned feature rows generated.
 - [ ] Next checkpoint: refresh or extend the realtime Upbit candle mart so 2026-06-08 text timestamps overlap price buckets, then run a text-aware backtest/report pass without triggering email delivery.
+
+## 2026-06-08 Conversation L2 Cache Addendum
+
+- [x] Added `conversation_l2_cache.md` at project root.
+- [x] Defined compact log format: `Date`, `Req`, `Constraints`, `Action/Output`, `Next`.
+- [x] Seeded it with the realtime text-context request and the L2-cache logging request.
+- [ ] Keep appending one compact row after each meaningful user task or direction change; do not store full raw conversation text.
