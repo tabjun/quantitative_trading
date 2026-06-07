@@ -1,7 +1,7 @@
 # AI 퀀트 트레이딩 연구: 다변량 분석 기반 최하방 방어 모델
 
 <div align="center">
-  <img src="https://img.shields.io/badge/Agent-Antigravity--CLI%20(agy)-purple?style=for-the-badge&logo=ai" alt="Antigravity CLI Badge"/>
+  <img src="https://img.shields.io/badge/Agent-Codex--CLI%20(Codex CLI)-purple?style=for-the-badge&logo=ai" alt="Codex CLI Badge"/>
   <img src="https://img.shields.io/badge/Environment-uv-green?style=for-the-badge&logo=python" alt="uv Badge"/>
   <img src="https://img.shields.io/badge/Database-DuckDB%20%2F%20SQLite-orange?style=for-the-badge&logo=sqlite" alt="DB Badge"/>
 </div>
@@ -18,7 +18,7 @@
 - **Univariate to Multivariate:** 주가 데이터(단변량)에 의존하지 않고 뉴스, 전쟁, 매크로 지표, SNS 반응 등 외부 변수를 포함한 다변량 분석을 수행합니다.
 - **Pattern & Sentiment Matcher:** 현재의 주가 모양과 비슷한 과거 시점을 찾고, 당시의 '뉴스 맥락(감성)'까지 비교하여 현재 흐름을 예측합니다.
 - **Data Mart 기반 분석:** 매번 API를 호출하는 비효율을 제거하기 위해, 섹터별/이슈별로 정제된 데이터 마트를 구축(DuckDB/SQLite)하여 즉각적인 백테스트 환경을 조성합니다.
-- **AI-Agentic Workflow:** 연구의 전 과정(데이터 수집, 코딩, 분석, 리포트)을 **Antigravity CLI (`agy`) 에이전트**와 완벽히 통제된 환경에서 협업하여 수행합니다.
+- **AI-Agentic Workflow:** 연구의 전 과정(데이터 수집, 코딩, 분석, 리포트)을 **Codex CLI 에이전트**와 완벽히 통제된 환경에서 협업하여 수행합니다.
 
 ---
 
@@ -49,9 +49,9 @@ graph TD
 
 ---
 
-## 4. Antigravity CLI (agy) 환경 설정 및 실행 방법
+## 4. Codex CLI (Codex CLI) 환경 설정 및 실행 방법
 
-본 프로젝트는 속도와 의존성 관리에 최적화된 `uv` 패키지 매니저와, 플러그인/스킬이 극대화된 `Antigravity CLI (agy)`를 기반으로 구동됩니다.
+본 프로젝트는 속도와 의존성 관리에 최적화된 `uv` 패키지 매니저와, 플러그인/스킬이 극대화된 `Codex CLI (Codex CLI)`를 기반으로 구동됩니다.
 
 ### 4.1. 가상환경 및 종속성 동기화
 ```bash
@@ -63,37 +63,37 @@ uv run main.py
 ```
 
 ### 4.2. MCP 및 로컬 스킬 마이그레이션 구성
-본 프로젝트는 `agy` 가동 시 자동으로 로드되는 로컬 에이전트 설정을 완비하고 있습니다.
-- **ArXiv 학술 논문 MCP 서버:** `.agents/mcp_config.json`에 등록되어 있으며, `npx -y @mcp/arxiv-server`를 통해 논문 자료를 즉각적으로 색인합니다.
-- **Hugging Face Skills 라이브러리:** `.agents/skills/`에 14가지 정형 스킬(데이터셋 다운로드, 모델 탐색, Sentence Transformer 훈련, 가중치 최적화 등)이 마이그레이션되어 `agy`가 기본 툴 세트로 활용합니다.
+본 프로젝트는 `Codex CLI` 가동 시 자동으로 로드되는 로컬 에이전트 설정을 완비하고 있습니다.
+- **ArXiv 학술 논문 MCP 서버:** `.agents/mcp_config.json`, `.mcp.json`, `.codex/config.toml`에 등록되어 있으며, `uv tool install 'arxiv-mcp-server[pdf]'` 후 `arxiv-mcp-server`를 통해 논문 자료를 즉각적으로 검색합니다.
+- **Hugging Face Skills 라이브러리:** `.agents/skills/`에 14가지 정형 스킬(데이터셋 다운로드, 모델 탐색, Sentence Transformer 훈련, 가중치 최적화 등)이 마이그레이션되어 `Codex CLI`가 기본 툴 세트로 활용합니다.
 
 ---
 
-## 🔥 5. AI 에이전트(agy) 활용법 & 생산성 극대화 꿀팁 (AI-Agentic Tips)
+## 🔥 5. AI 에이전트(Codex CLI) 활용법 & 생산성 극대화 꿀팁 (AI-Agentic Tips)
 
 > [!NOTE]
 > 본 프로젝트는 주기적인 세션 초기화(리셋) 환경에서도 에이전트가 이전의 기억과 분석 기조를 즉시 복원하고, 번거로운 클릭 승인 없이 100% 자동 구동할 수 있도록 정교한 **AI 자가 치유 및 상태 보존 아키텍처**를 채택했습니다.
 
 ### 🚀 Tip 1. full-auto (자동 승인) 모드 구동
-작업 지시나 분석 명령을 실행할 때마다 에이전트가 파일 읽기/쓰기, 터미널 실행에 관해 허용 여부를 묻는 팝업을 거치는 것이 번거롭다면, `agy`를 구동할 때 **`--dangerously-skip-permissions`** 플래그를 추가하십시오.
+작업 지시나 분석 명령을 실행할 때마다 에이전트가 파일 읽기/쓰기, 터미널 실행에 관해 허용 여부를 묻는 팝업을 거치는 것이 번거롭다면, `Codex CLI`를 구동할 때 **`--dangerously-skip-permissions`** 플래그를 추가하십시오.
 ```bash
-agy --dangerously-skip-permissions "test/models/에 있는 시계열 모델 앙상블 분석하고 결과를 results에 적재해줘"
+Codex CLI --dangerously-skip-permissions "test/models/에 있는 시계열 모델 앙상블 분석하고 결과를 results에 적재해줘"
 ```
 *이 플래그를 사용하면 모든 파일 수정 및 명령어 동작이 에이전트의 판단에 따라 **자동 승인(Full-Auto)**되어 백그라운드 태스크나 오랜 연산이 필요한 퀀트 분석 자동화에 최적화됩니다.*
 
 ### 🚀 Tip 2. 주기적인 세션 초기화 및 '원클릭 맥락 복원' 시나리오
 컨텍스트 토큰 누적에 따른 성능 저하나 캐시 오염을 막기 위해 세션을 초기화(`/clear` 또는 터미널 재실행)한 뒤, **이전 작업의 맥락과 완료 목록을 원클릭으로 주입하여 Next Step을 자동 실행하게 하는 방법**입니다.
 
-1. **상태 관리의 주축 (`history.md` & `process.md` & `.antigravityrules`):**
-   - 프로젝트 루트의 `.antigravityrules` 파일은 `agy` 기동 시 자동으로 로드되어, 에이전트가 시작 시 무조건 `history.md`(수행 이력)와 `process.md`(연구 프로세스 ToDo 리스트)를 스캔하도록 강제합니다.
+1. **상태 관리의 주축 (`history.md` & `process.md` & `AGENTS.md`):**
+   - 프로젝트 루트의 `AGENTS.md` 파일은 `Codex CLI` 기동 시 자동으로 로드되어, 에이전트가 시작 시 무조건 `history.md`(수행 이력)와 `process.md`(연구 프로세스 ToDo 리스트)를 스캔하도록 강제합니다.
 2. **세션 리셋 후 복원 Magic Command:**
    ```bash
-   agy --dangerously-skip-permissions "history.md와 process.md를 읽고 현재 Next Step 작업을 바로 실행해줘"
+   Codex CLI --dangerously-skip-permissions "history.md와 process.md를 읽고 현재 Next Step 작업을 바로 실행해줘"
    ```
-   *이 단 한 줄의 명령만 실행하면, `agy`는 이전 세션의 마지막 종료 지점(예: Phase 2 / Step 2.1)을 정밀 인지하고, ToDo 목록 상의 다음 미완료 분석 모듈 개발 및 학습을 알아서 기계적으로 시작합니다.*
+   *이 단 한 줄의 명령만 실행하면, `Codex CLI`는 이전 세션의 마지막 종료 지점(예: Phase 2 / Step 2.1)을 정밀 인지하고, ToDo 목록 상의 다음 미완료 분석 모듈 개발 및 학습을 알아서 기계적으로 시작합니다.*
 
 ### 🚀 Tip 3. SOTA 학술 연동 및 결과 리포트 자동 생성 팁
-- "~~ 찾아줘" 혹은 "특정 예측 모델 조사해줘"와 같은 명령이 내려지면, 에이전트는 `.antigravityrules`에 명시된 규칙에 의거해 ArXiv MCP와 Hugging Face Local Skills를 연동하여 최신(SOTA) 연구를 탐색합니다.
+- "~~ 찾아줘" 혹은 "특정 예측 모델 조사해줘"와 같은 명령이 내려지면, 에이전트는 `AGENTS.md`에 명시된 규칙에 의거해 ArXiv MCP와 Hugging Face Local Skills를 연동하여 최신(SOTA) 연구를 탐색합니다.
 - 탐색을 마친 분석 보고서는 다음과 같은 **엄격한 전사적 6대 규격**에 맞춰 루트 또는 `test/results/` 경로에 Markdown으로 자동 생성됩니다.
   1. **실행 환경 명시:** 사용된 OS, CPU/GPU, 패키지 버전 및 데이터 스케일링/결측치 처리 방식 공개.
   2. **기초 통계량 분석:** 학습/예측 데이터의 `describe()` 결괏값 및 시계열 정상성 검정.

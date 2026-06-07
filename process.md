@@ -1,11 +1,11 @@
 # 연구 수행 프로세스 (Research Process)
 
-본 문서느 긴 호흡의 AI 에이전트 세션(Antigravity CLI 등)이 토큰 한계로 인해 망가지는 것을 방지하고, 사용자의 주기적 세션 초기화 요구에 완벽하게 대응하기 위해 작업을 모듈화된 **'단위 프로세스(Step)'**로 나눈 가이드라인입니다.
+본 문서느 긴 호흡의 AI 에이전트 세션(Codex CLI 등)이 토큰 한계로 인해 망가지는 것을 방지하고, 사용자의 주기적 세션 초기화 요구에 완벽하게 대응하기 위해 작업을 모듈화된 **'단위 프로세스(Step)'**로 나눈 가이드라인입니다.
 
 ## 💡 AI 에이전트 프로세스 진행 및 세션 복원 규칙
 - **세션당 범위 제한:** 한 세션(대화)에서는 **최대 1~2개의 Step**만 완료하는 것을 목표로 합니다.
 - **세션 종료 전 자동 기록:** 각 Step이 완료되면 세션을 종료하기 전에 반드시 프로젝트 루트의 `history.md`와 `process.md`에 수행 결과와 다음 Step을 명확히 기록(Update)해야 합니다.
-- **세션 초기화 후 즉각 복원:** 새로운 세션이 초기화되고 복원되어 작업을 다시 수행할 때, `agy` 에이전트는 `.antigravityrules`에 의거하여 **가장 먼저 `history.md`와 `process.md`를 읽고** 복원 지점(ToDo 리스트)으로 정확하게 진입하여 작업을 이어서 수행해야 합니다.
+- **세션 초기화 후 즉각 복원:** 새로운 세션이 초기화되고 복원되어 작업을 다시 수행할 때, `Codex CLI` 에이전트는 `AGENTS.md`에 의거하여 **가장 먼저 `history.md`와 `process.md`를 읽고** 복원 지점(ToDo 리스트)으로 정확하게 진입하여 작업을 이어서 수행해야 합니다.
 
 ---
 
@@ -52,7 +52,7 @@
   - MDD를 최소화하기 위해 '30% 현금 유동성 의무 확보', '매수가 대비 기계적 -2% 손절선(Stop-loss)', '단기 이동평균선(SMA-5/SMA-20) 돌파 및 거래량 동반(Breakout) 시 진입, 이평선 하회 시 철저히 관망' 등의 방어적 매매 전략을 설계하고, **모의 투자 2차 업그레이드(_v2)를 통해 업비트 표준 거래수수료 0.05% 및 호가 스프레드/체결지연 슬리피지 0.02%를 완벽하게 통합 산출하는 거래 비용 모델**을 코딩하여 포트폴리오 자산 마찰을 실전 퀀트 수준으로 극대화하여 구현했습니다.
 - **Step 3.2: Data Mart 연동 백테스트 (Completed - 2026-05-28)**
   - DuckDB `upbit_data.db`의 3년치 10.4만 행 고빈도 `btc_15m_advance` 테이블을 연동하여, pandas/numpy 기반으로 매틱마다 실시간 SMA 지표 및 국소 지지/저항선을 계산하는 모의 투자 시뮬레이터 v2를 기동하였습니다.
-  - 단순 코드 구동을 넘어 **Antigravity 내장 인지 모델 자체가 실시간 캔들 모양(Doji, Hammer, Marubozu, 상승장악형, 유성선)을 직접 시각적으로 판독**하고 거래를 기계적으로 집행하며 거래비용(수수료+슬리피지) 마찰의 가치를 극적으로 실증해 낸 보고서(`analysis_report.md`)를 생성하여 교수님께 메일 전송을 완료했습니다.
+  - 단순 코드 구동을 넘어 **Codex 내장 인지 모델 자체가 실시간 캔들 모양(Doji, Hammer, Marubozu, 상승장악형, 유성선)을 직접 시각적으로 판독**하고 거래를 기계적으로 집행하며 거래비용(수수료+슬리피지) 마찰의 가치를 극적으로 실증해 낸 보고서(`analysis_report.md`)를 생성하여 교수님께 메일 전송을 완료했습니다.
 - **Step 3.3: 하이퍼파라미터 튜닝**
   - 변동성 돌파 계수($k$), 손절 라인 등 파라미터를 조정하며 가장 안정적인 기대값을 도출합니다.
 
@@ -63,3 +63,14 @@
   - 차트 매칭 결과 및 자산 곡선을 시각화하는 모듈을 개발합니다.
 - **Step 4.2: AI 상황 복기 리포트 생성기**
   - "왜 떨어지고 있으며, 과거 유사 사례에서 반등의 트리거는 무엇이었는가"를 설명하는 논리적 텍스트 리포트를 LLM을 통해 자동 생성합니다.
+## MCP Recovery Addendum
+
+- [x] Retarget the arXiv MCP config to `arxiv-mcp-server` in `.agents/mcp_config.json`, `.codex/config.toml`, and `.mcp.json`.
+- [x] Update `README.md` and `AGENTS.md` so the documented launch path matches the installed server binary.
+- [ ] Verify the Codex MCP loader picks up `arxiv-mcp-server`, then keep that as the next checkpoint.
+
+## 2026-06-07 Session Addendum
+
+- [x] Reconciled the migration docs by rewriting the test docs to match the current Codex / `arxiv-mcp-server` workflow.
+- [x] Cleaned obvious generated clutter under `test/` and kept only the useful experiment artifacts.
+- [ ] Re-run a quick file-tree review if more temporary outputs appear during the next research pass.

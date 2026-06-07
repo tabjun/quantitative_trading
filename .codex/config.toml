@@ -7,5 +7,5 @@ approval_policy = "on-request"
 
 # Model Context Protocol (MCP) Servers
 [mcp_servers.arxiv]
-command = "npx.cmd"
-args = ["-y", "@mcp/arxiv-server"]
+command = "arxiv-mcp-server"
+args = []

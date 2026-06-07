@@ -22,12 +22,12 @@
 
 ### 1. Arxiv MCP Server 활용 (문헌 검색)
 최신 논문의 초록을 읽고 알고리즘의 원리를 실시간으로 파악합니다.
-- **활용법**: `agy` 세션에서 `"2025 Mamba time series paper summaries"`와 같이 논문 탐색을 요청하여 아카이브의 최신 연구를 즉각 반영합니다.
-- **설치**: `.agents/mcp_config.json`에 `arxiv` MCP 서버를 등록하여 `agy`와 연동해 사용합니다.
+- **활용법**: `Codex CLI` 세션에서 `"2025 Mamba time series paper summaries"`와 같이 논문 탐색을 요청하여 아카이브의 최신 연구를 즉각 반영합니다.
+- **설치**: `.agents/mcp_config.json`에 `arxiv` MCP 서버를 등록하여 `Codex CLI`와 연동해 사용합니다.
 
 ### 2. Hugging Face Skills 활용 (모델 및 데이터셋 연동)
 허깅페이스의 오픈소스 가중치나 데이터셋 메타데이터를 직접 조회합니다.
-- **활용법**: `.agents/skills/` 디렉터리에 Hugging Face Skills 리포지토리의 스킬들을 위치시켜 `agy`에서 네이티브 스킬로 직접 활용하며, `Chronos`나 `TimesFM` 같은 파운데이션 모델 정보를 탐색합니다.
+- **활용법**: `.agents/skills/` 디렉터리에 Hugging Face Skills 리포지토리의 스킬들을 위치시켜 `Codex CLI`에서 네이티브 스킬로 직접 활용하며, `Chronos`나 `TimesFM` 같은 파운데이션 모델 정보를 탐색합니다.
 
 이를 통해 **단순히 코드를 짜는 것에 그치지 않고, 2025년 이후의 최신 학술 트렌드를 분석 프로세스에 직접 결합**할 수 있는 연구소급 환경을 구축했습니다.
 
