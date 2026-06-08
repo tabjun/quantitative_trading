@@ -13,9 +13,9 @@ ROOT = Path(__file__).resolve().parents[2]
 REPORT_PATH = "test/research_materials/historical_flow_datamart_research_20260608.md"
 GITHUB_BASE = "https://github.com/tabjun/personal_ai_project"
 REPORT_URL = f"{GITHUB_BASE}/blob/stock/quantitative_trading/{REPORT_PATH}"
-MART_URL = f"{GITHUB_BASE}/blob/stock/quantitative_trading/historical_flow_mart.py"
-BUILD_URL = f"{GITHUB_BASE}/blob/stock/quantitative_trading/build_historical_flow_mart.py"
-QUERY_URL = f"{GITHUB_BASE}/blob/stock/quantitative_trading/query_historical_flows.py"
+MART_URL = f"{GITHUB_BASE}/blob/stock/quantitative_trading/marts/historical_flow.py"
+BUILD_URL = f"{GITHUB_BASE}/blob/stock/quantitative_trading/pipelines/build_historical_flow_mart.py"
+QUERY_URL = f"{GITHUB_BASE}/blob/stock/quantitative_trading/pipelines/query_historical_flows.py"
 
 
 def load_env() -> None:
@@ -52,9 +52,9 @@ def build_body(commit_hash: str) -> str:
 {REPORT_URL}
 
 구축 코드 링크:
-- historical_flow_mart.py: {MART_URL}
-- build_historical_flow_mart.py: {BUILD_URL}
-- query_historical_flows.py: {QUERY_URL}
+- marts/historical_flow.py: {MART_URL}
+- pipelines/build_historical_flow_mart.py: {BUILD_URL}
+- pipelines/query_historical_flows.py: {QUERY_URL}
 
 커밋 링크:
 {commit_url}
@@ -74,8 +74,8 @@ def build_body(commit_hash: str) -> str:
 - 이를 통해 현재 흐름의 원인이 과거 변곡점의 원인과 맞는지 함께 평가할 수 있습니다.
 
 4. 이용 방식
-- 서버 또는 자동화 환경에서 `uv run build_historical_flow_mart.py --window-lengths 16,48,96,288 --stride 4 --top-k 10 --liquid-top-n 50` 형태로 사전 마트를 구축합니다.
-- 분석 시점에는 `uv run query_historical_flows.py --ticker KRW-SOL --window-length 96 --top-k 10`처럼 현재 종목의 최근 흐름과 가장 유사한 과거 사건을 조회합니다.
+- 서버 또는 자동화 환경에서 `uv run pipelines/build_historical_flow_mart.py --window-lengths 16,48,96,288 --stride 4 --top-k 10 --liquid-top-n 50` 형태로 사전 마트를 구축합니다.
+- 분석 시점에는 `uv run pipelines/query_historical_flows.py --ticker KRW-SOL --window-length 96 --top-k 10`처럼 현재 종목의 최근 흐름과 가장 유사한 과거 사건을 조회합니다.
 - 조회 결과의 `query_composite_distance`가 낮을수록 가격 형태, 독립변수 상태, 당시 원인/맥락이 함께 유사한 과거 사례입니다.
 
 5. 저장 테이블

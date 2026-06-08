@@ -35,15 +35,15 @@ def build_message(sender: str, receiver: str) -> EmailMessage:
     )
     text_context_url = (
         "https://github.com/tabjun/personal_ai_project/blob/stock/"
-        "quantitative_trading/text_context.py"
+        "quantitative_trading/contexts/text_context.py"
     )
     ingest_url = (
         "https://github.com/tabjun/personal_ai_project/blob/stock/"
-        "quantitative_trading/ingest_text_context.py"
+        "quantitative_trading/pipelines/ingest_text_context.py"
     )
     sim_url = (
         "https://github.com/tabjun/personal_ai_project/blob/stock/"
-        "quantitative_trading/simulate_and_send.py"
+        "quantitative_trading/pipelines/simulate_and_send.py"
     )
 
     body = f"""교수님 안녕하세요.
@@ -74,7 +74,7 @@ def build_message(sender: str, receiver: str) -> EmailMessage:
 - 생성 변수는 text_event_count, text_sentiment_mean, text_shock_z, text_sentiment_momentum_1h, text_macro_count, text_risk_count, text_crypto_count, text_regulation_count, text_liquidity_count 등입니다.
 
 3. 분석 코드 반영
-- simulate_and_send.py에 텍스트 피처 결합 로직을 추가했습니다.
+- pipelines/simulate_and_send.py에 텍스트 피처 결합 로직을 추가했습니다.
 - 악재성 텍스트가 강하고 리스크 토픽이 감지되면 신규 진입을 차단하는 text_risk_guard를 추가했습니다.
 - 리포트 테이블에는 텍스트 이벤트 수, 감성 점수, 쇼크 Z-score, 리스크 가드 상태가 함께 표시되도록 했습니다.
 
@@ -82,12 +82,12 @@ def build_message(sender: str, receiver: str) -> EmailMessage:
 - 이번 실행에서 RSS 텍스트 90건을 refresh했습니다.
 - DuckDB raw table에는 총 91건의 텍스트 row가 유지되고 있습니다.
 - 기존 15분봉 가격 인덱스와 정렬된 text_features_15m 500행을 생성했습니다.
-- 문법 검증은 text_context.py, ingest_text_context.py, simulate_and_send.py 모두 통과했습니다.
+- 문법 검증은 contexts/text_context.py, pipelines/ingest_text_context.py, pipelines/simulate_and_send.py 모두 통과했습니다.
 
 [주요 코드 링크]
-- text_context.py: {text_context_url}
-- ingest_text_context.py: {ingest_url}
-- simulate_and_send.py: {sim_url}
+- contexts/text_context.py: {text_context_url}
+- pipelines/ingest_text_context.py: {ingest_url}
+- pipelines/simulate_and_send.py: {sim_url}
 
 다음 단계는 실시간 Upbit 캔들 마트를 최신 시점까지 갱신하여, 2026-06-08 텍스트 타임스탬프와 가격 타임스탬프가 실제로 겹치도록 만든 뒤, 학교 서버 커널에서 텍스트 독립변수가 반영된 백테스트/리포트 pass를 수행하는 것입니다.
 

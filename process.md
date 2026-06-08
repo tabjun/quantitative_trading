@@ -87,10 +87,10 @@
 
 ## 2026-06-08 Realtime Text Context Addendum
 
-- [x] Added `text_context.py` for realtime text collection from RSS, optional Naver News API, and local report/SNS CSV exports.
+- [x] Added `contexts/text_context.py` for realtime text collection from RSS, optional Naver News API, and local report/SNS CSV exports.
 - [x] Added DuckDB mart tables `text_events_raw` and `text_features_15m` with 15-minute independent variables: event count, sentiment mean/sum, shock z-score, 1-hour sentiment momentum, and macro/risk/crypto/regulation/liquidity topic counts.
-- [x] Added `ingest_text_context.py` as the operational entrypoint: `uv run ingest_text_context.py`.
-- [x] Connected `simulate_and_send.py` to text factors and added `text_risk_guard` so strongly negative/risk-heavy text context can block new entries.
+- [x] Added `pipelines/ingest_text_context.py` as the operational entrypoint: `uv run pipelines/ingest_text_context.py`.
+- [x] Connected `pipelines/simulate_and_send.py` to text factors and added `text_risk_guard` so strongly negative/risk-heavy text context can block new entries.
 - [x] Verified ingestion end-to-end: 90 RSS records refreshed, 91 total raw text rows retained, and 500 candle-aligned feature rows generated.
 - [ ] Next checkpoint: refresh or extend the realtime Upbit candle mart so 2026-06-08 text timestamps overlap price buckets, then run a text-aware backtest/report pass without triggering email delivery.
 
@@ -127,3 +127,12 @@
 - [x] 리서치 보고서는 `test/research_materials/historical_flow_datamart_research_20260608.md`에 표준 5단계 포맷으로 작성했다.
 - [x] 문법 검사와 tiny synthetic KRW multi-ticker 검증으로 table build/query 및 `query_composite_distance` 생성을 확인했다.
 - [x] `stock` 브랜치에만 커밋/푸시한 뒤 교수님께 UTF-8 한글 이메일로 보고했다.
+
+## 2026-06-08 Framework Structure Reorganization Addendum
+
+- [x] 루트 경로에 흩어져 있던 실사용 모듈을 역할군별 패키지로 재배치했다.
+- [x] `main.py`는 루트에 유지하고, 나머지 실사용 모듈은 `analysis/`, `advisors/`, `integrations/`, `contexts/`, `marts/`, `pipelines/`로 정리했다.
+- [x] `contexts/text_context.py`와 `marts/historical_flow.py`가 `/test` 분석 코드에서 직접 import 가능한 실사용 프레임워크 경로가 되도록 맞췄다.
+- [x] `README.md`, `AGENTS.md`, `skills.md`, 메일 스크립트, 연구 문서의 실행 경로와 코드 링크를 새 구조에 맞춰 갱신했다.
+- [x] `py_compile` 및 import check로 새 패키지 구조의 경로 정합성을 확인했다.
+- [ ] 필요 시 다음 단계에서 `/test/models/*.py`와 노트북 import 예시도 새 패키지 기준으로 추가 정리한다.

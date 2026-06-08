@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from historical_flow_mart import HistoricalFlowConfig, HistoricalFlowMart
+from marts.historical_flow import HistoricalFlowConfig, HistoricalFlowMart
 
 
 def main() -> None:

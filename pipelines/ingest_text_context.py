@@ -2,7 +2,7 @@
 CLI entrypoint for building realtime text independent variables.
 
 Usage:
-    uv run ingest_text_context.py
+    uv run pipelines/ingest_text_context.py
 
 Optional environment variables:
     TEXT_RSS_URLS      Pipe-separated RSS URLs.
@@ -18,7 +18,7 @@ from pathlib import Path
 
 import duckdb
 
-from text_context import TextDataCollector, TextFeatureBuilder
+from contexts.text_context import TextDataCollector, TextFeatureBuilder
 
 
 def load_recent_price_index(db_path: str, table_name: str = "btc_15m_advance", limit: int = 500):

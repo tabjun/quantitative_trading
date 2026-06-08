@@ -6,7 +6,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import duckdb
-from text_context import TextDataCollector, TextFeatureBuilder
+from contexts.text_context import TextDataCollector, TextFeatureBuilder
 
 
 def attach_realtime_text_context(df: pd.DataFrame, db_path: str) -> pd.DataFrame:

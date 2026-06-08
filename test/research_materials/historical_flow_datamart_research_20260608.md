@@ -176,20 +176,20 @@ subsequence 간 거리 profile을 계산해 가장 가까운 motif와 가장 먼
 
 | 파일 | 역할 |
 | :--- | :--- |
-| `historical_flow_mart.py` | 전체 KRW 마켓 historical flow mart 생성/조회 핵심 모듈 |
-| `build_historical_flow_mart.py` | 서버/자동화 환경에서 실행할 빌드 entrypoint |
-| `query_historical_flows.py` | 현재 ticker 흐름과 유사한 과거 사건 조회 CLI |
+| `marts/historical_flow.py` | 전체 KRW 마켓 historical flow mart 생성/조회 핵심 모듈 |
+| `pipelines/build_historical_flow_mart.py` | 서버/자동화 환경에서 실행할 빌드 entrypoint |
+| `pipelines/query_historical_flows.py` | 현재 ticker 흐름과 유사한 과거 사건 조회 CLI |
 
 운영 실행 예시는 다음과 같다. 이 명령은 전체 KRW 마켓을 대상으로 하므로 로컬 Codex 세션에서는 실행하지 않고, 학교 서버 또는 자동화 환경에서 실행한다.
 
 ```bash
-uv run build_historical_flow_mart.py --window-lengths 16,48,96,288 --stride 4 --top-k 10 --liquid-top-n 50
+uv run pipelines/build_historical_flow_mart.py --window-lengths 16,48,96,288 --stride 4 --top-k 10 --liquid-top-n 50
 ```
 
 조회 예시는 다음과 같다.
 
 ```bash
-uv run query_historical_flows.py --ticker KRW-SOL --window-length 96 --top-k 10
+uv run pipelines/query_historical_flows.py --ticker KRW-SOL --window-length 96 --top-k 10
 ```
 
 결과 해석은 `query_composite_distance`가 낮을수록 현재 흐름과 과거 사건이 더 유사하다는 뜻이다. 단순 형태 유사성은 `query_dtw_distance`, 독립변수 상태 유사성은 `query_factor_distance`, 당시 원인/맥락 유사성은 `query_context_distance`로 분해해 확인한다.

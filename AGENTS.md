@@ -105,7 +105,10 @@ Welcome to the Quantitative Trading & 시계열 (Time Series) Prediction Project
 
 - **스크립트 기동 및 테스트**:
   - `uv run main.py`
-  - `uv run analyzer.py`
+  - `uv run pipelines/ingest_text_context.py`
+  - `uv run pipelines/build_historical_flow_mart.py`
+  - `uv run pipelines/query_historical_flows.py`
+  - `uv run pipelines/simulate_and_send.py`
 - **Jupyter Notebook 변환 및 점검**:
   - 만약 `.ipynb` 파일을 갱신하는 경우, 변경점 추적이 용이하도록 동명의 `.py` 파일로 미러링(Mirroring)하여 동기화할 것을 강력히 권장합니다.
 - **SQLite DB 확인**:

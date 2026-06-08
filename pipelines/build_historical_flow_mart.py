@@ -4,7 +4,7 @@ Run this from the intended server/automation environment, not as a local heavy
 research pass during Codex code-generation sessions.
 """
 
-from historical_flow_mart import main
+from marts.historical_flow import main
 
 
 if __name__ == "__main__":
