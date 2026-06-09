@@ -12,6 +12,9 @@ dependencies = [
     "fastdtw",
     "scipy",
     "duckdb",
-    "pandas"
+    "pandas",
+    "torch",
+    "optuna",
+    "statsmodels"
 ]
 

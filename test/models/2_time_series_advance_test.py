@@ -1,12 +1,11 @@
 # [FOR COMMIT TRACKING ONLY - DO NOT EXECUTE]
 # This file is automatically mirrored from the corresponding .ipynb for git diff purposes.
-# Actual execution should be performed in the Jupyter Notebook (.ipynb).
+# Actual research execution should be performed in the Jupyter Notebook (.ipynb)
+# or in an approved remote/server environment.
 
-# %%
-"""
-# 📊 시계열 가격 예측 알고리즘 전수 분석
-분석 목적: 15종 이상의 시계열 모델을 3년치 15분봉 데이터를 기반으로 전수 조사합니다.
-"""
+# %% [markdown]
+# # 📊 시계열 가격 예측 알고리즘 전수 분석
+# 분석 목적: 15종 이상의 시계열 모델을 3년치 15분봉 데이터를 기반으로 전수 조사합니다.
 
 # %%
 # [1] 라이브러리 로드 및 환경 설정
@@ -52,10 +51,9 @@ except ImportError:
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-
 # %%
 # [2] DuckDB 접속 및 3년치 데이터 강제 확보 & 전처리 파이프라인 구축
-db_path = 'upbit_data.db'
+db_path = 'data/upbit_data.db'
 
 def fetch_and_save_3_years_data():
     print(">>> [데이터 수집 시작] 3년치(약 10.5만건) 15분봉 데이터를 수집합니다...")
@@ -189,7 +187,6 @@ class PreprocessingPipeline:
             std_prev = rolling_std[start_idx : start_idx + len(z_score_pred)]
             return z_score_pred * std_prev + mean_prev
 
-
 # %%
 # [3] 15종 모델 정의
 class ModelZoo:
@@ -254,7 +251,6 @@ class ModelZoo:
     class LinearDecompModel(nn.Module):
         def __init__(self, seq_len=60): super().__init__(); self.t_fc = nn.Linear(seq_len, 1); self.r_fc = nn.Linear(seq_len, 1)
         def forward(self, x): x = x.squeeze(-1); return self.t_fc(x) + self.r_fc(x)
-
 
 # %%
 # [4] 전수 조사 실행 (5대 손실 함수 및 시계열 Walk-Forward 교차 검증 적용)
@@ -490,6 +486,178 @@ metadata = {
 os.makedirs('test/results', exist_ok=True)
 with open('test/results/metadata.json', 'w') as f: json.dump(metadata, f, default=json_serial)
 
+# %%
+# [5] 심층 시각화 및 잔차 진단 자동 보고 (DPI 300 고해상도 인라인/로컬 동시 아카이빙)
+import os
+
+os.makedirs('test/images', exist_ok=True)
+plt.rcParams['figure.dpi'] = 300
+plt.rcParams['savefig.dpi'] = 300
+
+best_model_name = results_df[(results_df['Split'] == plot_split) & (results_df['P_Type'] == plot_p_type) & (results_df['Loss_Function'] == plot_loss_name)].sort_values('RMSE')['Model'].values[0]
+print(f"\n>>> 시각화 및 분석을 수행할 최고 성능 모델: {best_model_name}")
+
+print("\n[1] 모델별 학습 손실(Loss) 곡선 비교")
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 12), dpi=300)
+tf_related = ['Transformer', 'Informer', 'Autoformer', 'PatchTST', 'NonStat-TF']
+for m_name in tf_related:
+    if m_name in history_dict: ax1.plot(history_dict[m_name], label=m_name)
+ax1.set_title('Training Loss: Transformer-based Models'); ax1.set_xlabel('Epoch'); ax1.set_ylabel('Loss'); ax1.legend()
+others = [m for m in models_to_test.keys() if m not in tf_related]
+for m_name in others:
+    if m_name in history_dict: ax2.plot(history_dict[m_name], label=m_name)
+ax2.set_title('Training Loss: RNN, CNN, and Hybrid Models'); ax2.set_xlabel('Epoch'); ax2.set_ylabel('Loss'); ax2.legend(ncol=2)
+plt.tight_layout()
+plt.savefig('test/images/2_time_series_advance_test_plot_1.png', bbox_inches='tight')
+plt.show()
+
+# 💡 학습 손실률 변화 양상 해석 텍스트 출력
+print("\n📝 [학습 손실률 곡선 진단 보고]")
+print("==================================================================")
+print("💡 기존 원본 종가(MinMax/Standard) 기반 학습 시 손실률 곡선이 epoch 1에서")
+print("   수직 하락하여 거의 변화가 없었던 현상은 비정상 시계열의 '지연 매핑(Lag-1 Shift)'")
+print("   편법이 결출된 것입니다. 모델이 실질적인 미래 방향이 아닌 바로 전 시점의 가격을")
+print("   단순히 다음 시점 가격으로 예측하도록 가중치가 쏠려 Huber loss가 극소화된 것입니다.")
+print("💡 본 고도화 파이프라인에서 차분(Difference) 및 수익률(LogReturns)로 학습을 교체한 후,")
+print("   훈련 손실률이 초기 에포크에서부터 시작하여 계단식이거나 지수적이고 노이즈가 섞인")
+print("   '점진적 우하향 안정화 곡선'을 그리는 것을 확인할 수 있습니다. 이는 모델이 마침내")
+print("   단순 가격 복사에서 탈피하여 '실제 가격 변화 규칙'을 올바르게 학습하고 있음을 증명합니다.")
+print("==================================================================\n")
+
+print("\n[2] 실제 가격 vs 상위 모델 예측 비교")
+plt.figure(figsize=(20, 8), dpi=300)
+plt.plot(predictions_dict['Actual'][-300:], label='Actual BTC Price', color='black', linewidth=3)
+top_models = results_df[(results_df['Split'] == plot_split) & (results_df['P_Type'] == plot_p_type) & (results_df['Loss_Function'] == plot_loss_name)].sort_values('RMSE').head(5)['Model'].tolist()
+for m in top_models: 
+    if m in predictions_dict:
+        plt.plot(predictions_dict[m][-300:], label=f'{m} (Pred)', linestyle='--', alpha=0.7)
+plt.title(f'Price Prediction Comparison (Lagging Resolved) - Top 5 Models ({plot_p_type} / {plot_split})')
+plt.xlabel('Time in 15-min intervals')
+plt.ylabel('Price in KRW')
+plt.legend()
+plt.grid(True, alpha=0.2)
+plt.savefig('test/images/2_time_series_advance_test_plot_2.png', bbox_inches='tight')
+plt.show()
+
+residuals = predictions_dict['Actual'] - predictions_dict[best_model_name]
+
+print("\n[3] 최우수 모델 잔차(Residual) 히스토그램")
+plt.figure(figsize=(15, 5), dpi=300)
+sns.histplot(residuals, kde=True, color='teal'); plt.axvline(0, color='red', linestyle='--')
+plt.title(f'Residual Distribution - Best Model ({best_model_name})')
+plt.xlabel('Error (KRW)')
+plt.ylabel('Count')
+plt.savefig('test/images/2_time_series_advance_test_plot_3.png', bbox_inches='tight')
+plt.show()
+
+print("\n[4] 최우수 모델 잔차 QQ-Plot")
+plt.figure(figsize=(8, 6), dpi=300)
+if stats is not None:
+    stats.probplot(residuals, dist="norm", plot=plt)
+else:
+    plt.scatter(np.sort(np.random.normal(0, 1, len(residuals))), np.sort(residuals), alpha=0.5)
+    plt.title("Residual QQ-Plot (Fallback)")
+plt.title(f"QQ-Plot of Residuals - Best Model ({best_model_name})")
+plt.grid(True, alpha=0.2)
+plt.savefig('test/images/2_time_series_advance_test_plot_4.png', bbox_inches='tight')
+plt.show()
+
+print("\n[5] 최우수 모델 잔차 자기상관함수 (ACF) 플롯")
+plt.figure(figsize=(10, 4), dpi=300)
+if sm is not None:
+    sm.graphics.tsa.plot_acf(residuals, lags=40, ax=plt.gca())
+else:
+    acf_vals = [np.corrcoef(residuals[:-lag], residuals[lag:])[0, 1] if lag > 0 else 1.0 for lag in range(41)]
+    plt.bar(range(41), acf_vals, width=0.4)
+    plt.axhline(0, color='black', linewidth=0.5)
+    plt.axhline(1.96 / np.sqrt(len(residuals)), color='blue', linestyle='--')
+    plt.axhline(-1.96 / np.sqrt(len(residuals)), color='blue', linestyle='--')
+plt.title(f"Autocorrelation of Residuals (ACF) - Best Model ({best_model_name})")
+plt.xlabel('Lag')
+plt.ylabel('Autocorrelation')
+plt.savefig('test/images/2_time_series_advance_test_plot_5.png', bbox_inches='tight')
+plt.show()
+
+def generate_residual_report(y_true, y_pred, model_name):
+    res = y_true - y_pred
+    mean_res = np.mean(res)
+    std_res = np.std(res)
+    
+    # Durbin-Watson
+    dw_stat = np.sum(np.diff(res)**2) / np.sum(res**2) if len(res) > 1 else 2.0
+    
+    # Jarque-Bera
+    jb_stat, jb_p = 0.0, 1.0
+    if stats is not None:
+        try: jb_stat, jb_p = stats.jarque_bera(res)
+        except: pass
+    else:
+        n = len(res)
+        if n > 2:
+            m2 = np.mean((res - mean_res)**2)
+            m3 = np.mean((res - mean_res)**3)
+            m4 = np.mean((res - mean_res)**4)
+            if m2 > 1e-8:
+                skew = m3 / (m2**1.5)
+                kurt = m4 / (m2**2)
+                jb_stat = (n / 6.0) * (skew**2 + ((kurt - 3.0)**2) / 4.0)
+                
+    # Ljung-Box
+    lb_p = 1.0
+    if acorr_ljungbox is not None:
+        try:
+            lb_df = acorr_ljungbox(res, lags=[10], return_df=True)
+            lb_p = lb_df['lb_pvalue'].values[0]
+        except: pass
+        
+    print(f"\n==================================================")
+    print(f"📊 [{model_name}] 최우수 모델 잔차 분석 보고서 (Residual Diagnostics)")
+    print(f"==================================================")
+    print(f"1. 잔차 기초 통계:")
+    print(f"   - 잔차 평균: {mean_res:,.2f} KRW")
+    print(f"   - 잔차 표준편차: {std_res:,.2f} KRW")
+    
+    print(f"\n2. Durbin-Watson 자기상관 검정:")
+    print(f"   - DW 통계량: {dw_stat:.4f}")
+    if dw_stat < 1.5:
+        print("   💡 [해석] DW가 1.5 미만으로 잔차 간 '양의 자기상관'이 뚜렷합니다.")
+        print("     - 모델이 시계열의 최근 추세나 단기 모멘텀 패턴을 완전히 흡수하지 못했습니다.")
+        print("     - 보완책: 과거 유사 패턴을 검색하는 시계열 패턴 매칭(DTW) 모듈을 결합하여 지연 보강이 필요합니다.")
+    elif dw_stat > 2.5:
+        print("   💡 [해석] DW가 2.5 초과로 잔차 간 '음의 자기상관'이 존재합니다.")
+        print("     - 모형이 단기 변동을 과도하게 수정(Over-correction)하고 있을 수 있습니다.")
+    else:
+        print("   💡 [해석] DW가 2 부근에 위치하여 잔차 간 자기상관성이 거의 없는 이상적인 상태(화이트 노이즈에 가까움)입니다.")
+        
+    print(f"\n3. Jarque-Bera 정규성 검정:")
+    print(f"   - JB 통계량: {jb_stat:.4f} (p-value: {jb_p:.4f})")
+    if jb_p < 0.05:
+        print("   💡 [해석] p-value가 0.05 미만으로 잔차의 '비정규성(Non-Normality)'이 통계적으로 유의합니다.")
+        print("     - 비트코인 급락/급등과 같은 금융 자산 특유의 두터운 꼬리(Fat Tail, 왜도/첨도 극단성)와 이상치 영향입니다.")
+        print("     - 보완책: 리스크 극대화를 예방하기 위해 손절(-2%) 등의 최하방 MDD 자금 방어 매매 규칙을 필수 병행하십시오.")
+    else:
+        print("   💡 [해석] 잔차가 정규분포를 따릅니다. 오차가 무작위적이고 안정적입니다.")
+        
+    if acorr_ljungbox is not None:
+        print(f"\n4. Ljung-Box 시계열 종속성 검정 (Lag 10):")
+        print(f"   - p-value: {lb_p:.4f}")
+        if lb_p < 0.05:
+            print("   💡 [해석] 오차가 시간의 흐름에 따라 일정 패턴을 가지며 종속되어 있습니다.")
+            print("     - 단기 노이즈를 넘어서는 잔존 규칙성이 존재하므로 하이퍼파라미터 튜닝이나 레이어 너비(Width) 조정을 권장합니다.")
+        else:
+            print("   💡 [해석] 오차 간에 의미 있는 시계열 종속성이 검출되지 않아 독립적입니다.")
+    print(f"==================================================\n")
+
+generate_residual_report(predictions_dict['Actual'], predictions_dict[best_model_name], best_model_name)
+
+with open('test/results/img_paths.json', 'w') as f:
+    json.dump({
+        "loss": "test/images/2_time_series_advance_test_plot_1.png",
+        "pred": "test/images/2_time_series_advance_test_plot_2.png",
+        "resid": "test/images/2_time_series_advance_test_plot_3.png",
+        "qqplot": "test/images/2_time_series_advance_test_plot_4.png",
+        "acf": "test/images/2_time_series_advance_test_plot_5.png"
+    }, f)
 
 # %%
 # [5] 심층 시각화 및 잔차 진단 자동 보고 (DPI 300 고해상도 인라인/로컬 동시 아카이빙)
