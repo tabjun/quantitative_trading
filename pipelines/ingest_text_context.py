@@ -19,6 +19,7 @@ from pathlib import Path
 import duckdb
 
 from contexts.text_context import TextDataCollector, TextFeatureBuilder
+from database.paths import resolve_db_path
 
 
 def load_recent_price_index(db_path: str, table_name: str = "btc_15m_advance", limit: int = 500):
@@ -61,7 +62,7 @@ def write_feature_report(inserted_count: int, feature_count: int, db_path: str, 
 
 
 def main() -> None:
-    db_path = "upbit_data.db"
+    db_path = resolve_db_path("data/upbit_data.db")
     collector = TextDataCollector()
     records = collector.collect_all(max_items_per_source=30)
     builder = TextFeatureBuilder(db_path=db_path)

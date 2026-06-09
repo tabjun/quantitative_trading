@@ -24,6 +24,7 @@ from typing import Iterable, Sequence
 
 import duckdb
 import pandas as pd
+from database.paths import resolve_db_path
 
 
 DEFAULT_RSS_QUERIES = [
@@ -258,8 +259,8 @@ def deduplicate_records(records: Iterable[TextRecord]) -> list[TextRecord]:
 class TextFeatureBuilder:
     """Builds 15-minute text factors aligned to the existing candle mart."""
 
-    def __init__(self, db_path: str = "upbit_data.db"):
-        self.db_path = db_path
+    def __init__(self, db_path: str = "data/upbit_data.db"):
+        self.db_path = resolve_db_path(db_path)
 
     def persist_raw_records(self, records: Sequence[TextRecord]) -> int:
         with duckdb.connect(self.db_path) as con:
@@ -466,7 +467,7 @@ class TextFeatureBuilder:
         return frame[columns]
 
 
-def ingest_realtime_text_context(db_path: str = "upbit_data.db", max_items_per_source: int = 30) -> tuple[int, pd.DataFrame]:
+def ingest_realtime_text_context(db_path: str = "data/upbit_data.db", max_items_per_source: int = 30) -> tuple[int, pd.DataFrame]:
     collector = TextDataCollector()
     records = collector.collect_all(max_items_per_source=max_items_per_source)
     builder = TextFeatureBuilder(db_path=db_path)
@@ -476,7 +477,7 @@ def ingest_realtime_text_context(db_path: str = "upbit_data.db", max_items_per_s
 
 
 def load_price_with_text_context(
-    db_path: str = "upbit_data.db",
+    db_path: str = "data/upbit_data.db",
     price_table: str = "btc_15m_advance",
     limit: int | None = None,
 ) -> pd.DataFrame:

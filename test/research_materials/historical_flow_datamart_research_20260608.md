@@ -42,7 +42,10 @@ composite_distance =
 | 테이블 | 역할 |
 | :--- | :--- |
 | `historical_flow_windows` | ticker별 sliding window metadata 저장. |
-| `historical_flow_features` | 가격 형태, 독립변수, 컨텍스트 요약, vector json 저장. |
+| `historical_flow_shape_features` | 가격 모양, 경로 JSON, shape 요약 저장. |
+| `historical_flow_factor_features` | 추세/변동성/유동성 요약과 factor vector 저장. |
+| `historical_flow_context_features` | 텍스트 충격, topic exposure, context vector 저장. |
+| `historical_flow_features` | 위 3개 테이블을 조인한 호환용 view. |
 | `historical_flow_neighbors` | 과거 window 간 top-k 유사 흐름 저장. |
 | `historical_flow_event_stats` | 유사 사건 이후 1h/4h/24h/3d 수익률, 미래 MDD, 반등 확률 저장. |
 | `historical_regime_stats` | 추세, 변동성, 유동성 bucket 기반 regime label 저장. |

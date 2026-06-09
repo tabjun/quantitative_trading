@@ -1,34 +1,33 @@
-# %%
-"""
-# 딥러닝 기반 시계열 예측 모델 성능 비교 분석
-
-이 노트북은 [딥러닝 기반 시계열 예측 모델 동향](https://ppta.or.kr/webzine/2022_11/a1.html) 기사에 소개된 주요 알고리즘들을 사용하여 업비트 비트코인(BTC/KRW) 최근 1년 데이터를 분석하고 성능을 비교합니다.
-
-## 분석 알고리즘 리스트
-
-1. **RNN 계열 (RNN Family)**
-   - **RNN (Recurrent Neural Network)**: 기본적인 순환 신경망.
-   - **LSTM (Long-Short Term Memory)**: 장기 의존성 문제를 해결한 모델.
-   - **GRU (Gated Recurrent Unit)**: LSTM의 간소화 버전.
-
-2. **ODE/CDE 기반 모델 (ODE/CDE-based Models)**
-   - **Neural ODE**: 미분 방정식을 이용한 연속적 상태 변화 모델링.
-   - **ODE-RNN**: GRU의 은닉 상태 변화에 ODE를 적용.
-
-3. **Transformer 계열 (Transformer Family)**
-   - **Transformer**: 어텐션 메커니즘을 시계열에 적용.
-   - **Informer**: ProbSparse Attention을 통한 장기 예측 효율화.
-   - **Autoformer**: Auto-correlation 기법을 도입한 시계열 분해 모델.
-
-4. **GCN 계열 (GCN Family)**
-   - **STGCN / AGCRN**: 시공간적 관계(Spatio-Temporal)를 모델링하는 그래프 신경망.
-
----
-"""
-
 # [FOR COMMIT TRACKING ONLY - DO NOT EXECUTE]
 # This file is automatically mirrored from the corresponding .ipynb for git diff purposes.
-# Actual execution should be performed in the Jupyter Notebook (.ipynb).
+# Actual research execution should be performed in the Jupyter Notebook (.ipynb)
+# or in an approved remote/server environment.
+
+# %% [markdown]
+# # 딥러닝 기반 시계열 예측 모델 성능 비교 분석
+#
+# 이 노트북은 [딥러닝 기반 시계열 예측 모델 동향](https://ppta.or.kr/webzine/2022_11/a1.html) 기사에 소개된 주요 알고리즘들을 사용하여 업비트 비트코인(BTC/KRW) 최근 1년 데이터를 분석하고 성능을 비교합니다.
+#
+# ## 분석 알고리즘 리스트
+#
+# 1. **RNN 계열 (RNN Family)**
+#    - **RNN (Recurrent Neural Network)**: 기본적인 순환 신경망.
+#    - **LSTM (Long-Short Term Memory)**: 장기 의존성 문제를 해결한 모델.
+#    - **GRU (Gated Recurrent Unit)**: LSTM의 간소화 버전.
+#
+# 2. **ODE/CDE 기반 모델 (ODE/CDE-based Models)**
+#    - **Neural ODE**: 미분 방정식을 이용한 연속적 상태 변화 모델링.
+#    - **ODE-RNN**: GRU의 은닉 상태 변화에 ODE를 적용.
+#
+# 3. **Transformer 계열 (Transformer Family)**
+#    - **Transformer**: 어텐션 메커니즘을 시계열에 적용.
+#    - **Informer**: ProbSparse Attention을 통한 장기 예측 효율화.
+#    - **Autoformer**: Auto-correlation 기법을 도입한 시계열 분해 모델.
+#
+# 4. **GCN 계열 (GCN Family)**
+#    - **STGCN / AGCRN**: 시공간적 관계(Spatio-Temporal)를 모델링하는 그래프 신경망.
+#
+# ---
 
 # %%
 import pandas as pd
@@ -67,7 +66,7 @@ df.reset_index(inplace=True)
 df.rename(columns={'index': 'timestamp'}, inplace=True)
 
 # 2. DuckDB 저장 및 로드
-db_conn = duckdb.connect('upbit_data.db')
+db_conn = duckdb.connect('data/upbit_data.db')
 db_conn.execute("CREATE OR REPLACE TABLE btc_history AS SELECT * FROM df")
 data_from_db = db_conn.execute("SELECT * FROM btc_history ORDER BY timestamp").df()
 
@@ -257,24 +256,22 @@ plt.legend()
 plt.grid(True)
 plt.show()
 
-# %%
-"""
-## 분석 결과 요약 보고서
-
-### 1. 알고리즘별 성능 (MSE/MAE)
-| 알고리즘 | MSE | MAE |
-| :--- | :--- | :--- |
-| LSTM | {mse_lstm} | {mae_lstm} |
-| GRU | {mse_gru} | {mae_gru} |
-| Transformer | {mse_tf} | {mae_tf} |
-| ODE-RNN | {mse_ode} | {mae_ode} |
-
-### 2. 종합 해석
-- **LSTM/GRU**: 전통적인 순계열 모델로서 안정적인 수렴 성능을 보임. 비트코인과 같이 변동성이 큰 데이터에서도 추세를 비교적 잘 따라감.
-- **Transformer**: 어텐션 메커니즘을 통해 데이터 간의 관계를 파악하려 하나, 단일 시계열(Univariate)에서는 데이터 양이 적을 경우 오버피팅 가능성이 있음.
-- **ODE-RNN**: 연속적인 미분 방정식을 적용하여 상태 변화를 모델링함. 주가의 불규칙한 미세 변동을 포착하는 데 강점이 있을 수 있으나 연산량이 상대적으로 많음.
-
-### 3. 향후 과제
-- 다변량(Multivariate) 데이터(거래량, RSI, 뉴스 감성 등)를 추가하여 성능 고도화 필요.
-- Informer 및 Autoformer와 같은 최신 SOTA 모델의 하이퍼파라미터 튜닝 수행 예정.
-"""
+# %% [markdown]
+# ## 분석 결과 요약 보고서
+#
+# ### 1. 알고리즘별 성능 (MSE/MAE)
+# | 알고리즘 | MSE | MAE |
+# | :--- | :--- | :--- |
+# | LSTM | {mse_lstm} | {mae_lstm} |
+# | GRU | {mse_gru} | {mae_gru} |
+# | Transformer | {mse_tf} | {mae_tf} |
+# | ODE-RNN | {mse_ode} | {mae_ode} |
+#
+# ### 2. 종합 해석
+# - **LSTM/GRU**: 전통적인 순계열 모델로서 안정적인 수렴 성능을 보임. 비트코인과 같이 변동성이 큰 데이터에서도 추세를 비교적 잘 따라감.
+# - **Transformer**: 어텐션 메커니즘을 통해 데이터 간의 관계를 파악하려 하나, 단일 시계열(Univariate)에서는 데이터 양이 적을 경우 오버피팅 가능성이 있음.
+# - **ODE-RNN**: 연속적인 미분 방정식을 적용하여 상태 변화를 모델링함. 주가의 불규칙한 미세 변동을 포착하는 데 강점이 있을 수 있으나 연산량이 상대적으로 많음.
+#
+# ### 3. 향후 과제
+# - 다변량(Multivariate) 데이터(거래량, RSI, 뉴스 감성 등)를 추가하여 성능 고도화 필요.
+# - Informer 및 Autoformer와 같은 최신 SOTA 모델의 하이퍼파라미터 튜닝 수행 예정.

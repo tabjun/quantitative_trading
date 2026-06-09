@@ -13,17 +13,22 @@ import argparse
 import json
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Iterable, Sequence
 
 import duckdb
 import numpy as np
 import pandas as pd
 from fastdtw import fastdtw
+from database.paths import resolve_db_path
 
 
 SOURCE_TABLE = "upbit_krw_candle"
 BTC_FALLBACK_TABLE = "btc_15m_advance"
 WINDOW_TABLE = "historical_flow_windows"
+SHAPE_TABLE = "historical_flow_shape_features"
+FACTOR_TABLE = "historical_flow_factor_features"
+CONTEXT_TABLE = "historical_flow_context_features"
 FEATURE_TABLE = "historical_flow_features"
 NEIGHBOR_TABLE = "historical_flow_neighbors"
 EVENT_STATS_TABLE = "historical_flow_event_stats"
@@ -70,7 +75,7 @@ CONTEXT_VECTOR_COLUMNS = [
 
 @dataclass(frozen=True)
 class HistoricalFlowConfig:
-    db_path: str = "upbit_data.db"
+    db_path: str = "data/upbit_data.db"
     source_table: str = SOURCE_TABLE
     interval: str = "minute15"
     window_lengths: tuple[int, ...] = (16, 48, 96, 288)
@@ -100,6 +105,22 @@ class HistoricalFlowMart:
 
     def __init__(self, config: HistoricalFlowConfig | None = None):
         self.config = config or HistoricalFlowConfig()
+        if self.config.db_path:
+            self.config = HistoricalFlowConfig(
+                db_path=resolve_db_path(self.config.db_path),
+                source_table=self.config.source_table,
+                interval=self.config.interval,
+                window_lengths=self.config.window_lengths,
+                stride=self.config.stride,
+                top_k=self.config.top_k,
+                liquid_top_n=self.config.liquid_top_n,
+                index_universe=self.config.index_universe,
+                max_windows_per_ticker=self.config.max_windows_per_ticker,
+                allow_btc_fallback=self.config.allow_btc_fallback,
+                shape_weight=self.config.shape_weight,
+                factor_weight=self.config.factor_weight,
+                context_weight=self.config.context_weight,
+            )
 
     def load_source_candles(self) -> pd.DataFrame:
         with duckdb.connect(self.config.db_path, read_only=True) as con:
@@ -126,14 +147,16 @@ class HistoricalFlowMart:
     def build_from_candles(self, candles: pd.DataFrame) -> dict[str, int]:
         clean = self._attach_optional_context(self._prepare_candles(candles))
         liquid_tickers = self._select_liquid_tickers(clean)
-        windows, features, event_stats = self._build_windows_features_events(clean, liquid_tickers)
-        regimes = self._build_regimes(features)
-        neighbors = self._build_neighbors(features)
-        self._persist(windows, features, event_stats, regimes, neighbors, len(clean))
+        windows, feature_bundles, event_stats = self._build_windows_features_events(clean, liquid_tickers)
+        regimes = self._build_regimes(feature_bundles)
+        neighbors = self._build_neighbors(feature_bundles)
+        self._persist(windows, feature_bundles, event_stats, regimes, neighbors, len(clean))
         return {
             "source_rows": len(clean),
             "window_rows": len(windows),
-            "feature_rows": len(features),
+            "shape_rows": len(feature_bundles),
+            "factor_rows": len(feature_bundles),
+            "context_rows": len(feature_bundles),
             "event_stat_rows": len(event_stats),
             "regime_rows": len(regimes),
             "neighbor_rows": len(neighbors),
@@ -161,12 +184,12 @@ class HistoricalFlowMart:
             window_id="query",
             index_universe="query",
         )
-        query_path = np.asarray(json.loads(query_vector["return_path_json"]), dtype=float)
-        query_factor = np.asarray(json.loads(query_vector["factor_vector_json"]), dtype=float)
-        query_context = np.asarray(json.loads(query_vector["context_vector_json"]), dtype=float)
+        query_path = np.asarray(json.loads(query_vector["shape"]["return_path_json"]), dtype=float)
+        query_factor = np.asarray(json.loads(query_vector["factor"]["factor_vector_json"]), dtype=float)
+        query_context = np.asarray(json.loads(query_vector["context"]["context_vector_json"]), dtype=float)
 
         with duckdb.connect(self.config.db_path, read_only=True) as con:
-            exists = self._table_exists(con, FEATURE_TABLE)
+            exists = self._relation_exists(con, FEATURE_TABLE)
             if not exists:
                 return pd.DataFrame()
             where = "window_length = ? AND ticker <> ?"
@@ -229,26 +252,31 @@ class HistoricalFlowMart:
         should use the same independent-variable state when the data exists.
         """
         df = candles.copy()
-        with duckdb.connect(self.config.db_path, read_only=True) as con:
-            if not self._table_exists(con, "text_features_15m"):
-                for column in CONTEXT_COLUMNS:
-                    df[column] = 0.0
-                return df
-            context = con.execute(
-                """
-                SELECT timestamp,
-                       text_event_count,
-                       text_sentiment_mean,
-                       text_shock_z,
-                       text_sentiment_momentum_1h,
-                       text_risk_count,
-                       text_macro_count,
-                       text_crypto_count,
-                       text_regulation_count,
-                       text_liquidity_count
-                FROM text_features_15m
-                """
-            ).df()
+        try:
+            with duckdb.connect(self.config.db_path, read_only=True) as con:
+                if not self._relation_exists(con, "text_features_15m"):
+                    for column in CONTEXT_COLUMNS:
+                        df[column] = 0.0
+                    return df
+                context = con.execute(
+                    """
+                    SELECT timestamp,
+                           text_event_count,
+                           text_sentiment_mean,
+                           text_shock_z,
+                           text_sentiment_momentum_1h,
+                           text_risk_count,
+                           text_macro_count,
+                           text_crypto_count,
+                           text_regulation_count,
+                           text_liquidity_count
+                    FROM text_features_15m
+                    """
+                ).df()
+        except duckdb.IOException:
+            for column in CONTEXT_COLUMNS:
+                df[column] = 0.0
+            return df
         context["timestamp"] = pd.to_datetime(context["timestamp"], errors="coerce").dt.floor("15min")
         df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce").dt.floor("15min")
         df = df.merge(context, on="timestamp", how="left")
@@ -266,9 +294,9 @@ class HistoricalFlowMart:
 
     def _build_windows_features_events(
         self, candles: pd.DataFrame, liquid_tickers: set[str]
-    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    ) -> tuple[pd.DataFrame, list[dict[str, dict[str, object]]], pd.DataFrame]:
         window_rows: list[dict[str, object]] = []
-        feature_rows: list[dict[str, object]] = []
+        feature_bundles: list[dict[str, dict[str, object]]] = []
         event_rows: list[dict[str, object]] = []
         built_at = datetime.utcnow()
 
@@ -307,12 +335,12 @@ class HistoricalFlowMart:
                             "built_at": built_at,
                         }
                     )
-                    feature_rows.append(feature)
+                    feature_bundles.append(feature)
                     event_rows.append(
                         self._event_stats_row(ticker_df, ticker, window_id, end_idx - 1, window_length)
                     )
 
-        return pd.DataFrame(window_rows), pd.DataFrame(feature_rows), pd.DataFrame(event_rows)
+        return pd.DataFrame(window_rows), feature_bundles, pd.DataFrame(event_rows)
 
     def _window_feature_row(
         self,
@@ -321,7 +349,7 @@ class HistoricalFlowMart:
         window_length: int,
         window_id: str,
         index_universe: str,
-    ) -> dict[str, object]:
+    ) -> dict[str, dict[str, object]]:
         close = window["close"].astype(float).to_numpy()
         volume = window["volume"].fillna(0.0).astype(float).to_numpy()
         value = window["value"].fillna(0.0).astype(float).to_numpy()
@@ -339,44 +367,74 @@ class HistoricalFlowMart:
         bb_width_20 = _bb_width(close, period=20)
         amihud = np.abs(returns) / np.maximum(value, 1.0)
         context_summary = self._context_summary(window)
-        feature_values = {
-            "return_total": float(close[-1] / close[0] - 1.0),
-            "realized_vol": float(np.std(returns) * np.sqrt(max(window_length, 1))),
-            "mdd_in_window": float(np.min(drawdown)),
-            "trend_slope_per_hour": float(trend_slope),
-            "value_z_last": float(value_z[-1]) if len(value_z) else 0.0,
-            "volume_z_last": float(volume_z[-1]) if len(volume_z) else 0.0,
-            "rsi_14_last": float(rsi_14),
-            "roc_16_last": float(roc_16),
-            "bb_width_20_last": float(bb_width_20),
-            "amihud_illiq_mean": float(np.mean(amihud)),
-            **context_summary,
-        }
-        factor_vector = _standard_vector([feature_values[col] for col in FACTOR_VECTOR_COLUMNS])
-        context_vector = _standard_vector([feature_values[col] for col in CONTEXT_VECTOR_COLUMNS])
-        return {
+        shape_row = {
             "window_id": window_id,
             "ticker": ticker,
             "window_length": window_length,
             "window_start": window.iloc[0]["timestamp"],
             "window_end": window.iloc[-1]["timestamp"],
             "index_universe": index_universe,
-            **feature_values,
-            "value_sum": float(np.sum(value)),
-            "event_type": _classify_event(
-                return_total=feature_values["return_total"],
-                mdd=feature_values["mdd_in_window"],
-                vol=feature_values["realized_vol"],
-                shock_z=feature_values["context_shock_z_max"],
-                risk_count=feature_values["context_risk_count_sum"],
-                sentiment=feature_values["context_sentiment_mean"],
-            ),
+            "return_total": float(close[-1] / close[0] - 1.0),
+            "realized_vol": float(np.std(returns) * np.sqrt(max(window_length, 1))),
+            "mdd_in_window": float(np.min(drawdown)),
+            "trend_slope_per_hour": float(trend_slope),
             "return_path_json": json.dumps(return_path.round(8).tolist(), separators=(",", ":")),
             "volume_z_path_json": json.dumps(volume_z.round(8).tolist(), separators=(",", ":")),
             "value_z_path_json": json.dumps(value_z.round(8).tolist(), separators=(",", ":")),
-            "factor_vector_json": json.dumps(factor_vector.round(8).tolist(), separators=(",", ":")),
-            "context_vector_json": json.dumps(context_vector.round(8).tolist(), separators=(",", ":")),
             "updated_at": datetime.utcnow(),
+        }
+        factor_values = {
+            "return_total": float(close[-1] / close[0] - 1.0),
+            "realized_vol": float(np.std(returns) * np.sqrt(max(window_length, 1))),
+            "mdd_in_window": float(np.min(drawdown)),
+            "trend_slope_per_hour": float(trend_slope),
+            "value_sum": float(np.sum(value)),
+            "value_z_last": float(value_z[-1]) if len(value_z) else 0.0,
+            "volume_z_last": float(volume_z[-1]) if len(volume_z) else 0.0,
+            "rsi_14_last": float(rsi_14),
+            "roc_16_last": float(roc_16),
+            "bb_width_20_last": float(bb_width_20),
+            "amihud_illiq_mean": float(np.mean(amihud)),
+        }
+        factor_vector = _standard_vector([factor_values[col] for col in FACTOR_VECTOR_COLUMNS if col in factor_values])
+        factor_row = {
+            "window_id": window_id,
+            "ticker": ticker,
+            "window_length": window_length,
+            "window_start": window.iloc[0]["timestamp"],
+            "window_end": window.iloc[-1]["timestamp"],
+            "index_universe": index_universe,
+            **factor_values,
+            "factor_vector_json": json.dumps(factor_vector.round(8).tolist(), separators=(",", ":")),
+            "updated_at": datetime.utcnow(),
+            "event_type": _classify_event(
+                return_total=float(close[-1] / close[0] - 1.0),
+                mdd=float(np.min(drawdown)),
+                vol=float(np.std(returns) * np.sqrt(max(window_length, 1))),
+                shock_z=float(context_summary["context_shock_z_max"]),
+                risk_count=float(context_summary["context_risk_count_sum"]),
+                sentiment=float(context_summary["context_sentiment_mean"]),
+            ),
+        }
+        context_row = {
+            "window_id": window_id,
+            "ticker": ticker,
+            "window_length": window_length,
+            "window_start": window.iloc[0]["timestamp"],
+            "window_end": window.iloc[-1]["timestamp"],
+            "index_universe": index_universe,
+            **context_summary,
+            "context_vector_json": json.dumps(
+                _standard_vector([context_summary[col] for col in CONTEXT_VECTOR_COLUMNS]).round(8).tolist(),
+                separators=(",", ":"),
+            ),
+            "updated_at": datetime.utcnow(),
+        }
+        return {
+            "shape": shape_row,
+            "factor": factor_row,
+            "context": context_row,
+            "combined": {**shape_row, **factor_row, **context_row},
         }
 
     def _context_summary(self, window: pd.DataFrame) -> dict[str, float]:
@@ -433,10 +491,10 @@ class HistoricalFlowMart:
             "updated_at": datetime.utcnow(),
         }
 
-    def _build_regimes(self, features: pd.DataFrame) -> pd.DataFrame:
-        if features.empty:
+    def _build_regimes(self, feature_bundles: list[dict[str, dict[str, object]]]) -> pd.DataFrame:
+        if not feature_bundles:
             return pd.DataFrame()
-        df = features.copy()
+        df = pd.DataFrame([bundle["combined"] for bundle in feature_bundles])
         vol_q = df["realized_vol"].quantile([0.33, 0.66]).to_dict()
         liquidity_q = df["value_sum"].quantile([0.33, 0.66]).to_dict()
         rows = []
@@ -460,17 +518,26 @@ class HistoricalFlowMart:
             )
         return pd.DataFrame(rows)
 
-    def _build_neighbors(self, features: pd.DataFrame) -> pd.DataFrame:
-        if features.empty:
+    def _build_neighbors(self, feature_bundles: list[dict[str, dict[str, object]]]) -> pd.DataFrame:
+        if not feature_bundles:
             return pd.DataFrame()
         rows: list[dict[str, object]] = []
-        indexed = features[features["index_universe"].eq("liquid-top")].copy()
-        for window_length, group in indexed.groupby("window_length"):
-            group = group.sort_values("window_end").reset_index(drop=True)
-            path_vectors = np.vstack([json.loads(value) for value in group["return_path_json"]])
-            factor_vectors = np.vstack([json.loads(value) for value in group["factor_vector_json"]])
-            context_vectors = np.vstack([json.loads(value) for value in group["context_vector_json"]])
-            metadata = group.to_dict("records")
+        indexed = [
+            bundle["combined"]
+            for bundle in feature_bundles
+            if bundle["combined"]["index_universe"] == "liquid-top"
+        ]
+        if not indexed:
+            return pd.DataFrame()
+        indexed_by_length: dict[int, list[dict[str, object]]] = {}
+        for row in indexed:
+            indexed_by_length.setdefault(int(row["window_length"]), []).append(row)
+        for window_length, group in indexed_by_length.items():
+            group = sorted(group, key=lambda row: row["window_end"])
+            path_vectors = np.vstack([json.loads(value) for value in [row["return_path_json"] for row in group]])
+            factor_vectors = np.vstack([json.loads(value) for value in [row["factor_vector_json"] for row in group]])
+            context_vectors = np.vstack([json.loads(value) for value in [row["context_vector_json"] for row in group]])
+            metadata = group
             for idx, query in enumerate(metadata):
                 path_distances = np.linalg.norm(path_vectors - path_vectors[idx], axis=1)
                 factor_distances = np.linalg.norm(factor_vectors - factor_vectors[idx], axis=1)
@@ -521,16 +588,35 @@ class HistoricalFlowMart:
     def _persist(
         self,
         windows: pd.DataFrame,
-        features: pd.DataFrame,
+        feature_bundles: list[dict[str, dict[str, object]]],
         event_stats: pd.DataFrame,
         regimes: pd.DataFrame,
         neighbors: pd.DataFrame,
         source_rows: int,
     ) -> None:
-        with duckdb.connect(self.config.db_path) as con:
+        shape_features = pd.DataFrame([bundle["shape"] for bundle in feature_bundles])
+        factor_features = pd.DataFrame([bundle["factor"] for bundle in feature_bundles])
+        context_features = pd.DataFrame([bundle["context"] for bundle in feature_bundles])
+        db_path = Path(self.config.db_path)
+        try:
+            con_ctx = duckdb.connect(self.config.db_path)
+        except duckdb.IOException as exc:
+            if "not a valid DuckDB database file" not in str(exc):
+                raise
+            if db_path.exists():
+                db_path.unlink()
+            con_ctx = duckdb.connect(self.config.db_path)
+
+        with con_ctx as con:
+            for relation_name in [FEATURE_TABLE, SHAPE_TABLE, FACTOR_TABLE, CONTEXT_TABLE]:
+                con.execute(f"DROP VIEW IF EXISTS {relation_name}")
+                con.execute(f"DROP TABLE IF EXISTS {relation_name}")
+
             for table_name, frame in [
                 (WINDOW_TABLE, windows),
-                (FEATURE_TABLE, features),
+                (SHAPE_TABLE, shape_features),
+                (FACTOR_TABLE, factor_features),
+                (CONTEXT_TABLE, context_features),
                 (EVENT_STATS_TABLE, event_stats),
                 (REGIME_TABLE, regimes),
                 (NEIGHBOR_TABLE, neighbors),
@@ -539,6 +625,49 @@ class HistoricalFlowMart:
                 con.register("frame_df", frame)
                 con.execute(f"CREATE TABLE {table_name} AS SELECT * FROM frame_df")
                 con.unregister("frame_df")
+
+            con.execute(
+                f"""
+                CREATE VIEW {FEATURE_TABLE} AS
+                SELECT
+                    s.window_id,
+                    s.ticker,
+                    s.window_length,
+                    s.window_start,
+                    s.window_end,
+                    s.index_universe,
+                    s.return_total,
+                    s.realized_vol,
+                    s.mdd_in_window,
+                    s.trend_slope_per_hour,
+                    s.return_path_json,
+                    s.volume_z_path_json,
+                    s.value_z_path_json,
+                    f.value_sum,
+                    f.value_z_last,
+                    f.volume_z_last,
+                    f.rsi_14_last,
+                    f.roc_16_last,
+                    f.bb_width_20_last,
+                    f.amihud_illiq_mean,
+                    f.factor_vector_json,
+                    f.event_type,
+                    c.context_event_count_mean,
+                    c.context_sentiment_mean,
+                    c.context_shock_z_max,
+                    c.context_sentiment_momentum_1h,
+                    c.context_risk_count_sum,
+                    c.context_macro_count_sum,
+                    c.context_crypto_count_sum,
+                    c.context_regulation_count_sum,
+                    c.context_liquidity_count_sum,
+                    c.context_vector_json,
+                    GREATEST(s.updated_at, f.updated_at, c.updated_at) AS updated_at
+                FROM {SHAPE_TABLE} s
+                JOIN {FACTOR_TABLE} f USING (window_id, ticker, window_length, window_start, window_end, index_universe)
+                JOIN {CONTEXT_TABLE} c USING (window_id, ticker, window_length, window_start, window_end, index_universe)
+                """
+            )
 
             run_row = pd.DataFrame(
                 [
@@ -574,15 +703,16 @@ class HistoricalFlowMart:
             con.execute(f"INSERT INTO {RUN_LOG_TABLE} SELECT * FROM run_df")
             con.unregister("run_df")
 
-    def _table_exists(self, con: duckdb.DuckDBPyConnection, table_name: str) -> bool:
+    def _relation_exists(self, con: duckdb.DuckDBPyConnection, relation_name: str) -> bool:
         return bool(
             con.execute(
                 """
                 SELECT COUNT(*)
                 FROM information_schema.tables
                 WHERE table_name = ?
+                  AND table_type IN ('BASE TABLE', 'VIEW')
                 """,
-                [table_name],
+                [relation_name],
             ).fetchone()[0]
         )
 
@@ -658,7 +788,7 @@ def _classify_event(
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build KRW-wide historical flow DuckDB mart.")
-    parser.add_argument("--db-path", default="upbit_data.db")
+    parser.add_argument("--db-path", default="data/upbit_data.db")
     parser.add_argument("--window-lengths", default="16,48,96,288")
     parser.add_argument("--stride", type=int, default=4)
     parser.add_argument("--top-k", type=int, default=10)

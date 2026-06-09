@@ -4,19 +4,20 @@ from __future__ import annotations
 
 import argparse
 
+from database.paths import resolve_db_path
 from marts.historical_flow import HistoricalFlowConfig, HistoricalFlowMart
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Query similar historical KRW-market flows.")
-    parser.add_argument("--db-path", default="upbit_data.db")
+    parser.add_argument("--db-path", default="data/upbit_data.db")
     parser.add_argument("--ticker", required=True, help="Example: KRW-BTC, KRW-ETH, KRW-SOL")
     parser.add_argument("--window-length", type=int, default=96)
     parser.add_argument("--top-k", type=int, default=10)
     parser.add_argument("--include-all-index", action="store_true")
     args = parser.parse_args()
 
-    mart = HistoricalFlowMart(HistoricalFlowConfig(db_path=args.db_path))
+    mart = HistoricalFlowMart(HistoricalFlowConfig(db_path=resolve_db_path(args.db_path)))
     result = mart.query_similar_flows(
         ticker=args.ticker,
         window_length=args.window_length,

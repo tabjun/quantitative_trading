@@ -1,129 +1,120 @@
-# AGENTS.md - Codex Custom Instructions & Working Agreements
+# AGENTS.md - Codex 작업 지침서
 
-Welcome to the Quantitative Trading & 시계열 (Time Series) Prediction Project workspace. As an AI Agent (Codex), you must strictly adhere to the following rules, standards, and workflow procedures in this repository.
+## 목적
 
----
+이 문서는 이 저장소에서 Codex가 매 세션 반드시 따라야 하는 강제 규칙을 정의한다.
+영구 규칙은 여기 둔다. 세션별 요청 요약은 `conversation_l2_cache.md`에 짧게 둔다.
 
-## 0. 실행 주체 분리 규칙 (Execution Actor Boundary)
+## 0. 항상 먼저 읽을 문서
 
-> [!IMPORTANT]
-> **이 저장소에는 다른 연구원/운영자가 재현 실행할 수 있는 자동화 코드와 실행 명령을 남깁니다.**
-> 단, **Codex는 사용자의 개인 연구 세션에서 로컬 터미널로 대용량/장시간 연구 수행 코드(딥러닝 학습, 노트북 분석 실행, 백테스트, 분석 리포트 산출용 실험)를 수행하지 않습니다.**
-> 실제 학습/분석 실행은 학교 서버 커널, CI/스케줄러, 또는 사용자가 지정한 원격 실행 환경에서 수행합니다.
+새 세션이 시작되면 아래 순서로 읽는다.
 
-- **레포에 보존해야 하는 것**:
-  - 다른 사람이 실행할 수 있는 자동화 스크립트, CLI 엔트리포인트, 실행 명령 예시
-  - n8n/Cron/CI/Docker/Kubernetes 등 운영 자동화 설계와 코드
-  - 학교 서버 커널에서 실행할 명령, 파라미터, 리포트 생성 절차
-- **Codex가 이 개인 연구 세션에서 수행할 수 있는 것**:
-  - 코드 작성 및 수정
-  - 정적 코드 리뷰, diff 리뷰, 설계 리뷰
-  - 간단한 로컬 계산, 문법/컴파일 점검, import 확인, 작은 단위 테스트
-  - 실행 방법, 서버 커널 실행 절차, 리포트 템플릿 작성
-  - 논문/문서 조사 및 설계 근거 정리
-  - 연구용 `.ipynb` 작성 및 동일한 동명 `.py` 미러 파일 작성/동기화
-- **Codex가 이 개인 연구 세션에서 수행하지 않는 것**:
-  - 로컬 터미널에서 `uv run main.py`, `uv run analyzer.py` 등 장시간 분석/학습/백테스트 파이프라인을 실제 수행
-  - `.ipynb` 노트북을 실행하여 연구 결과를 산출
-  - `.venv` 또는 로컬 Python으로 대용량 연구 수행 코드를 실행
-  - 딥러닝 모델 학습, 대규모 추론, 성능지표 산출용 실험 실행
-  - 결과 수치 생성을 목적으로 한 DB/시계열 분석 실행
-- **예외 조건**:
-  - 사용자가 해당 세션에서 명시적으로 “로컬에서 실행해도 된다”고 승인한 경우에만 제한적으로 수행합니다.
-  - 승인 없이 필요한 검증은 코드 리뷰, diff 검토, 컴파일/문법 확인 같은 경량 검증으로 대체하고, 실제 연구 실행은 학교 서버 커널에서 수행하도록 안내합니다.
+1. `AGENTS.md`
+2. `process.md`
+3. `history.md`
+4. `conversation_l2_cache.md`
+5. `test/README.md`
 
----
+`conversation_l2_cache.md`는 전체를 길게 읽지 말고 최근 항목만 확인한다.
 
-## 1. 세션 초기화 및 기억 복원 (Session Persistence & Context Recovery)
+## 1. 영구 규칙
 
-> [!IMPORTANT]
-> **최우선 탐색 의무 (First-Scan Directive)**
-> 새로운 대화 세션이 시작되거나 세션 초기화/리셋이 감지되면, 다른 어떤 프롬프트 지시보다도 **가장 먼저 프로젝트 루트의 `history.md`와 `process.md` 파일을 정밀 스캔**하여 현재 진행 상태를 완벽히 동기화하십시오.
+다음 규칙은 캐시가 아니라 항상 적용되는 저장소 규칙이다.
 
-- **맥락 파악**: 두 문서를 통해 현재 수행 중인 '연구 단계(Phase)', '최종 완료된 태스크', 그리고 '즉시 진행해야 하는 Next Step'을 파악하여 인지 오차 없이 작업을 계승해야 합니다.
-- **작업 종료 전 상태 갱신**: 단일 태스크나 Step을 마친 후 작업을 종료하기 전, 다음 세션으로의 완벽한 컨텍스트 인계를 위해 **반드시** 아래 작업을 자동 수행하십시오:
-  1. `process.md`를 열어 완료된 Step을 업데이트하고 다음 목표를 수립합니다.
-  2. `history.md`에 오늘 날짜와 작업 이력 테이블을 추가하고, **"세션 인계를 위한 핵심 요약"**란을 최신 상태로 수정하십시오.
+1. 로컬 heavy run 금지, 경량 검증 허용
+   - 저장소에는 재현 가능한 자동화 코드와 실행 명령을 남긴다.
+   - Codex는 사용자의 개인 연구 세션에서 로컬 터미널 또는 `.venv`로 장시간 분석, 학습, 백테스트, 노트북 결과 산출을 실행하지 않는다.
+   - 허용되는 로컬 검증은 문법 검사, import 확인, 작은 synthetic 테스트, 정적 리뷰, diff 리뷰, 짧은 컴파일 점검이다.
+   - 실제 연구 실행은 학교 서버 커널, CI, 스케줄러, 또는 사용자가 명시적으로 승인한 원격 환경에서 수행한다.
 
----
+2. `/test`와 실사용 프레임워크를 분리한다
+   - 루트 `quantitative_trading/`는 실사용 프레임워크 코드와 운영 문서를 둔다.
+   - `test/`는 연구 실험, 노트북, 리서치 문서, 결과물 전용이다.
+   - 운영 진입점은 `pipelines/`에 둔다.
+   - 새 워크플로우 플러밍은 `.githooks/` 같은 인프라 폴더에 둔다.
 
-## 2. 학술 탐색 및 SOTA 연동 규칙 (Academic Research & MCP Integration)
+3. 연구 분석은 노트북 원본 + `.py` 미러를 유지한다
+   - 새 연구 실험은 `test/models/` 아래 `.ipynb` 원본을 먼저 만든다.
+   - 같은 이름의 `.py` 미러를 반드시 함께 유지한다.
+   - `.py` 미러는 Git diff 추적과 원격 실행용이며 노트북 대체물이 아니다.
+   - `.githooks/pre-commit`은 스테이징된 노트북을 자동 동기화하고, 동명 `.ipynb`가 없는 `test/models/*.py`를 차단한다.
 
-- **도구 및 플러그인 연동**:
-  - 논문 조사 또는 SOTA(State-of-the-Art) 모델 연구 지시를 받으면, 수동 웹 서칭 대신 구성된 **ArXiv MCP 서버** 및 로컬 `.agents/skills/` 내의 **Hugging Face Skills**를 적극 활용하여 정밀하게 자료를 탐색하십시오.
-  - Hugging Face는 MCP 서버가 아니라 **로컬 skill 세트**로 취급합니다. 이 프로젝트에서는 우선 **논문/아카이브 탐색 보조 용도**로만 사용하고, 모델·데이터셋·훈련·평가 작업은 사용자가 명시적으로 요청할 때만 별도 범위로 다룹니다.
-  - 2025~2026년 이후의 시계열 및 퀀트 최신 학술 동향을 우선 반영합니다.
-- **학술 자료 문서화 규격 (Standardized Research Paper Format)**:
-  - 수집되거나 인용된 논문 내용은 `test/research_materials/` 디렉토리에 마크다운(`.md`) 파일로 저장해야 하며, 반드시 아래의 **표준 5단계 포맷**을 엄격히 적용하십시오:
-    1. **[요약] (Summary)**: 논문의 핵심 아키텍처와 결론 1줄 요약.
-    2. **[서론] (Introduction)**: 기존 모델의 기술적 한계 및 연구 배경.
-    3. **[분석 기법] (Methodology)**: 알고리즘 아키텍처, 데이터 전처리 흐름, 학습 파라미터 상세 기재.
-    4. **[결과] (Results)**: SOTA 모델 대비 지표(MSE, MAE 등)의 구체적 향상도.
-    5. **[결론 및 설계 결정] (Conclusion)**: 해당 연구가 우리 프로젝트의 설계(예: 특정 레이어 층수, 노드 개수 결정 등)에 기여하는 명확한 이론적 근거 및 **[핵심 인용]** 구문 수록.
+4. 메일은 UTF-8 기준으로 다룬다
+   - 한국어 메일 본문은 UTF-8 또는 MIME-safe 방식으로 보낸다.
+   - PowerShell inline here-string으로 한글 SMTP 본문을 직접 조합하는 방식은 피한다.
+   - 재사용 가능한 메일 발송 도구만 `test/scripts/`에 둔다.
 
----
+5. branch 정책을 지킨다
+   - 사용자가 별도 지시하지 않으면 작업 브랜치에서만 커밋/푸시한다.
+   - `main` 또는 `develop` 병합은 사용자가 명시적으로 요청한 경우에만 수행한다.
+   - 보고서/메일 링크는 현재 작업 브랜치 기준 링크를 사용한다.
 
-## 3. 분석 및 예측 보고서 표준 규격 (Exhaustive Analysis & Reporting Standards)
+6. 새 파일을 만들기 전 먼저 검색하고 재사용한다
+   - `AGENTS.md`, `process.md`, `history.md`, `conversation_l2_cache.md`, `test/README.md`, `pipelines/`, `test/scripts/`, 기존 `test/models/*.ipynb/*.py`를 먼저 확인한다.
+   - 새 파일보다 기존 파일 수정 또는 확장을 우선한다.
 
-분석 결과 보고서(프로젝트 루트 및 `test/results/` 폴더 내 마크다운)는 반드시 아래 **6대 핵심 기준**을 완벽하게 만족해야 하며, 내용을 절대로 임의 축소하지 마십시오.
+7. `test/scripts/`에는 일회성 Python 파일을 만들지 않는다
+   - 허용: 노트북 빌더, 보고서 변환기, 이미지 추출기, 환경 복구기, 메일/리포트 전달기 같은 재사용 도구
+   - 금지: 이번 한 번만 쓰는 ad-hoc 스크립트
 
-- **0. 실행 및 분석 환경 (Execution & Utility Environment)**
-  - 분석 환경의 메타데이터(OS, CPU/GPU, 주요 라이브러리 버전 등) 명시.
-  - 데이터셋 용량, 시간 범위(예: 15분 단위 3년 데이터), 전처리 기법(데이터 스케일링, 결측치 보간 등)과 Train/Val/Test 분할 스펙 기술.
-- **1. 기초 통계량 분석 (Descriptive Statistics)**
-  - 분석 대상 시계열 데이터의 `describe()` 결괏값(평균, 분산, 왜도, 최소/최대치 등) 해석.
-  - 정상성(Stationarity) 검정 등 통계적 시계열 특징 명시.
-- **2. 알고리즘 성능 지표 (Advanced Performance Metrics)**
-  - 비교 및 사용한 모든 모델(Mamba, mTAND, TCN, PatchTST, Autoformer 등)의 오차 지표 기록.
-  - **스케일 역변환 필수**: 예측 가격이나 지표는 전처리용 normalized scale에 머무르지 않고, 반드시 **역변환(Inverse Transform)**을 적용하여 **원본 가격 스케일(KRW 등)** 기준으로 표기하십시오.
-  - **학술 지표 필수 산출**: 2025년 이후 학술계 표준인 **DA (Directional Accuracy / Hit Ratio)** 및 **MASE (Mean Absolute Scaled Error)** 필수 포함. (MASE가 1보다 작은지 검증하여 단순 Persistence 모델 대비 우월성을 수치로 증명할 것)
-- **3. 시각화 결과 및 상세 해석 (축 및 범례 텍스트 명시)**
-  - 모든 그래프 설명 시, 반드시 **X축(예: Time in 15-min intervals)**과 **Y축(예: Price in KRW)**의 축 정보 및 범례(Legend) 텍스트를 논리적으로 매치하여 설명하십시오.
-  - 추세 추종 능력, 지연 현상(Lagging) 해소 강도에 대해 기술적으로 정밀 분석.
-- **4. 종합 결론 및 전략 제언**
-  - "절대 잃지 않는다"는 **최하방 방어(MDD 최소화)** 퀀트 관점에서 최선의 알고리즘 및 매매 임계점(Thresholds) 설정 제안.
-- **5. 주요 도메인 용어 해설 (Glossary)**
-  - 보고서 내의 핵심 도메인 용어(예: 엣지(Edge), 라깅(Lagging), MDD 등)를 비전문가 눈높이에 맞게 해설.
-- **6. 개발 과정, 디버깅 이력 및 심층 탐구 (Development & Debugging Logs)**
-  - 단순 수치 요약을 넘어, **이전에 비해 실제 변경 및 수정한 코드 스니펫(Diff)**을 반드시 리포트에 삽입하십시오.
-  - 직면했던 **기술적 오류(예: PyTorch 차원 불일치 등)의 진단 경로와 완전한 코드 해결책** 기록.
-  - **시계열 지연 매핑(Lag-1 Shift) 메커니즘 심층 분석**: epoch 1 수준에서 훈련 손실이 수직 낙하하며 고착되던 현상은 '지연 매핑(Lag-1 Shift)' 편법 가중치 쏠림(이전 시점 가격을 다음 시점 가격으로 단순 카피 예측하여 loss를 낮추는 Trapping)이 원인임을 밝히고, 이를 극복하기 위해 수행한 PreprocessingPipeline의 지연 극복 전처리 설계와 그에 따른 점진적 손실 하강 안정화 결과를 정성/정량적으로 상세 기술하십시오.
+## 2. 실행 주체 분리
 
----
+### 저장소에 남길 것
 
-## 4. 모델 설계 철학 (Model Design Philosophy)
+- 다른 연구원이나 운영자가 실행할 수 있는 자동화 스크립트
+- `uv run ...` 형식의 재현 실행 명령 예시
+- n8n, Cron, CI, Docker, Kubernetes 같은 운영 자동화 설계
+- 학교 서버 커널에서 실행할 절차와 파라미터
 
-> [!TIP]
-> **"Shallow but Wide" 원칙**
-> 금융 시계열 데이터의 극심한 노이즈와 과적합(Overfitting) 방지를 위해, 딥러닝/시계열 예측 신경망 레이어는 **1~2층의 얕은 구조(Shallow)**로 설계하되, 각 레이어의 노드 수(Width)는 **64~128개**로 비교적 넓게 가져가는 기조를 엄격하게 유지하십시오.
+### Codex가 이 세션에서 할 수 있는 것
 
----
+- 코드 작성과 수정
+- 정적 코드 리뷰, diff 리뷰, 설계 리뷰
+- 문법 검사, import 확인, 작은 synthetic 테스트
+- 논문 조사와 설계 근거 정리
+- 연구용 `.ipynb` 작성과 `.py` 미러 동기화
 
-## 5. 재현 실행 및 자동화 명령 가이드
+### Codex가 하지 않는 것
 
-본 프로젝트에서는 패키지 관리 및 빠른 툴 기동을 위해 **`uv`** 환경을 사용합니다. 아래 명령은 **레포 사용자, 학교 서버 커널, CI/스케줄러, 운영 자동화가 재현 실행할 수 있도록 남기는 명령 규격**입니다. Codex는 별도 승인 없이 이 명령을 개인 연구 세션의 로컬 터미널에서 직접 실행하지 않습니다.
+- `uv run main.py` 같은 장시간 분석/학습/백테스트 파이프라인 로컬 실행
+- `.ipynb` 실행을 통한 연구 결과 산출
+- `.venv` 또는 로컬 Python으로 대용량 연구 수행 코드 실행
+- 결과 수치 생성을 목적으로 한 대규모 DB/시계열 분석 실행
 
-- **스크립트 기동 및 테스트**:
-  - `uv run main.py`
-  - `uv run pipelines/ingest_text_context.py`
-  - `uv run pipelines/build_historical_flow_mart.py`
-  - `uv run pipelines/query_historical_flows.py`
-  - `uv run pipelines/simulate_and_send.py`
-- **Jupyter Notebook 변환 및 점검**:
-  - 만약 `.ipynb` 파일을 갱신하는 경우, 변경점 추적이 용이하도록 동명의 `.py` 파일로 미러링(Mirroring)하여 동기화할 것을 강력히 권장합니다.
-- **SQLite DB 확인**:
-  - SQLite 클라이언트나 Python 스크립트를 사용하여 `upbit_data.db`에 있는 15분봉 등의 테이블 적재 현황을 직접 쿼리하여 검증할 수 있습니다.
+## 3. 분석 설계 원칙
 
----
+1. 2026-05 연구 설계를 유지한다
+   - PreprocessingPipeline의 핵심은 정상성 진단, 변환 비교/선택, Lag-1 shift 또는 copy-risk 기록이다.
+   - 모든 데이터를 하나의 정상 표현으로 강제하지 않는다.
+   - 원시 가격 수준만 그대로 학습시키지 않는다.
+   - 정상성 검정, 롤링 드리프트 점검, log return, diff, rolling z-score, EMA 변형, KRW 역복원 지표를 함께 사용한다.
 
-## 6. Git 자동 커밋 및 GitHub 마크다운 렌더링 경로 전송 규칙 (Git Auto-Push & Rendered Link Delivery)
+2. 보고서 기준
+   - 실행 및 분석 환경
+   - 기초 통계량과 정상성
+   - KRW 원본 스케일 기준 성능 지표
+   - DA와 MASE
+   - 축/범례를 포함한 시각화 해석
+   - MDD 최소화 관점의 종합 결론
+   - 용어 해설과 개발/디버깅 기록
 
-> [!IMPORTANT]
-> **보고서 전달 자동화 필수 전제조건 (Delivery Aesthetics & Accessibility)**
-> 보고서 마크다운(`.md`) 파일을 이메일로 자동 전송할 때, 단순 날것(Raw Text) 형식의 첨부 방식은 열람 가독성을 저해하므로 금지합니다. 에이전트는 반드시 보고서를 원격 저장소에 자동 반영하고, GitHub 고유의 미려한 스타일시트 렌더링 경로를 추출하여 이메일 본문에 연동해야 합니다.
+3. 모델 철학
+   - 금융 시계열은 "Shallow but Wide" 원칙을 유지한다.
+   - 레이어는 1~2층, width는 대체로 64~128 범위를 우선 검토한다.
 
-- **자동 Git 라이프사이클 집행**:
-  - 보고서(`analysis_report.md` 등) 또는 모의 투자 결과 파일이 생성/갱신되면, 이메일 발송 스크립트는 백그라운드에서 `git add`, `git commit -m "..."`, `git push origin stock` 명령어 세트를 자동으로 집행하여 GitHub 원격 `stock` 브랜치에 코드를 즉각 푸시해야 합니다.
-- **GitHub 렌더링 URL 구성 및 이메일 본문 연동**:
-  - 푸시 완료 후, GitHub 원격 주소 체계를 판독하여 해당 브랜치(`stock`) 하위의 파일 경로 주소(예: `https://github.com/tabjun/personal_ai_project/blob/stock/quantitative_trading/analysis_report.md`)를 동적으로 구성하십시오.
-  - 구성된 깃허브 실시간 마크다운 렌더링 링크를 이메일 본문(Email Body) 상단에 명확하게 삽입하고, 해당 보고서 내의 핵심 개선점(수수료 차감 내역, AI 차트 판독 논리 등)을 메일 텍스트에 상세히 요약 소개하여 보고서 접근성과 열람 편의성을 극대화하십시오.
+## 4. 재현 실행 명령
+
+아래 명령은 학교 서버, CI, 스케줄러, 운영자가 재현 실행할 수 있도록 저장소에 남기는 기준 명령이다.
+
+- `uv run main.py`
+- `uv run pipelines/ingest_text_context.py`
+- `uv run pipelines/build_historical_flow_mart.py`
+- `uv run pipelines/query_historical_flows.py`
+- `uv run pipelines/simulate_and_send.py`
+
+## 5. Git 및 전달 규칙
+
+- 보고서나 결과물이 생성되면 자동 발송 스크립트는 `git add`, `git commit`, `git push origin <branch>`를 수행할 수 있어야 한다.
+- 푸시 후에는 GitHub 렌더링 URL을 계산해 메일 본문 상단에 넣는다.
+- 메일 본문에는 핵심 개선점과 보고서 접근 링크를 함께 넣는다.
+
