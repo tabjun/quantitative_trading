@@ -1,5 +1,11 @@
 # [FOR COMMIT TRACKING ONLY - DO NOT EXECUTE]
 # This file is automatically mirrored from the corresponding .ipynb for git diff purposes.
+# Actual research execution should be performed in the Jupyter Notebook (.ipynb)
+# or in an approved remote/server environment.
+
+# %%
+# [FOR COMMIT TRACKING ONLY - DO NOT EXECUTE]
+# This file is automatically mirrored from the corresponding .ipynb for git diff purposes.
 # Actual execution should be performed in the Jupyter Notebook (.ipynb).
 
 # %% [markdown]
@@ -11,6 +17,7 @@
 # > - 시가/고가/저가/종가(OHLC) 봉 차트(Candle Chart) 상단 배치
 # > - 최우수 모델의 예측 종가 궤적 라인 그래프 오버레이
 # > - 가격 상승/하락 칼라가 정합된 거래량(Volume) 막대 그래프 하단 배치
+#
 
 # %%
 import pandas as pd
@@ -30,14 +37,18 @@ import time
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"🎉 Using device: {device} 🎉")
 
+# 기초통계량 출력 형식 변경
+pd.options.display.float_format = '{:,.2f}'.format
+
 # %% [markdown]
 # ## 1. 데이터 로딩 및 엄격한 9개월/3개월 시간 스플릿 설계
 # 업비트 전체 모든 종목의 1년치 15분봉 데이터를 로드하고, 앞의 9개월은 Train, 뒤의 3개월은 Test로 나눕니다.
+#
 
 # %%
 start_block1 = time.time()
 
-def fetch_and_save_all_krw_tickers_pyupbit(db_path='upbit_data.db', days=365):
+def fetch_and_save_all_krw_tickers_pyupbit(db_path='data/upbit_data.db', days=365):
     import pyupbit
     
     con = duckdb.connect(db_path)
@@ -127,7 +138,7 @@ def fetch_and_save_all_krw_tickers_pyupbit(db_path='upbit_data.db', days=365):
     con.close()
 
 def load_all_tickers_data():
-    db_path = 'upbit_data.db'
+    db_path = 'data/upbit_data.db'
     
     # pyupbit를 통한 자동 데이터 구축 실행 (데이터가 없을 경우에만 활성화됨)
     try:
@@ -182,6 +193,9 @@ def load_all_tickers_data():
 df_all = load_all_tickers_data()
 
 # %%
+df_all.describe()
+
+# %%
 def split_train_test_9_3(df):
     df = df.sort_values('timestamp').copy()
     min_date = df['timestamp'].min()
@@ -203,6 +217,7 @@ print(f"⏱️ Block 1 (Data Loading & Split) Execution Time: {time.time() - sta
 # %% [markdown]
 # ## 2. 15종 모델 정의 (Model Zoo)
 # 이전 단계에서 검증된 15개 SOTA 시계열 예측 모델들을 모두 통합합니다.
+#
 
 # %%
 start_block2 = time.time()
@@ -285,6 +300,7 @@ print(f"⏱️ Block 2 (Model Zoo Initialization) Execution Time: {time.time() -
 # - Cross Validation 생략 (속도 확보)
 # - 전처리: MinMaxScaler 단일화
 # - 그리드 서치: 각 모델별 은닉층 크기(Hidden Dim)를 [32, 64] 2가지로 탐색하며 전체 종목 데이터셋에 피팅.
+#
 
 # %%
 def perform_grid_search_and_evaluate(train_df, test_df, seq_len=60):
@@ -408,10 +424,10 @@ start_block3 = time.time()
 best_results_dict, best_model_name, model_times = perform_grid_search_and_evaluate(train_df, test_df, seq_len=60)
 print(f"⏱️ Block 3 (Model Zoo Grid Search) Execution Time: {time.time() - start_block3:.4f} seconds")
 
-
 # %% [markdown]
 # ## 4. 정통 금융 봉 차트(Candle Chart) + 거래량 막대 + 최우수 예측 모델 라인 융합 시각화
 # 네이버 블로그 명세를 준수하여, 시각적 왜곡이 전혀 없는 정통 금융 시각화 그래프를 생성합니다.
+#
 
 # %%
 start_block4 = time.time()
@@ -481,6 +497,7 @@ print(f"⏱️ Block 4 (Professional Candle Plot Visualizer) Execution Time: {ti
 # %% [markdown]
 # ## 5. 테스트 케이스 그룹별 실행 시간 리포트 (Execution Time Summary)
 # 각 모델 그룹(Test Case Group)별 훈련 및 검증 소요 시간을 마지막에 일목요연하게 출력합니다.
+#
 
 # %%
 print("\n" + "="*60)

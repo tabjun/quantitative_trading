@@ -1,124 +1,225 @@
+"""Reusable UTF-8 email sender for research reports.
+
+Usage examples:
+    python test/scripts/send_email.py
+    python test/scripts/send_email.py --preset text_context
+    python test/scripts/send_email.py --preset independent_variables
+    python test/scripts/send_email.py --preset historical_flow_mart
+"""
+
+from __future__ import annotations
+
+import argparse
 import os
 import smtplib
-import datetime
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
+import subprocess
+from email.message import EmailMessage
+from pathlib import Path
 
-# .env 파일 로드 로직 (python-dotenv가 없어도 작동하도록 기본 파서 구현)
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    env_path = os.path.join(os.path.dirname(__file__), '.env')
-    if os.path.exists(env_path):
-        with open(env_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, val = line.split('=', 1)
-                    os.environ[key.strip()] = val.strip()
 
-def send_professor_report():
-    print("[INFO] Preparing email notification...")
-    
-    # 환경변수에서 자격 증명 가져오기
-    sender_email = os.environ.get("NAVER_EMAIL_ID")
-    sender_password = os.environ.get("NAVER_APP_PASSWORD")
-    receiver_email = os.environ.get("RECEIVER_EMAIL")
-    
-    if not sender_email or not sender_password or not receiver_email:
-        print("[ERROR] Credentials not configured. Please check NAVER_EMAIL_ID, NAVER_APP_PASSWORD, RECEIVER_EMAIL in your .env file.")
-        return
+ROOT = Path(__file__).resolve().parents[2]
+GITHUB_BASE = "https://github.com/tabjun/personal_ai_project"
+REPO_BLOB_BASE = f"{GITHUB_BASE}/blob/stock/quantitative_trading"
 
-    smtp_server = "smtp.naver.com"
-    smtp_port = 465
-    
-    msg = MIMEMultipart()
-    msg['From'] = sender_email
-    msg['To'] = receiver_email
-    msg['Subject'] = "[윤태준 퀀트 트레이딩] 교수님 업비트 분석 및 실시간 가상 투자 v2 결과 보고서 전달드립니다."
-    
-    body = """안녕하세요 손낙훈 교수님,
 
-전달주신 시계열 알고리즘으로 다중 자산 통합 분석 및 벤치마크를 수행한 학술 결과와 함께, 교수님께서 피드백 주신 내용을 정밀 반영한 [모의 투자 v2 업그레이드 버전] 결과를 보고서 형식으로 전달드립니다.
+def load_env() -> None:
+    for env_path in (ROOT / "test/.env", ROOT / "test/scripts/.env", ROOT / ".env"):
+        if not env_path.exists():
+            continue
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip())
 
-이번 v2 버전에서는 단순 시뮬레이션 스토리 작성을 완전히 배제하고, DuckDB 데이터마트에 구축된 실제 업비트 3개년 비트코인 15분봉 원천 데이터(10.4만 행)를 직접 연동하여 실시간 이동평균선(SMA) 및 20캔들 기준 국소 지지/저항선을 계산하며 모의 투자를 집행하였습니다.
 
-특히, 교수님께서 주신 피드백을 실전 퀀트 수준으로 완벽하게 충족하여 보완하였습니다:
+def normalize_sender(sender: str) -> str:
+    sender = sender.strip()
+    if sender and "@" not in sender:
+        return f"{sender}@naver.com"
+    return sender
 
-1. [실질 거래 비용 및 슬리피지 마찰 모델 적용]:
-   현실 속 퀀트 매매 환경의 마찰 비용을 완벽 재현하기 위해 업비트 표준 거래 수수료(0.05%) 및 시장 스프레드/체결지연 슬리피지(0.02%)를 모든 매수/매도 진입 및 청산 시점에 개별 적용 및 이중 차감하였습니다. 이를 통해 가격이 산 가격에 그대로 팔리더라도 누적 수수료와 슬리피지로 인해 자산 평가액이 갉아먹히는 현실적인 거래비용 마찰의 파괴력을 극적으로 확인하였습니다 (총 111,911 KRW 비용 지출).
 
-2. [Codex AI의 자체 실시간 캔들 차트 패턴 판독 및 의사결정]:
-   단순한 파이썬 모듈 연산을 넘어, 제가 직접 실시간으로 raw 가격 매트릭스를 읽어내 10여 개 시점에 걸쳐 도지(Doji), 상승 장대양봉(Bullish Marubozu), 상승 장악형(Bullish Engulfing), 유성선(Shooting Star)/비석형(Gravestone Doji) 등의 정통 금융 캔들스틱 기하학 패턴을 독자적으로 판독해 매매를 주도하고 기록하였습니다.
+def git_head_short() -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    return result.stdout.strip()
 
-상세한 거래 원장, 실시간 이평선 추적 로그, -2% 손절 작동 검증 결과와 학술 벤치마크 diagnostics 수치들은 첨부해 드린 [analysis_report.md] 보고서 파일에 일목요연하게 일체 박제되어 있습니다.
 
-본 메일은 제가 직접 분석 - 가상 투자 시뮬레이션 - 보고서 작성 및 첨부 - SMTP 메일 전송까지 전 과정을 자동화하여 송신해 드리는 결과물입니다.
+def github_blob(path: str) -> str:
+    return f"{REPO_BLOB_BASE}/{path}"
 
-늘 날카롭고 유익한 통계학적 피드백을 통해 연구 방향을 지도해 주셔서 깊이 감사드립니다 교수님.
+
+def simulation_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    commit_url = f"{GITHUB_BASE}/commit/{commit_hash}"
+    body = f"""교수님 안녕하세요.
+
+실시간 모의투자 시뮬레이션 결과 보고 메일입니다.
+
+커밋 링크:
+{commit_url}
+
+이번 메일은 `analysis_report.md`와 `analysis_report.pdf`가 존재하면 첨부해 전송하도록 구성했습니다.
+기본 용도는 `pipelines/simulate_and_send.py`가 생성한 결과 전달입니다.
 
 감사합니다.
-윤태준 드림"""
-    
-    msg.attach(MIMEText(body, 'plain', 'utf-8'))
-    
-    # 1. MD 파일 첨부
-    md_path = "analysis_report.md"
-    if os.path.exists(md_path):
-        with open(md_path, "rb") as f:
-            part = MIMEBase("application", "octet-stream")
-            part.set_payload(f.read())
-            encoders.encode_base64(part)
-            part.add_header("Content-Disposition", f"attachment; filename={os.path.basename(md_path)}")
-            msg.attach(part)
-        print(f"[INFO] Attached {md_path} successfully.")
-    else:
-        # Try one level up or relative
-        alt_md_path = os.path.join(os.path.dirname(__file__), "analysis_report.md")
-        if os.path.exists(alt_md_path):
-            with open(alt_md_path, "rb") as f:
-                part = MIMEBase("application", "octet-stream")
-                part.set_payload(f.read())
-                encoders.encode_base64(part)
-                part.add_header("Content-Disposition", f"attachment; filename={os.path.basename(alt_md_path)}")
-                msg.attach(part)
-            print(f"[INFO] Attached {alt_md_path} successfully.")
-        else:
-            print(f"[WARNING] Markdown report file not found at {md_path}")
+"""
+    attachments = [ROOT / "analysis_report.md", ROOT / "analysis_report.pdf"]
+    subject = "[시계열/퀀트 연구] 시뮬레이션 결과 보고"
+    return subject, body, attachments
 
-    # 2. PDF 파일 첨부 (있을 경우에만)
-    pdf_path = "analysis_report.pdf"
-    if os.path.exists(pdf_path):
-        with open(pdf_path, "rb") as f:
-            part = MIMEBase("application", "pdf")
-            part.set_payload(f.read())
-            encoders.encode_base64(part)
-            part.add_header("Content-Disposition", f"attachment; filename={os.path.basename(pdf_path)}")
-            msg.attach(part)
-        print(f"[INFO] Attached {pdf_path} successfully.")
-    else:
-        alt_pdf_path = os.path.join(os.path.dirname(__file__), "analysis_report.pdf")
-        if os.path.exists(alt_pdf_path):
-            with open(alt_pdf_path, "rb") as f:
-                part = MIMEBase("application", "pdf")
-                part.set_payload(f.read())
-                encoders.encode_base64(part)
-                part.add_header("Content-Disposition", f"attachment; filename={os.path.basename(alt_pdf_path)}")
-                msg.attach(part)
-            print(f"[INFO] Attached {alt_pdf_path} successfully.")
-    
-    try:
-        print("[INFO] Connecting to Naver SMTP server...")
-        server = smtplib.SMTP_SSL(smtp_server, smtp_port)
-        server.login(sender_email, sender_password)
-        server.sendmail(sender_email, receiver_email, msg.as_string())
-        server.close()
-        print("[SUCCESS] Report and attachments emailed successfully!")
-    except Exception as e:
-        print(f"[ERROR] Email dispatch failed: {e}")
+
+def text_context_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    commit_url = f"{GITHUB_BASE}/commit/{commit_hash}"
+    report_path = "test/results/text_context_feature_report_20260608_012237.md"
+    body = f"""교수님 안녕하세요.
+
+실시간 텍스트 데이터(뉴스, 리포트, SNS)를 독립변수로 반영하는 환경 구축 내용을 공유드립니다.
+
+커밋 링크:
+{commit_url}
+
+보고서:
+{github_blob(report_path)}
+
+주요 코드:
+- contexts/text_context.py: {github_blob('contexts/text_context.py')}
+- pipelines/ingest_text_context.py: {github_blob('pipelines/ingest_text_context.py')}
+- pipelines/simulate_and_send.py: {github_blob('pipelines/simulate_and_send.py')}
+
+핵심 반영 사항:
+1. `text_events_raw`, `text_features_15m` DuckDB 테이블 추가
+2. 감성, 이벤트 수, shock, 토픽 count 기반 독립변수 구성
+3. `text_risk_guard`를 통한 신규 진입 차단 로직 추가
+
+감사합니다.
+"""
+    subject = "[시계열/퀀트 연구] 실시간 텍스트 독립변수 반영 환경 구축 보고"
+    return subject, body, []
+
+
+def independent_variables_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    commit_url = f"{GITHUB_BASE}/commit/{commit_hash}"
+    report_path = (
+        "test/research_materials/independent_variables_literature_review_20260608.md"
+    )
+    body = f"""교수님 안녕하세요.
+
+주식/코인 예측용 독립변수 후보를 논문 근거 기반으로 정리한 보고서를 공유드립니다.
+
+커밋 링크:
+{commit_url}
+
+보고서:
+{github_blob(report_path)}
+
+핵심 내용:
+1. 가격/변동성/유동성/오더북 변수
+2. 뉴스/리포트/SNS 감성 변수
+3. 매크로/글로벌 유동성/온체인/파생상품 변수
+4. 논문별 5단계 포맷 정리 및 실제 변수 설계안 반영
+
+감사합니다.
+"""
+    subject = "[시계열/퀀트 연구] 독립변수 설계 논문 조사 보고"
+    return subject, body, []
+
+
+def historical_flow_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    commit_url = f"{GITHUB_BASE}/commit/{commit_hash}"
+    report_path = "test/research_materials/historical_flow_datamart_research_20260608.md"
+    body = f"""교수님 안녕하세요.
+
+과거 유사 사건/흐름을 KRW 전체 종목 기준으로 조회하는 historical flow data mart 설계 및 구현 내용을 공유드립니다.
+
+커밋 링크:
+{commit_url}
+
+보고서:
+{github_blob(report_path)}
+
+주요 코드:
+- marts/historical_flow.py: {github_blob('marts/historical_flow.py')}
+- pipelines/build_historical_flow_mart.py: {github_blob('pipelines/build_historical_flow_mart.py')}
+- pipelines/query_historical_flows.py: {github_blob('pipelines/query_historical_flows.py')}
+
+핵심 내용:
+1. KRW 전체 종목 원천 저장 + 유동성 subset index
+2. `shape + factor + context` 복합 유사도
+3. 텍스트 컨텍스트를 포함한 변곡점 원인 매칭
+
+감사합니다.
+"""
+    subject = "[시계열/퀀트 연구] Historical Flow Data Mart 구축 보고"
+    return subject, body, []
+
+
+PRESETS = {
+    "simulation": simulation_email,
+    "text_context": text_context_email,
+    "independent_variables": independent_variables_email,
+    "historical_flow_mart": historical_flow_email,
+}
+
+
+def build_message(preset: str, sender: str, receiver: str) -> tuple[EmailMessage, list[Path]]:
+    commit_hash = git_head_short()
+    subject, body, attachments = PRESETS[preset](commit_hash)
+    msg = EmailMessage()
+    msg["From"] = sender
+    msg["To"] = receiver
+    msg["Subject"] = subject
+    msg.set_content(body, subtype="plain", charset="utf-8", cte="base64")
+    return msg, attachments
+
+
+def attach_files(msg: EmailMessage, attachments: list[Path]) -> None:
+    for path in attachments:
+        if not path.exists():
+            continue
+        data = path.read_bytes()
+        maintype = "application"
+        subtype = "octet-stream"
+        if path.suffix.lower() == ".pdf":
+            subtype = "pdf"
+        msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=path.name)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Send reusable UTF-8 report email.")
+    parser.add_argument(
+        "--preset",
+        choices=sorted(PRESETS.keys()),
+        default="simulation",
+        help="Email template preset. Default keeps compatibility with simulate_and_send.py.",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    load_env()
+    sender = normalize_sender(os.environ.get("NAVER_EMAIL_ID", ""))
+    password = os.environ.get("NAVER_APP_PASSWORD", "").strip()
+    receiver = os.environ.get("RECEIVER_EMAIL", "").strip()
+    if not sender or not password or not receiver:
+        raise SystemExit("Missing NAVER_EMAIL_ID, NAVER_APP_PASSWORD, or RECEIVER_EMAIL")
+
+    msg, attachments = build_message(args.preset, sender, receiver)
+    attach_files(msg, attachments)
+
+    with smtplib.SMTP_SSL("smtp.naver.com", 465, timeout=30) as server:
+        server.login(sender, password)
+        server.send_message(msg)
+    print(f"Sent preset '{args.preset}' email to {receiver}")
+
 
 if __name__ == "__main__":
-    send_professor_report()
+    main()

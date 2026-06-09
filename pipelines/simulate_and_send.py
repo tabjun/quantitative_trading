@@ -6,7 +6,8 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import duckdb
-from text_context import TextDataCollector, TextFeatureBuilder
+from contexts.text_context import TextDataCollector, TextFeatureBuilder
+from database.paths import resolve_db_path
 
 
 def attach_realtime_text_context(df: pd.DataFrame, db_path: str) -> pd.DataFrame:
@@ -45,7 +46,7 @@ def run_database_simulation_and_generate_report_v2():
     print("[INFO] Starting real database-driven trading simulation v2 (with trade fees & slippage)...")
     
     # 1. upbit_data.db에서 실제 데이터 로드
-    db_path = 'upbit_data.db'
+    db_path = resolve_db_path("data/upbit_data.db")
     if not os.path.exists(db_path):
         print(f"[ERROR] Database file not found at {db_path}")
         return

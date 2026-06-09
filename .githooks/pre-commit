@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+python quantitative_trading/.githooks/sync_ipynb_mirrors.py
+python quantitative_trading/.githooks/check_repo_policy.py
