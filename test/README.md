@@ -35,31 +35,35 @@
 - 특정 뉴스량이나 감성 합계보다, 구조화된 event/context feature가 더 유용한가
 - 텍스트를 독립변수로 넣을 때도 naive baseline보다 의미 있는 개선이 있는가
 
-## 5. 최적화 진단 실험
+## 5. 최적화 관련 연구 과제
 
-`5번` 실험은 성능 리더보드가 아니라 **학습 곡선 진단 실험**입니다.
+`5번` 실험은 단순 성능 비교용 리더보드가 아니라, **현재 연구 데이터의 학습 과정에서 어떤 최적화 문제가 생기는지 확인하고 이를 어떤 방식으로 통제할지 검토하는 실험**입니다.
 
-핵심 문제의식은 다음과 같습니다.
+이번 연구에서 중요한 점은 금융 시계열이 비정상적이고 잡음이 많다는 이유만으로 학습 실패를 모두 "기울기 소실"로 해석하면 안 된다는 것입니다. 실제로는 모델이 정보를 배우지 못한 것이 아니라, 현재 objective와 prediction head 조합이 허용하는 가장 쉬운 해로 빠져 `0 수익률 근처 예측`, `lag-1 복사`, `평균 회귀형 flat output` 같은 붕괴 패턴을 택할 수 있습니다.
 
-- 비정상 시계열에서 모델이 정말 구조를 배우는가
-- 아니면 loss function이 허용한 쉬운 해로 붕괴하는가
-- 이 현상이 단순 기울기 소실이 아니라 `0 수익률 예측`, `lag-1 복사`, `평균 회귀형 flat output` 문제는 아닌가
+그래서 이 실험은 “어떤 알고리즘이 최고 성능인가”를 고르는 단계가 아니라, **우리 연구 방향에서 어떤 학습 설정은 피해야 하고 어떤 설정은 다음 실험의 기본값으로 삼을 수 있는지 판단하는 진단 단계**로 둡니다. 이후 `/test/models` 아래 연구 실험을 확장할 때, 전처리 이전에 학습 objective 자체가 잘못된 shortcut을 허용하는지 먼저 점검하려는 목적입니다.
+
+### 먼저 확인하려는 연구 질문
+
+- 현재 next-close 또는 return target 설계가 복사형 shortcut을 유도하는가
+- Huber, 방향성 penalty, volatility weighting 같은 손실 함수 설계가 collapse를 줄이는가
+- 같은 objective를 쓰더라도 Linear, LSTM, GRU, TCN, Transformer 중 어떤 구조가 더 안정적인 학습 곡선을 보이는가
 
 ### 실험 구성
 
-- `objective_probe`: 같은 LSTM 계열에서 target/loss/head만 바꿔 objective의 영향을 관찰
-- `architecture_probe`: 같은 objective를 두고 Linear/LSTM/GRU/TCN/Transformer를 비교
-- `full_matrix`: 일부 objective와 architecture를 교차해 넓게 스캔
+- `objective_probe`: 같은 계열 모델에서 target, loss, prediction head만 바꿔 objective 설계가 붕괴를 유도하는지 확인
+- `architecture_probe`: 같은 objective를 둔 상태에서 Linear, LSTM, GRU, TCN, Transformer를 비교해 구조별 학습 안정성을 점검
+- `full_matrix`: objective와 architecture를 교차시켜 특정 조합에서만 발생하는 붕괴 패턴이 있는지 폭넓게 확인
 
 ### 주요 진단 지표
 
-- `collapse_score`: 낮을수록 좋음
+- `collapse_score`: 붕괴 징후를 종합한 지표로 낮을수록 좋음
 - `variance_ratio`: 예측 변화량 분산 / 실제 변화량 분산
 - `zero_share`: 거의 0에 가까운 수익률을 예측한 비율
-- `copy_alignment`: 현재 가격을 복사하는 경향
+- `copy_alignment`: 현재 가격 또는 직전 상태를 복사하는 경향
 - `persistence_gap`: naive persistence 대비 개선 여부
 
-즉, 이번 실험의 목적은 “어떤 모델이 가장 잘 맞는가”보다 “어떤 objective가 잘못된 쉬운 해를 덜 허용하는가”를 보는 데 있습니다.
+정리하면, 이번 실험의 목적은 “무슨 모델이 제일 잘 맞는가”보다 “어떤 objective와 구조 조합이 연구용 학습 과정에서 잘못된 쉬운 해로 무너지는가”를 먼저 가려내는 데 있습니다.
 
 ## 6. 실행 예시
 

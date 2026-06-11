@@ -102,7 +102,6 @@
 
 이번에 추가한 코드는 다음 파일들입니다.
 
-- `analysis/optimization_diagnostics.py`
 - `test/models/5_optimization_diagnostics_test.ipynb`
 - `test/models/5_optimization_diagnostics_test.py`
 

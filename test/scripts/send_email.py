@@ -149,18 +149,25 @@ def optimization_context_brief_email(commit_hash: str) -> tuple[str, str, list[P
     report_path = "test/research_materials/optimization_context_professor_brief_20260611.md"
     body = f"""교수님 안녕하세요.
 
-현재 연구에서 중요한 두 문제를 함께 정리한 브리프를 공유드립니다.
+이번 업데이트에서는 아래 두 가지 문제를 먼저 정리하고, 그에 맞춰 문서와 연구용 실험 코드를 수정했습니다.
 
-1. 코인 분석에서 주식형 증시 리포트 중심 접근이 왜 충분하지 않은지
-2. 비정상 시계열 학습에서 관찰되는 현상이 왜 단순 기울기 소실보다 objective가 허용한 쉬운 해 붕괴로 해석되어야 하는지
+1. 코인 분석 입력 설계 관점 수정
+- 주식처럼 증시 리포트나 일반 뉴스 중심으로 입력을 구성하는 방식은 코인 시장 설명력에 한계가 있다고 판단했습니다.
+- 그래서 코인 시장에서는 거래소 흐름, 규제/거시 이벤트, 유동성 변화, 위험 심리, SNS 반응처럼 시장 미시구조와 이벤트 전파가 더 직접적으로 반영되는 변수 구성이 필요하다는 방향으로 정리했습니다.
+
+2. 최적화 문제 해석 관점 수정
+- 비정상 시계열 학습 과정에서 보이는 문제를 단순 기울기 소실이나 성능 저하로만 보지 않고, objective와 prediction head가 허용하는 가장 쉬운 해로 붕괴하는 현상인지 먼저 확인하는 방향으로 재정리했습니다.
+- 이에 따라 `/test` 연구 공간에서는 단순 리더보드식 비교가 아니라, 학습 곡선을 보면서 `0 수익률 예측`, `lag-1 복사`, `flat output` 같은 shortcut collapse를 먼저 진단하는 구조로 문서와 코드를 수정했습니다.
 
 커밋 링크:
 {commit_url}
 
+아래 링크에서 수정 내용과 관련 문서를 함께 보실 수 있습니다.
+
 루트 프로젝트 개요 및 아키텍처:
 {github_blob('README.md')}
 
-연구 실험 공간 설명:
+연구 실험 공간 설명 및 최적화 문제 정리:
 {github_blob('test/README.md')}
 
 상세 브리프:
@@ -170,19 +177,17 @@ def optimization_context_brief_email(commit_hash: str) -> tuple[str, str, list[P
 {github_blob('materials/quant_architecture.png')}
 
 관련 코드:
-- analysis/optimization_diagnostics.py: {github_blob('analysis/optimization_diagnostics.py')}
 - test/models/5_optimization_diagnostics_test.ipynb: {github_blob('test/models/5_optimization_diagnostics_test.ipynb')}
 - test/models/5_optimization_diagnostics_test.py: {github_blob('test/models/5_optimization_diagnostics_test.py')}
 
-이번 실험은 성능 리더보드가 아니라 학습 곡선 진단 실험으로 구성했습니다.
-`objective_probe`, `architecture_probe`, `full_matrix` 세 가지 테스트 케이스를 통해
-어떤 loss / head / architecture 조합이 쉬운 해에 덜 붕괴하는지 확인할 수 있도록 정리했습니다.
+특히 이번에는 메일 본문만 읽어도 어떤 점을 수정했는지 바로 파악하실 수 있도록, 수정 관점을 1번과 2번으로 먼저 적었습니다.
+상세 브리프에서는 각 문제를 왜 연구상 중요하게 보는지, 그리고 이를 코드와 실험 구조에 어떻게 반영했는지를 조금 더 풀어서 정리했습니다.
 
 참고문헌은 통계 용어 설명과 함께 브리프 하단에 정리해 두었습니다.
 
 감사합니다.
 """
-    subject = "[시계열·코인 연구] 코인 맥락 변수와 최적화 경로 진단 브리프"
+    subject = "[시계열·코인 연구] 코인 입력 변수 관점 및 최적화 진단 구조 수정 브리프"
     return subject, body, []
 
 
