@@ -9,6 +9,7 @@ dependencies = [
     "openai",
     "google-generativeai",
     "numpy",
+    "matplotlib",
     "fastdtw",
     "scipy",
     "duckdb",
