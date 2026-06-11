@@ -105,7 +105,26 @@
 - `test/models/5_optimization_diagnostics_test.ipynb`
 - `test/models/5_optimization_diagnostics_test.py`
 
-설계 의도는 전처리 변경이 아니라 `objective / head / architecture` 조합의 차이를 학습 곡선으로 비교하는 것입니다.
+오늘 수정한 핵심은, 이 코드를 “독립변수까지 모두 포함한 본격 예측 실험”이 아니라 **최적화 경로만 빠르게 보는 경량 진단 코드**로 다시 정리한 것입니다.
+
+따라서 기본 실행은 다음 원칙을 따릅니다.
+
+- 텍스트 독립변수 전체를 붙이지 않고 endogenous market feature만 사용
+- sequence length, row 수, overlapping window 수를 줄여 몇 분 내 학습 곡선 확인이 가능하도록 축소
+- 가장 먼저 봐야 하는 `target / loss / head` 조합만 작은 LSTM probe로 점검
+
+즉, 설계 의도는 전처리 변경이나 최종 성능 측정이 아니라 `objective / head / architecture` 조합의 차이를 **낮은 비용으로 빠르게** 학습 곡선으로 비교하는 것입니다.
+
+### 4.0 기본 실행 `quick_probe`
+
+기본 실행은 새로 추가한 `quick_probe`입니다.
+
+- feature set: `optimization_probe`
+- 입력 변수: `log_return_1`, `return_4`, `realized_vol_16`, `hl_range_pct`, `volume_z_96`, `spread_proxy`
+- 기본 길이: `seq_len=32`, `max_rows=2500`, `max_windows=512`, `window_stride=4`
+- 기본 모델 크기: `hidden_dim=32`, `epochs=5`, `batch_size=64`
+
+이렇게 줄인 이유는, 지금 단계의 질문이 “독립변수를 더 넣으면 좋아지는가”가 아니라 “학습이 애초에 쉬운 해로 붕괴하는가”이기 때문입니다. 빠른 probe에서 이미 collapse가 뚜렷하면, 데이터나 독립변수를 더 늘리는 것은 계산량만 키우고 원인 해석은 더 흐릴 수 있습니다.
 
 ### 4.1 `objective_probe`
 
@@ -114,11 +133,11 @@
 - `next_close_level + MSE`
 - `next_log_return + MSE`
 - `next_log_return + Huber`
-- `next_log_return + volatility-weighted MSE`
 - `next_log_return + directional hybrid loss`
-- `next_log_return + tail-focus loss`
 
 이 probe의 목적은 “어떤 target/loss 설계가 shortcut collapse를 가장 덜 허용하는가”를 보는 것입니다.
+
+여기서 `Huber`를 둔 이유는 최근 금융 시계열 연구에서 outlier와 turbulent regime에 대한 강건성을 높이기 위해 robust loss를 쓰는 흐름이 강화되고 있기 때문입니다. 또한 directional hybrid는 단순 point error만 줄이다가 `0 수익률 근처`로 붕괴하는 현상을 막기 위해, 값 예측과 방향 일치를 함께 보려는 목적의 실험적 설계입니다.
 
 ### 4.2 `architecture_probe`
 
@@ -127,14 +146,14 @@
 - Linear
 - LSTM
 - GRU
-- TCN
-- Transformer encoder
 
 이 probe의 목적은 “objective를 고정해도 아키텍처에 따라 collapse 민감도가 달라지는가”를 확인하는 것입니다.
 
+여기서는 TCN, Transformer를 기본 비교군에서 제외했습니다. 이유는 지금 목표가 SOTA 비교가 아니라 **최적화 곡선의 이상 징후를 빠르게 확인하는 것**이기 때문입니다. 먼저 Linear, LSTM, GRU처럼 계산 비용이 낮고 해석이 쉬운 축에서 collapse 양상을 확인한 뒤, 필요할 때만 더 복잡한 구조로 확장하는 편이 합리적입니다.
+
 ### 4.3 `full_matrix`
 
-아키텍처와 objective 일부를 교차해, 보다 넓은 조합을 한 번에 볼 수 있게 했습니다.
+아키텍처와 objective 일부를 교차해, 보다 넓은 조합을 한 번에 볼 수 있게 했습니다. 다만 이 역시 이전 버전보다 줄여서, 빠른 탐색이 가능하도록 제한된 조합만 남겼습니다.
 
 ## 5. 현재 연구에 대한 제안
 
@@ -153,15 +172,16 @@
 
 ### 5.2 최적화 실험 설계
 
-학습 단계에서는 raw close level을 바로 맞추는 케이스를 “통제군”으로만 두고, 실제 연구 방향은 다음을 우선 검토하는 것이 좋습니다.
+학습 단계에서는 raw close level을 바로 맞추는 케이스를 “통제군”으로만 두고, 실제 연구 방향은 다음 순서로 검토하는 것이 좋습니다.
 
-1. return target 기반 head
-2. Huber 또는 weighted regression
-3. directional hybrid penalty
-4. tail / turning-point emphasis
-5. 학습 곡선에서 collapse score, variance ratio, zero share 동시 모니터링
+1. `quick_probe`로 빠르게 collapse 여부 확인
+2. return target 기반 head
+3. Huber 기반 robust regression
+4. directional hybrid penalty
+5. 필요할 때만 architecture probe 확장
+6. 학습 곡선에서 collapse score, variance ratio, zero share 동시 모니터링
 
-즉, 지금 단계에서 중요한 것은 “어떤 모델이 0.001 더 낮은 loss를 냈는가”보다 “어떤 objective가 잘못된 쉬운 해를 덜 허용하는가”입니다.
+즉, 지금 단계에서 중요한 것은 “어떤 모델이 0.001 더 낮은 loss를 냈는가”보다 “어떤 objective가 잘못된 쉬운 해를 덜 허용하는가”입니다. 이 판단이 끝난 후에야, 4번 실험의 텍스트 독립변수나 더 큰 데이터 범위를 안전하게 얹을 수 있습니다.
 
 ## 6. 참고문헌 및 활용 포인트
 
@@ -212,6 +232,14 @@
 11. Hyndman, R. J., & Koehler, A. B. (2006). *Another Look at Measures of Forecast Accuracy*. International Journal of Forecasting, 22(4), 679-688.  
     링크: https://robjhyndman.com/papers/mase.pdf  
     활용 포인트: naive baseline 대비 scaled error인 `MASE` 해석의 표준 근거입니다. 이번 실험은 리더보드가 목적은 아니지만, naive persistence를 기준선으로 둬야 한다는 점을 설명하는 데 유용합니다.
+
+12. Liu, A., Ma, J., & Zhang, G. (2025). *Adapting to the Unknown: Robust Meta-Learning for Zero-Shot Financial Time Series Forecasting*. arXiv:2504.09664.  
+    링크: https://arxiv.org/abs/2504.09664  
+    활용 포인트: turbulent financial time series에서 robust loss를 채택하는 최근 흐름을 보여주며, 이번 `Huber` 선택의 근거로 참고했습니다.
+
+13. Guo, R., Qiu, H., & Hou, X. (2025). *A Novel Loss Function for Deep Learning Based Daily Stock Trading System*. arXiv:2502.17493.  
+    링크: https://arxiv.org/abs/2502.17493  
+    활용 포인트: 금융 시계열에서 손실함수를 수익률 크기와 방향성에 더 가깝게 맞추려는 최근 흐름을 보여줍니다. 이번 코드의 directional hybrid 및 “쉬운 해 붕괴 방지” 문제의식과 연결됩니다.
 
 ## 7. 최종 정리
 

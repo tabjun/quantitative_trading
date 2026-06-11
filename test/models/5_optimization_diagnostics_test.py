@@ -7,17 +7,18 @@
 # # 5. 최적화 경로 진단 실험
 #
 # [연구용 스크립트 - Codex 로컬 세션에서 자동 실행 금지]
-# 이번 실험은 성능 리더보드가 아니라, 비정상 금융 시계열에서 어떤 objective / head / architecture 조합이 쉬운 해(0 수익률, lag-1 복사)에 붕괴하는지를 학습 곡선으로 확인하기 위한 진단용 pass입니다.
+# 이번 실험은 성능 리더보드가 아니라, 비정상 금융 시계열에서 어떤 objective / head / architecture 조합이 쉬운 해(0 수익률, lag-1 복사)에 붕괴하는지를 빠르게 확인하기 위한 경량 진단용 pass입니다.
 #
 # 핵심 질문:
 # - raw next-close 회귀가 실제로 copy-risk를 키우는가?
 # - return target만으로 충분한가, 아니면 Huber / 방향성 penalty / volatility weighting이 필요한가?
-# - 같은 objective를 두었을 때 Linear / LSTM / GRU / TCN / Transformer 중 어느 쪽이 더 안정적인가?
+# - 같은 objective를 두었을 때 Linear / LSTM / GRU 중 어느 쪽이 더 안정적인가?
 #
 # 기본 실행 예시:
+# - `uv run test/models/5_optimization_diagnostics_test.py`
 # - `uv run test/models/5_optimization_diagnostics_test.py --suite objective_probe`
-# - `uv run test/models/5_optimization_diagnostics_test.py --suite architecture_probe --epochs 12`
-# - `uv run test/models/5_optimization_diagnostics_test.py --suite full_matrix --max-rows 8000 --feature-set text_aware`
+# - `uv run test/models/5_optimization_diagnostics_test.py --suite architecture_probe --max-windows 768 --epochs 6`
+# - `uv run test/models/5_optimization_diagnostics_test.py --suite full_matrix --feature-set market_only --max-rows 4000`
 #
 # 산출물:
 # - epoch curve CSV
@@ -30,6 +31,7 @@
 # - `variance_ratio`가 0에 가까우면 flat prediction 붕괴 위험
 # - `zero_share`가 높으면 0-return shortcut 위험
 # - `persistence_gap`이 계속 양수이면 naive copy보다도 못한 상태
+#
 
 # %%
 """Optimization diagnostics for research-time training curve analysis.
@@ -99,7 +101,17 @@ MARKET_FEATURE_COLUMNS = [
     "spread_proxy",
 ]
 
+OPTIMIZATION_PROBE_FEATURE_COLUMNS = [
+    "log_return_1",
+    "return_4",
+    "realized_vol_16",
+    "hl_range_pct",
+    "volume_z_96",
+    "spread_proxy",
+]
+
 FEATURE_SETS = {
+    "optimization_probe": OPTIMIZATION_PROBE_FEATURE_COLUMNS,
     "market_only": MARKET_FEATURE_COLUMNS,
     "text_aware": MARKET_FEATURE_COLUMNS + TEXT_FEATURE_COLUMNS,
 }
@@ -111,18 +123,20 @@ class ExperimentConfig:
     price_table: str = "btc_15m_advance"
     output_dir: str = "test/results"
     ticker: str | None = None
-    feature_set: str = "text_aware"
-    suite: str = "objective_probe"
-    seq_len: int = 64
-    max_rows: int | None = 5000
+    feature_set: str = "optimization_probe"
+    suite: str = "quick_probe"
+    seq_len: int = 32
+    max_rows: int | None = 2500
+    max_windows: int | None = 512
+    window_stride: int = 4
     train_ratio: float = 0.70
     val_ratio: float = 0.15
-    epochs: int = 8
-    batch_size: int = 128
+    epochs: int = 5
+    batch_size: int = 64
     learning_rate: float = 0.001
     weight_decay: float = 0.0001
-    hidden_dim: int = 64
-    n_heads: int = 4
+    hidden_dim: int = 32
+    n_heads: int = 2
     grad_clip_norm: float = 1.0
     seed: int = 42
     device: str = "auto"
@@ -137,6 +151,33 @@ class CaseSpec:
     objective_mode: str
     description: str
 
+
+QUICK_PROBE_CASES = [
+    CaseSpec(
+        name="lstm_level_mse",
+        suite="quick_probe",
+        algorithm="lstm",
+        target_mode="next_close_level",
+        objective_mode="mse",
+        description="Direct next-close regression as the fastest copy-risk control case.",
+    ),
+    CaseSpec(
+        name="lstm_return_huber",
+        suite="quick_probe",
+        algorithm="lstm",
+        target_mode="next_log_return",
+        objective_mode="huber",
+        description="Compact robust-return probe for a fast collapse check.",
+    ),
+    CaseSpec(
+        name="lstm_return_directional_hybrid",
+        suite="quick_probe",
+        algorithm="lstm",
+        target_mode="next_log_return",
+        objective_mode="directional_hybrid",
+        description="Return regression plus direction penalty to test shortcut suppression quickly.",
+    ),
+]
 
 OBJECTIVE_PROBE_CASES = [
     CaseSpec(
@@ -164,28 +205,12 @@ OBJECTIVE_PROBE_CASES = [
         description="Robust return regression using SmoothL1/Huber loss.",
     ),
     CaseSpec(
-        name="lstm_return_vol_weighted",
-        suite="objective_probe",
-        algorithm="lstm",
-        target_mode="next_log_return",
-        objective_mode="vol_weighted_mse",
-        description="Weights larger moves more heavily using realized volatility.",
-    ),
-    CaseSpec(
         name="lstm_return_directional_hybrid",
         suite="objective_probe",
         algorithm="lstm",
         target_mode="next_log_return",
         objective_mode="directional_hybrid",
         description="Regression plus sign-consistency penalty to reduce zero-return collapse.",
-    ),
-    CaseSpec(
-        name="lstm_return_tail_focus",
-        suite="objective_probe",
-        algorithm="lstm",
-        target_mode="next_log_return",
-        objective_mode="tail_focus",
-        description="Upweights turning points and large absolute returns.",
     ),
 ]
 
@@ -198,7 +223,7 @@ ARCHITECTURE_PROBE_CASES = [
         objective_mode="directional_hybrid",
         description="Shared objective to isolate architectural differences in optimization behavior.",
     )
-    for algorithm in ("linear", "lstm", "gru", "tcn", "transformer")
+    for algorithm in ("linear", "lstm", "gru")
 ]
 
 FULL_MATRIX_CASES = [
@@ -210,11 +235,12 @@ FULL_MATRIX_CASES = [
         objective_mode="mse" if objective_mode == "level_mse" else objective_mode,
         description="Crossed architecture/objective probe.",
     )
-    for algorithm in ("linear", "lstm", "gru", "tcn", "transformer")
-    for objective_mode in ("level_mse", "huber", "vol_weighted_mse", "directional_hybrid")
+    for algorithm in ("linear", "lstm", "gru")
+    for objective_mode in ("level_mse", "huber", "directional_hybrid")
 ]
 
 SUITE_CASES = {
+    "quick_probe": QUICK_PROBE_CASES,
     "objective_probe": OBJECTIVE_PROBE_CASES,
     "architecture_probe": ARCHITECTURE_PROBE_CASES,
     "full_matrix": FULL_MATRIX_CASES,
@@ -527,7 +553,7 @@ def build_splits(config: ExperimentConfig, df: pd.DataFrame) -> tuple[dict[str, 
     vol_next_list: list[float] = []
     dir_next_list: list[float] = []
 
-    for end_idx in range(config.seq_len - 1, len(df)):
+    for end_idx in range(config.seq_len - 1, len(df), max(1, config.window_stride)):
         start_idx = end_idx - config.seq_len + 1
         sequences.append(features[start_idx : end_idx + 1])
         close_now_list.append(close[end_idx])
@@ -542,6 +568,15 @@ def build_splits(config: ExperimentConfig, df: pd.DataFrame) -> tuple[dict[str, 
     return_next_arr = np.asarray(return_next_list, dtype=np.float32)
     vol_next_arr = np.asarray(vol_next_list, dtype=np.float32)
     dir_next_arr = np.asarray(dir_next_list, dtype=np.float32)
+
+    if config.max_windows and len(X) > config.max_windows:
+        sampled_idx = np.linspace(0, len(X) - 1, num=config.max_windows, dtype=int)
+        X = X[sampled_idx]
+        close_now_arr = close_now_arr[sampled_idx]
+        close_next_arr = close_next_arr[sampled_idx]
+        return_next_arr = return_next_arr[sampled_idx]
+        vol_next_arr = vol_next_arr[sampled_idx]
+        dir_next_arr = dir_next_arr[sampled_idx]
 
     total = len(X)
     if total < 64:
@@ -718,7 +753,7 @@ def train_case(
     input_dim: int,
 ) -> tuple[pd.DataFrame, dict[str, float]]:
     device = resolve_device(config)
-    train_loader = DataLoader(datasets["train"], batch_size=config.batch_size, shuffle=False)
+    train_loader = DataLoader(datasets["train"], batch_size=config.batch_size, shuffle=True)
     val_loader = DataLoader(datasets["val"], batch_size=config.batch_size, shuffle=False)
     test_loader = DataLoader(datasets["test"], batch_size=config.batch_size, shuffle=False)
 
@@ -819,7 +854,8 @@ def render_suite_report(
         "## Purpose",
         "",
         "This experiment is not a leaderboard run.",
-        "It is a training-curve diagnostic suite for checking whether the objective function and model family drift into an easy solution such as near-zero return prediction or lag-1 price copying.",
+        "It is a lightweight training-curve diagnostic suite for checking whether the objective function and model family drift into an easy solution such as near-zero return prediction or lag-1 price copying.",
+        "The defaults intentionally avoid a wide independent-variable setup so that optimization collapse can be checked quickly before the larger research runs are attempted.",
         "",
         "## Configuration",
         "",
@@ -829,6 +865,8 @@ def render_suite_report(
         f"- Sequence length: `{config.seq_len}`",
         f"- Epochs: `{config.epochs}`",
         f"- Max rows: `{config.max_rows}`",
+        f"- Max windows: `{config.max_windows}`",
+        f"- Window stride: `{config.window_stride}`",
         f"- Figure: `{figure_path.as_posix()}`",
         "",
         "## Reading guide",
@@ -871,7 +909,8 @@ def render_suite_report(
             "## Recommendation for this research direction",
             "",
             "Start from the case family with the lowest collapse score, not from the lowest raw loss alone.",
-            "For non-stationary crypto forecasting, the most useful checks are whether the objective maintains non-trivial predictive variance and whether it beats naive persistence without collapsing into near-zero returns.",
+            "For non-stationary crypto forecasting, the fastest useful first check is whether the objective maintains non-trivial predictive variance and whether it beats naive persistence without collapsing into near-zero returns.",
+            "If the quick probe already collapses, increasing independent variables or widening the data matrix usually adds cost before it adds insight.",
             "",
         ]
     )
@@ -924,16 +963,18 @@ def parse_args(argv: Iterable[str] | None = None) -> ExperimentConfig:
     parser.add_argument("--table", default="btc_15m_advance")
     parser.add_argument("--output-dir", default="test/results")
     parser.add_argument("--ticker", default=None)
-    parser.add_argument("--feature-set", choices=sorted(FEATURE_SETS.keys()), default="text_aware")
-    parser.add_argument("--suite", choices=sorted(SUITE_CASES.keys()), default="objective_probe")
-    parser.add_argument("--seq-len", type=int, default=64)
-    parser.add_argument("--max-rows", type=int, default=5000)
-    parser.add_argument("--epochs", type=int, default=8)
-    parser.add_argument("--batch-size", type=int, default=128)
+    parser.add_argument("--feature-set", choices=sorted(FEATURE_SETS.keys()), default="optimization_probe")
+    parser.add_argument("--suite", choices=sorted(SUITE_CASES.keys()), default="quick_probe")
+    parser.add_argument("--seq-len", type=int, default=32)
+    parser.add_argument("--max-rows", type=int, default=2500)
+    parser.add_argument("--max-windows", type=int, default=512)
+    parser.add_argument("--window-stride", type=int, default=4)
+    parser.add_argument("--epochs", type=int, default=5)
+    parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--learning-rate", type=float, default=0.001)
     parser.add_argument("--weight-decay", type=float, default=0.0001)
-    parser.add_argument("--hidden-dim", type=int, default=64)
-    parser.add_argument("--n-heads", type=int, default=4)
+    parser.add_argument("--hidden-dim", type=int, default=32)
+    parser.add_argument("--n-heads", type=int, default=2)
     parser.add_argument("--grad-clip-norm", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", default="auto")
@@ -947,6 +988,8 @@ def parse_args(argv: Iterable[str] | None = None) -> ExperimentConfig:
         suite=args.suite,
         seq_len=args.seq_len,
         max_rows=args.max_rows,
+        max_windows=args.max_windows,
+        window_stride=args.window_stride,
         epochs=args.epochs,
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
