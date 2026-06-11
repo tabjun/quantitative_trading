@@ -5,6 +5,7 @@ Usage examples:
     python test/scripts/send_email.py --preset text_context
     python test/scripts/send_email.py --preset independent_variables
     python test/scripts/send_email.py --preset historical_flow_mart
+    python test/scripts/send_email.py --preset optimization_context_brief
 """
 
 from __future__ import annotations
@@ -61,7 +62,7 @@ def simulation_email(commit_hash: str) -> tuple[str, str, list[Path]]:
     commit_url = f"{GITHUB_BASE}/commit/{commit_hash}"
     body = f"""교수님 안녕하세요.
 
-실시간 모의투자 시뮬레이션 결과 보고 메일입니다.
+실시간 모의투자 결과 보고 메일입니다.
 
 커밋 링크:
 {commit_url}
@@ -72,7 +73,7 @@ def simulation_email(commit_hash: str) -> tuple[str, str, list[Path]]:
 감사합니다.
 """
     attachments = [ROOT / "analysis_report.md", ROOT / "analysis_report.pdf"]
-    subject = "[시계열/퀀트 연구] 시뮬레이션 결과 보고"
+    subject = "[시계열 연구] 모의투자 결과 보고"
     return subject, body, attachments
 
 
@@ -94,25 +95,18 @@ def text_context_email(commit_hash: str) -> tuple[str, str, list[Path]]:
 - pipelines/ingest_text_context.py: {github_blob('pipelines/ingest_text_context.py')}
 - pipelines/simulate_and_send.py: {github_blob('pipelines/simulate_and_send.py')}
 
-핵심 반영 사항:
-1. `text_events_raw`, `text_features_15m` DuckDB 테이블 추가
-2. 감성, 이벤트 수, shock, 토픽 count 기반 독립변수 구성
-3. `text_risk_guard`를 통한 신규 진입 차단 로직 추가
-
 감사합니다.
 """
-    subject = "[시계열/퀀트 연구] 실시간 텍스트 독립변수 반영 환경 구축 보고"
+    subject = "[시계열 연구] 실시간 텍스트 독립변수 반영 환경 구축"
     return subject, body, []
 
 
 def independent_variables_email(commit_hash: str) -> tuple[str, str, list[Path]]:
     commit_url = f"{GITHUB_BASE}/commit/{commit_hash}"
-    report_path = (
-        "test/research_materials/independent_variables_literature_review_20260608.md"
-    )
+    report_path = "test/research_materials/independent_variables_literature_review_20260608.md"
     body = f"""교수님 안녕하세요.
 
-주식/코인 예측용 독립변수 후보를 논문 근거 기반으로 정리한 보고서를 공유드립니다.
+주식/코인 예측용 독립변수 설계에 관한 문헌 정리 보고서를 공유드립니다.
 
 커밋 링크:
 {commit_url}
@@ -120,15 +114,9 @@ def independent_variables_email(commit_hash: str) -> tuple[str, str, list[Path]]
 보고서:
 {github_blob(report_path)}
 
-핵심 내용:
-1. 가격/변동성/유동성/오더북 변수
-2. 뉴스/리포트/SNS 감성 변수
-3. 매크로/글로벌 유동성/온체인/파생상품 변수
-4. 논문별 5단계 포맷 정리 및 실제 변수 설계안 반영
-
 감사합니다.
 """
-    subject = "[시계열/퀀트 연구] 독립변수 설계 논문 조사 보고"
+    subject = "[시계열 연구] 독립변수 설계 문헌 리뷰"
     return subject, body, []
 
 
@@ -137,7 +125,7 @@ def historical_flow_email(commit_hash: str) -> tuple[str, str, list[Path]]:
     report_path = "test/research_materials/historical_flow_datamart_research_20260608.md"
     body = f"""교수님 안녕하세요.
 
-과거 유사 사건/흐름을 KRW 전체 종목 기준으로 조회하는 historical flow data mart 설계 및 구현 내용을 공유드립니다.
+KRW 전 종목 기준 historical flow data mart 설계 및 구축 내용을 공유드립니다.
 
 커밋 링크:
 {commit_url}
@@ -150,14 +138,56 @@ def historical_flow_email(commit_hash: str) -> tuple[str, str, list[Path]]:
 - pipelines/build_historical_flow_mart.py: {github_blob('pipelines/build_historical_flow_mart.py')}
 - pipelines/query_historical_flows.py: {github_blob('pipelines/query_historical_flows.py')}
 
-핵심 내용:
-1. KRW 전체 종목 원천 저장 + 유동성 subset index
-2. `shape + factor + context` 복합 유사도
-3. 텍스트 컨텍스트를 포함한 변곡점 원인 매칭
+감사합니다.
+"""
+    subject = "[시계열 연구] Historical Flow Data Mart 구축 보고"
+    return subject, body, []
+
+
+def optimization_context_brief_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    commit_url = f"{GITHUB_BASE}/commit/{commit_hash}"
+    report_path = "test/research_materials/optimization_context_professor_brief_20260611.md"
+    body = f"""교수님 안녕하세요.
+
+이번 업데이트에서는 아래 두 가지 문제를 먼저 정리하고, 그에 맞춰 문서와 연구용 실험 코드를 수정했습니다.
+
+1. 코인 분석 입력 설계 관점 수정
+- 주식처럼 증시 리포트나 일반 뉴스 중심으로 입력을 구성하는 방식은 코인 시장 설명력에 한계가 있다고 판단했습니다.
+- 그래서 코인 시장에서는 거래소 흐름, 규제/거시 이벤트, 유동성 변화, 위험 심리, SNS 반응처럼 시장 미시구조와 이벤트 전파가 더 직접적으로 반영되는 변수 구성이 필요하다는 방향으로 정리했습니다.
+
+2. 최적화 문제 해석 관점 수정
+- 비정상 시계열 학습 과정에서 보이는 문제를 단순 기울기 소실이나 성능 저하로만 보지 않고, objective와 prediction head가 허용하는 가장 쉬운 해로 붕괴하는 현상인지 먼저 확인하는 방향으로 재정리했습니다.
+- 이에 따라 `/test` 연구 공간에서는 단순 리더보드식 비교가 아니라, 학습 곡선을 보면서 `0 수익률 예측`, `lag-1 복사`, `flat output` 같은 shortcut collapse를 먼저 진단하는 구조로 문서와 코드를 수정했습니다.
+
+커밋 링크:
+{commit_url}
+
+아래 링크에서 수정 내용과 관련 문서를 함께 보실 수 있습니다.
+
+루트 프로젝트 개요 및 아키텍처:
+{github_blob('README.md')}
+
+연구 실험 공간 설명 및 최적화 문제 정리:
+{github_blob('test/README.md')}
+
+상세 브리프:
+{github_blob(report_path)}
+
+아키텍처 이미지:
+{github_blob('materials/quant_architecture.png')}
+
+관련 코드:
+- test/models/5_optimization_diagnostics_test.ipynb: {github_blob('test/models/5_optimization_diagnostics_test.ipynb')}
+- test/models/5_optimization_diagnostics_test.py: {github_blob('test/models/5_optimization_diagnostics_test.py')}
+
+특히 이번에는 메일 본문만 읽어도 어떤 점을 수정했는지 바로 파악하실 수 있도록, 수정 관점을 1번과 2번으로 먼저 적었습니다.
+상세 브리프에서는 각 문제를 왜 연구상 중요하게 보는지, 그리고 이를 코드와 실험 구조에 어떻게 반영했는지를 조금 더 풀어서 정리했습니다.
+
+참고문헌은 통계 용어 설명과 함께 브리프 하단에 정리해 두었습니다.
 
 감사합니다.
 """
-    subject = "[시계열/퀀트 연구] Historical Flow Data Mart 구축 보고"
+    subject = "[시계열·코인 연구] 코인 입력 변수 관점 및 최적화 진단 구조 수정 브리프"
     return subject, body, []
 
 
@@ -166,6 +196,7 @@ PRESETS = {
     "text_context": text_context_email,
     "independent_variables": independent_variables_email,
     "historical_flow_mart": historical_flow_email,
+    "optimization_context_brief": optimization_context_brief_email,
 }
 
 
