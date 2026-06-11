@@ -149,15 +149,30 @@ def optimization_context_brief_email(commit_hash: str) -> tuple[str, str, list[P
     report_path = "test/research_materials/optimization_context_professor_brief_20260611.md"
     body = f"""교수님 안녕하세요.
 
-오늘 논의한 내용을 반영하여, 아래 두 방향으로 연구 문서와 테스트 코드를 수정했습니다.
+아래 두 통은 무시하시고 이번 메일만 보시면 됩니다.
+
+오늘 논의한 내용을 반영하여, 아래 방향으로 연구 문서와 테스트 코드를 직접 수정했습니다.
 
 1. 코인 분석 입력 설계 관점 수정
 - 주식처럼 증시 리포트나 일반 뉴스 중심으로 입력을 구성하는 방식은 코인 시장 설명력에 한계가 있다고 판단했습니다.
 - 그래서 코인 시장에서는 거래소 흐름, 규제/거시 이벤트, 유동성 변화, 위험 심리, SNS 반응처럼 시장 미시구조와 이벤트 전파가 더 직접적으로 반영되는 변수 구성이 필요하다는 방향으로 정리했습니다.
+- 이번에 정리한 직접적인 독립변수 방향은 아래 6개 축입니다.
+  1) `market_microstructure_context`: 거래대금 급증, spread/depth proxy, order-book imbalance 성격 변수
+  2) `onchain_flow_context`: 거래소 순유입/순유출, active address, whale transfer 등
+  3) `stablecoin_liquidity_context`: USDT/USDC 발행·환수, liquidity shock
+  4) `derivatives_leverage_context`: open interest, funding rate, liquidation imbalance
+  5) `regulation_security_context`: 규제 발표, 상장/상폐, 해킹/브릿지 사고
+  6) `narrative_social_context`: X, 텔레그램, 커뮤니티 내러티브 확산과 SNS 반응
+- 즉, 텍스트는 단순 뉴스 감성 점수 하나로 쓰는 것이 아니라 `event_type`, `source_type`, `coverage_count`, `shock_strength`, `lag`를 가진 구조화 context 변수로 써야 한다는 방향으로 재정리했습니다.
 
 2. 최적화 문제 해석 관점 수정
 - 비정상 시계열 학습 과정에서 보이는 문제를 단순 기울기 소실이나 성능 저하로만 보지 않고, objective와 prediction head가 허용하는 가장 쉬운 해로 붕괴하는 현상인지 먼저 확인하는 방향으로 재정리했습니다.
 - 이에 따라 `/test` 연구 공간에서는 단순 리더보드식 비교가 아니라, 학습 곡선을 보면서 `0 수익률 예측`, `lag-1 복사`, `flat output` 같은 shortcut collapse를 먼저 진단하는 구조로 문서와 코드를 수정했습니다.
+- 코드 수준에서 바뀐 핵심은 아래와 같습니다.
+  - 기존처럼 “독립변수를 많이 넣고 예측까지 가면서 부수적으로 최적화를 보는 구조”가 아니라,
+  - `target / loss / head / backbone` 조합 자체가 붕괴를 유도하는지 먼저 점검하는 구조로 바꿨습니다.
+  - 그래서 결과 해석도 단순 `val_loss` 하나가 아니라 `collapse_score`, `variance_ratio`, `zero_share`, `copy_alignment`, `persistence_gap`를 함께 보도록 했습니다.
+- 쉽게 말하면 “loss가 조금 낮다”보다 “예측이 거의 0만 내는지”, “직전 값을 복사하는지”, “naive persistence보다 나은지”를 먼저 확인하게 바꾼 것입니다.
 
 3. 5번 최적화 진단 코드를 경량 quick probe 구조로 재설계
 - 이번 수정의 핵심은 `5_optimization_diagnostics_test`를 독립변수 전체를 붙인 본격 예측 실험이 아니라, 최적화 경로만 빠르게 확인하는 경량 진단 코드로 바꾼 것입니다.
@@ -165,6 +180,15 @@ def optimization_context_brief_email(commit_hash: str) -> tuple[str, str, list[P
 - 데이터 길이도 `seq_len=32`, `max_rows=2500`, `max_windows=512`, `window_stride=4`로 줄여, 겹치는 구간을 많이 학습시키기보다 몇 분 내에 학습 곡선과 collapse 징후를 확인할 수 있게 했습니다.
 - 기본 점검 케이스는 `quick_probe`로 두고, 여기서 `next_close_level + MSE`, `next_log_return + Huber`, `next_log_return + directional hybrid` 세 경우를 먼저 비교하게 했습니다.
 - 아키텍처 비교도 처음부터 TCN/Transformer까지 넓히지 않고, Linear/LSTM/GRU 정도만 남겨서 objective 차이와 구조 차이를 빠르게 분리해서 보도록 했습니다.
+- 실제 코드 예시로는 아래처럼 기본값이 바뀌었습니다.
+  - `feature_set='optimization_probe'`
+  - `suite='quick_probe'`
+  - `seq_len=32`
+  - `max_rows=2500`
+  - `max_windows=512`
+  - `window_stride=4`
+  - `hidden_dim=32`, `epochs=5`, `batch_size=64`
+- 즉, 지금 5번 코드는 “전체 연구용 예측기”가 아니라 “작게 돌려서 최적화 곡선이 정상인지 먼저 보는 테스트 장치”로 성격이 바뀌었습니다.
 
 4. 5번 코드에 반영한 최신 연구 방향
 - `Huber`는 최근 금융 시계열 연구에서 turbulent regime와 outlier에 강건한 손실함수로 쓰이는 흐름을 참고했습니다. 예: Liu et al., 2025, *Adapting to the Unknown: Robust Meta-Learning for Zero-Shot Financial Time Series Forecasting* (arXiv:2504.09664).
@@ -206,7 +230,7 @@ def optimization_context_brief_email(commit_hash: str) -> tuple[str, str, list[P
 
 감사합니다.
 """
-    subject = "[시계열·코인 연구] 오늘 논의 반영: 코인 변수 설계 및 5번 최적화 quick probe 재구성"
+    subject = "[이 메일만 보시면 됩니다] 오늘 논의 반영본: 코인 변수 설계 및 5번 최적화 quick probe 재구성"
     return subject, body, []
 
 
