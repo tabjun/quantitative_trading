@@ -32,6 +32,39 @@
 # - `zero_share`가 높으면 0-return shortcut 위험
 # - `persistence_gap`이 계속 양수이면 naive copy보다도 못한 상태
 #
+#
+
+# %%
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+
+def bootstrap_repo_root() -> Path:
+    """Notebook-first bootstrap so remote kernels can import repo-local modules."""
+    candidates = [Path.cwd(), *Path.cwd().parents]
+    try:
+        current_file = Path(__file__).resolve()
+        candidates.extend([current_file.parent, *current_file.parents])
+    except NameError:
+        pass
+
+    for candidate in candidates:
+        if (candidate / "database" / "paths.py").exists():
+            candidate_str = str(candidate)
+            if candidate_str not in sys.path:
+                sys.path.insert(0, candidate_str)
+            return candidate
+    raise ModuleNotFoundError(
+        "Could not locate the repository root containing 'database/paths.py'. "
+        "Open the notebook from inside the quantitative_trading repository or add the repo root to PYTHONPATH."
+    )
+
+
+REPO_ROOT = bootstrap_repo_root()
+print(f"[env-check] repo root: {REPO_ROOT}")
+print(f"[env-check] python path head: {sys.path[0]}")
 
 # %%
 """Optimization diagnostics for research-time training curve analysis.
@@ -41,8 +74,6 @@ architecture and objective-function behavior without performing local heavy
 research runs by default. Actual long runs should happen on the approved
 remote/server environment.
 """
-
-from __future__ import annotations
 
 import argparse
 import math
@@ -59,6 +90,37 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
+
+
+def ensure_repo_root_on_path() -> Path:
+    """Allow notebook/server kernels to import repo-local packages reliably."""
+    if "REPO_ROOT" in globals():
+        candidate = Path(REPO_ROOT)
+        candidate_str = str(candidate)
+        if candidate_str not in sys.path:
+            sys.path.insert(0, candidate_str)
+        return candidate
+
+    candidates = [Path.cwd(), *Path.cwd().parents]
+    try:
+        current_file = Path(__file__).resolve()
+        candidates.extend([current_file.parent, *current_file.parents])
+    except NameError:
+        pass
+
+    for candidate in candidates:
+        if (candidate / "database" / "paths.py").exists():
+            candidate_str = str(candidate)
+            if candidate_str not in sys.path:
+                sys.path.insert(0, candidate_str)
+            return candidate
+    raise ModuleNotFoundError(
+        "Could not locate the repository root containing 'database/paths.py'. "
+        "Run the notebook from inside the quantitative_trading repository or add the repo root to PYTHONPATH."
+    )
+
+
+REPO_ROOT = ensure_repo_root_on_path()
 
 from database.paths import resolve_db_path
 
