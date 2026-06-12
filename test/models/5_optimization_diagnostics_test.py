@@ -17,7 +17,8 @@
 # 기본 실행 예시:
 # - `uv run test/models/5_optimization_diagnostics_test.py`
 # - `uv run test/models/5_optimization_diagnostics_test.py --suite objective_probe`
-# - `uv run test/models/5_optimization_diagnostics_test.py --suite architecture_probe --max-windows 1024 --epochs 30`
+# - `uv run test/models/5_optimization_diagnostics_test.py --suite architecture_probe --normalization robust --max-windows 1024 --epochs 30`
+# - `uv run test/models/5_optimization_diagnostics_test.py --suite stabilization_loss_probe --normalization window_standard --max-windows 1536 --epochs 50`
 # - `uv run test/models/5_optimization_diagnostics_test.py --suite full_matrix --feature-set market_only --max-rows 4000`
 #
 # 산출물:
@@ -179,6 +180,8 @@ FEATURE_SETS = {
     "text_aware": MARKET_FEATURE_COLUMNS + TEXT_FEATURE_COLUMNS,
 }
 
+NORMALIZATION_MODES = ("standard", "robust", "window_standard", "identity")
+
 
 @dataclass(frozen=True)
 class ExperimentConfig:
@@ -191,6 +194,7 @@ class ExperimentConfig:
     ticker: str | None = None
     feature_set: str = "optimization_probe"
     suite: str = "quick_probe"
+    normalization: str = "standard"
     seq_len: int = 32
     max_rows: int | None = 35040
     max_windows: int | None = 1024
@@ -199,6 +203,7 @@ class ExperimentConfig:
     val_ratio: float = 0.15
     epochs: int = 30
     batch_size: int = 64
+    num_workers: int = 0
     learning_rate: float = 0.001
     weight_decay: float = 0.0001
     hidden_dim: int = 32
@@ -320,11 +325,52 @@ FULL_MATRIX_CASES = [
     for objective_mode in ("level_mse", "huber", "directional_hybrid")
 ]
 
+STABILIZATION_LOSS_OBJECTIVES = [
+    (
+        "return_huber",
+        "next_log_return",
+        "huber",
+        "Robust return regression. This is the conservative baseline after level target failure.",
+    ),
+    (
+        "return_directional_hybrid",
+        "next_log_return",
+        "directional_hybrid",
+        "Return regression plus direction penalty. This checks whether sign supervision suppresses zero-return collapse.",
+    ),
+    (
+        "return_vol_weighted_mse",
+        "next_log_return",
+        "vol_weighted_mse",
+        "Return regression that gives volatile windows more weight. This checks whether calm-period averaging is hiding tail errors.",
+    ),
+    (
+        "return_tail_focus",
+        "next_log_return",
+        "tail_focus",
+        "Return regression with stronger large-move weighting plus direction penalty. This checks whether the model can learn away from flat forecasts.",
+    ),
+]
+
+STABILIZATION_LOSS_CASES = [
+    CaseSpec(
+        name=f"{algorithm}_{case_name}",
+        suite="stabilization_loss_probe",
+        algorithm=algorithm,
+        target_mode=target_mode,
+        objective_mode=objective_mode,
+        description=description,
+    )
+    for algorithm in ("linear", "lstm", "gru", "tcn", "transformer")
+    for case_name, target_mode, objective_mode, description in STABILIZATION_LOSS_OBJECTIVES
+]
+
 SUITE_CASES = {
     "quick_probe": QUICK_PROBE_CASES,
     "objective_probe": OBJECTIVE_PROBE_CASES,
     "architecture_probe": ARCHITECTURE_PROBE_CASES,
     "full_matrix": FULL_MATRIX_CASES,
+    "stabilization_loss_probe": STABILIZATION_LOSS_CASES,
 }
 
 PRICE_TABLE_CANDIDATES = [
@@ -772,6 +818,43 @@ def standardize_train_applied(train: np.ndarray, other: np.ndarray) -> tuple[np.
     return (train - mean) / std, (other - mean) / std
 
 
+def robust_train_applied(train: np.ndarray, other: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    median = np.median(train, axis=0, keepdims=True)
+    q25 = np.percentile(train, 25, axis=0, keepdims=True)
+    q75 = np.percentile(train, 75, axis=0, keepdims=True)
+    iqr = np.where((q75 - q25) < 1e-8, 1.0, q75 - q25)
+    return (train - median) / iqr, (other - median) / iqr
+
+
+def window_standardize(array: np.ndarray) -> np.ndarray:
+    """Normalize each input window using only values inside that input window."""
+    mean = array.mean(axis=1, keepdims=True)
+    std = array.std(axis=1, keepdims=True)
+    std = np.where(std < 1e-8, 1.0, std)
+    return (array - mean) / std
+
+
+def normalize_feature_splits(
+    train: np.ndarray,
+    val: np.ndarray,
+    test: np.ndarray,
+    mode: str,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    if mode == "standard":
+        train_scaled, val_scaled = standardize_train_applied(train, val)
+        _, test_scaled = standardize_train_applied(train, test)
+        return train_scaled, val_scaled, test_scaled
+    if mode == "robust":
+        train_scaled, val_scaled = robust_train_applied(train, val)
+        _, test_scaled = robust_train_applied(train, test)
+        return train_scaled, val_scaled, test_scaled
+    if mode == "window_standard":
+        return window_standardize(train), window_standardize(val), window_standardize(test)
+    if mode == "identity":
+        return train, val, test
+    raise ValueError(f"Unsupported normalization mode: {mode}")
+
+
 def build_splits(config: ExperimentConfig, df: pd.DataFrame) -> tuple[dict[str, SequenceDataset], list[str]]:
     feature_columns = FEATURE_SETS[config.feature_set]
     features = df[feature_columns].to_numpy(dtype=np.float32)
@@ -829,8 +912,12 @@ def build_splits(config: ExperimentConfig, df: pd.DataFrame) -> tuple[dict[str, 
     X_train = X[:train_end]
     X_val = X[train_end:val_end]
     X_test = X[val_end:]
-    X_train_scaled, X_val_scaled = standardize_train_applied(X_train, X_val)
-    _, X_test_scaled = standardize_train_applied(X_train, X_test)
+    X_train_scaled, X_val_scaled, X_test_scaled = normalize_feature_splits(
+        X_train,
+        X_val,
+        X_test,
+        config.normalization,
+    )
 
     splits = {
         "train": SequenceDataset(
@@ -890,6 +977,7 @@ def build_dataset_profile(
         "start_time": timestamps.min(),
         "end_time": timestamps.max(),
         "feature_columns": feature_columns,
+        "normalization": config.normalization,
         "train_windows": len(datasets["train"]),
         "val_windows": len(datasets["val"]),
         "test_windows": len(datasets["test"]),
@@ -919,6 +1007,7 @@ def dataset_profile_lines(profile: dict[str, object]) -> list[str]:
         f"- 사용 행 수: `{format_number(profile['row_count'], 0)}`",
         f"- 종목 수: `{format_number(profile['ticker_count'], 0)}`",
         f"- 기간: `{profile['start_time']}` ~ `{profile['end_time']}`",
+        f"- 입력 정규화: `{profile['normalization']}`",
         f"- 입력 변수 수: `{len(feature_columns)}`",
         f"- 입력 변수: `{', '.join(feature_columns)}`",
         f"- 시퀀스 분할: train `{format_number(profile['train_windows'], 0)}`, validation `{format_number(profile['val_windows'], 0)}`, test `{format_number(profile['test_windows'], 0)}`",
@@ -1143,9 +1232,24 @@ def train_case(
     input_dim: int,
 ) -> tuple[pd.DataFrame, dict[str, float]]:
     device = resolve_device(config)
-    train_loader = DataLoader(datasets["train"], batch_size=config.batch_size, shuffle=True)
-    val_loader = DataLoader(datasets["val"], batch_size=config.batch_size, shuffle=False)
-    test_loader = DataLoader(datasets["test"], batch_size=config.batch_size, shuffle=False)
+    train_loader = DataLoader(
+        datasets["train"],
+        batch_size=config.batch_size,
+        shuffle=True,
+        num_workers=config.num_workers,
+    )
+    val_loader = DataLoader(
+        datasets["val"],
+        batch_size=config.batch_size,
+        shuffle=False,
+        num_workers=config.num_workers,
+    )
+    test_loader = DataLoader(
+        datasets["test"],
+        batch_size=config.batch_size,
+        shuffle=False,
+        num_workers=config.num_workers,
+    )
 
     model = ForecastModel(config=config, algorithm=case.algorithm, input_dim=input_dim).to(device)
     optimizer = torch.optim.AdamW(
@@ -1176,6 +1280,7 @@ def train_case(
             {
                 "case_name": case.name,
                 "algorithm": case.algorithm,
+                "normalization": config.normalization,
                 "objective_mode": case.objective_mode,
                 "target_mode": case.target_mode,
                 "epoch": epoch,
@@ -1197,6 +1302,7 @@ def train_case(
     summary = {
         "case_name": case.name,
         "algorithm": case.algorithm,
+        "normalization": config.normalization,
         "objective_mode": case.objective_mode,
         "target_mode": case.target_mode,
         "description": case.description,
@@ -1553,9 +1659,12 @@ def render_suite_report(
             "",
             f"- Suite: `{config.suite}`",
             f"- Feature set: `{config.feature_set}`",
+            f"- Normalization: `{config.normalization}`",
             f"- Feature count: `{len(feature_columns)}`",
             f"- Sequence length: `{config.seq_len}`",
             f"- Epochs: `{config.epochs}`",
+            f"- Batch size: `{config.batch_size}`",
+            f"- DataLoader workers: `{config.num_workers}`",
             f"- Max rows: `{config.max_rows}`",
             f"- Max windows: `{config.max_windows}`",
             f"- Window stride: `{config.window_stride}`",
@@ -1820,12 +1929,14 @@ def parse_args(argv: Iterable[str] | None = None) -> ExperimentConfig:
     parser.add_argument("--ticker", default=None)
     parser.add_argument("--feature-set", choices=sorted(FEATURE_SETS.keys()), default="optimization_probe")
     parser.add_argument("--suite", choices=sorted(SUITE_CASES.keys()), default="quick_probe")
+    parser.add_argument("--normalization", choices=NORMALIZATION_MODES, default="standard")
     parser.add_argument("--seq-len", type=int, default=32)
     parser.add_argument("--max-rows", type=int, default=35040)
     parser.add_argument("--max-windows", type=int, default=1024)
     parser.add_argument("--window-stride", type=int, default=4)
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--learning-rate", type=float, default=0.001)
     parser.add_argument("--weight-decay", type=float, default=0.0001)
     parser.add_argument("--hidden-dim", type=int, default=32)
@@ -1850,12 +1961,14 @@ def parse_args(argv: Iterable[str] | None = None) -> ExperimentConfig:
         ticker=args.ticker,
         feature_set=args.feature_set,
         suite=args.suite,
+        normalization=args.normalization,
         seq_len=args.seq_len,
         max_rows=args.max_rows,
         max_windows=args.max_windows,
         window_stride=args.window_stride,
         epochs=args.epochs,
         batch_size=args.batch_size,
+        num_workers=args.num_workers,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
         hidden_dim=args.hidden_dim,
