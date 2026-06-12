@@ -14,6 +14,7 @@
 3. `history.md`
 4. `conversation_l2_cache.md`
 5. `test/README.md`
+6. `docs/harness/research-workflow/team-spec.md` for recurring research/report workflows
 
 `conversation_l2_cache.md`는 전체를 길게 읽지 말고 최근 항목만 확인한다.
 
