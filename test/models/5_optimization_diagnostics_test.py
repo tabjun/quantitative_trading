@@ -33,6 +33,7 @@
 # - `persistence_gap`이 계속 양수이면 naive copy보다도 못한 상태
 #
 #
+#
 
 # %%
 from __future__ import annotations
@@ -77,8 +78,9 @@ remote/server environment.
 
 import argparse
 import math
+import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable
 
@@ -202,6 +204,9 @@ class ExperimentConfig:
     grad_clip_norm: float = 1.0
     seed: int = 42
     device: str = "auto"
+    bootstrap_if_missing: bool = True
+    bootstrap_ticker: str = "KRW-BTC"
+    bootstrap_days: int = 180
 
 
 @dataclass(frozen=True)
@@ -307,6 +312,12 @@ SUITE_CASES = {
     "architecture_probe": ARCHITECTURE_PROBE_CASES,
     "full_matrix": FULL_MATRIX_CASES,
 }
+
+PRICE_TABLE_CANDIDATES = [
+    "btc_15m_advance",
+    "upbit_krw_candle",
+    "btc_15m",
+]
 
 
 def compatible_num_heads(hidden_dim: int, requested: int) -> int:
@@ -465,6 +476,100 @@ def table_exists(con: duckdb.DuckDBPyConnection, table_name: str) -> bool:
     )
 
 
+def list_main_tables(con: duckdb.DuckDBPyConnection) -> list[str]:
+    rows = con.execute(
+        """
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'main'
+        ORDER BY table_name
+        """
+    ).fetchall()
+    return [row[0] for row in rows]
+
+
+def resolve_price_table(con: duckdb.DuckDBPyConnection, requested: str) -> str:
+    if table_exists(con, requested):
+        return requested
+
+    available = list_main_tables(con)
+    for candidate in PRICE_TABLE_CANDIDATES:
+        if candidate in available:
+            print(
+                f"[table-resolve] Requested price table '{requested}' was not found. "
+                f"Using fallback table '{candidate}'."
+            )
+            return candidate
+
+    raise RuntimeError(
+        "Price table not found in DuckDB. "
+        f"requested='{requested}', available_tables={available}"
+    )
+
+
+def bootstrap_price_table_if_missing(config: ExperimentConfig) -> str | None:
+    if not config.bootstrap_if_missing:
+        return None
+
+    try:
+        import pyupbit
+    except ImportError as exc:
+        raise RuntimeError(
+            "No reusable price table exists in DuckDB and pyupbit is not available for bootstrap."
+        ) from exc
+
+    db_path = Path(config.db_path)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    print(
+        "[table-bootstrap] No reusable price table was found. "
+        f"Building '{config.price_table}' from {config.bootstrap_ticker} 15-minute candles "
+        f"for the last {config.bootstrap_days} days."
+    )
+
+    df_list: list[pd.DataFrame] = []
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=config.bootstrap_days)
+    current_to = end_date
+
+    while current_to > start_date:
+        df = pyupbit.get_ohlcv(
+            config.bootstrap_ticker,
+            interval="minute15",
+            to=current_to.strftime("%Y-%m-%d %H:%M:%S"),
+            count=200,
+        )
+        if df is None or df.empty:
+            break
+        df_list.append(df)
+        current_to = df.index[0]
+        time.sleep(0.12)
+
+    if not df_list:
+        raise RuntimeError(
+            "Price table bootstrap failed because pyupbit returned no candle data."
+        )
+
+    full_df = pd.concat(df_list).sort_index()
+    full_df = full_df[~full_df.index.duplicated(keep="first")]
+    full_df = full_df.loc[full_df.index >= pd.Timestamp(start_date)].copy()
+    full_df.reset_index(inplace=True)
+    full_df.rename(columns={"index": "timestamp"}, inplace=True)
+    full_df["ticker"] = config.bootstrap_ticker
+    if "value" not in full_df.columns:
+        full_df["value"] = full_df["close"] * full_df["volume"]
+
+    with duckdb.connect(config.db_path) as con:
+        con.register("bootstrap_df", full_df)
+        con.execute(f"CREATE OR REPLACE TABLE {config.price_table} AS SELECT * FROM bootstrap_df")
+
+    print(
+        f"[table-bootstrap] Created '{config.price_table}' with {len(full_df)} rows "
+        f"at {config.db_path}."
+    )
+    return config.price_table
+
+
 def rolling_zscore(series: pd.Series, window: int) -> pd.Series:
     rolling_mean = series.rolling(window).mean()
     rolling_std = series.rolling(window).std().replace(0, np.nan)
@@ -480,10 +585,64 @@ def garman_klass_volatility(df: pd.DataFrame) -> pd.Series:
 def load_price_with_text_features(config: ExperimentConfig) -> pd.DataFrame:
     limit_sql = f"LIMIT {int(config.max_rows)}" if config.max_rows else ""
     with duckdb.connect(config.db_path) as con:
-        if not table_exists(con, config.price_table):
-            raise RuntimeError(f"Price table not found in DuckDB: {config.price_table}")
+        try:
+            price_table = resolve_price_table(con, config.price_table)
+        except RuntimeError:
+            con.close()
+            bootstrapped_table = bootstrap_price_table_if_missing(config)
+            with duckdb.connect(config.db_path) as rebuilt_con:
+                price_table = resolve_price_table(rebuilt_con, bootstrapped_table or config.price_table)
+                table_columns = {row[1] for row in rebuilt_con.execute(f"PRAGMA table_info('{price_table}')").fetchall()}
+                ticker_expr = "ticker" if "ticker" in table_columns else "'KRW-BTC' AS ticker"
+                value_expr = "value" if "value" in table_columns else "close * volume AS value"
 
-        table_columns = {row[1] for row in con.execute(f"PRAGMA table_info('{config.price_table}')").fetchall()}
+                params: list[object] = []
+                where_sql = ""
+                if config.ticker:
+                    if "ticker" in table_columns:
+                        where_sql = "WHERE ticker = ?"
+                        params.append(config.ticker)
+                    else:
+                        where_sql = "WHERE 'KRW-BTC' = ?"
+                        params.append(config.ticker)
+
+                price_df = rebuilt_con.execute(
+                    f"""
+                    SELECT timestamp, open, high, low, close, volume, {value_expr}, {ticker_expr}
+                    FROM {price_table}
+                    {where_sql}
+                    ORDER BY timestamp DESC
+                    {limit_sql}
+                    """,
+                    params,
+                ).df()
+
+                text_exists = table_exists(rebuilt_con, "text_features_15m")
+                if text_exists:
+                    text_df = rebuilt_con.execute(
+                        f"""
+                        SELECT timestamp, {", ".join(TEXT_FEATURE_COLUMNS)}
+                        FROM text_features_15m
+                        ORDER BY timestamp
+                        """
+                    ).df()
+                else:
+                    text_df = pd.DataFrame(columns=["timestamp", *TEXT_FEATURE_COLUMNS])
+
+            if price_df.empty:
+                raise RuntimeError("No rows loaded after table bootstrap. Check ticker or bootstrap window.")
+
+            price_df = price_df.sort_values("timestamp").reset_index(drop=True)
+            price_df["timestamp"] = pd.to_datetime(price_df["timestamp"]).dt.floor("15min")
+            text_df["timestamp"] = pd.to_datetime(text_df["timestamp"]).dt.floor("15min")
+            merged = price_df.merge(text_df, on="timestamp", how="left")
+            for column in TEXT_FEATURE_COLUMNS:
+                if column not in merged.columns:
+                    merged[column] = 0.0
+            merged[TEXT_FEATURE_COLUMNS] = merged[TEXT_FEATURE_COLUMNS].fillna(0.0)
+            return merged.sort_values(["ticker", "timestamp"]).reset_index(drop=True)
+
+        table_columns = {row[1] for row in con.execute(f"PRAGMA table_info('{price_table}')").fetchall()}
         ticker_expr = "ticker" if "ticker" in table_columns else "'KRW-BTC' AS ticker"
         value_expr = "value" if "value" in table_columns else "close * volume AS value"
 
@@ -500,7 +659,7 @@ def load_price_with_text_features(config: ExperimentConfig) -> pd.DataFrame:
         price_df = con.execute(
             f"""
             SELECT timestamp, open, high, low, close, volume, {value_expr}, {ticker_expr}
-            FROM {config.price_table}
+            FROM {price_table}
             {where_sql}
             ORDER BY timestamp DESC
             {limit_sql}
@@ -1040,6 +1199,12 @@ def parse_args(argv: Iterable[str] | None = None) -> ExperimentConfig:
     parser.add_argument("--grad-clip-norm", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", default="auto")
+    parser.add_argument("--bootstrap-if-missing", action="store_true", default=True)
+    parser.add_argument("--no-bootstrap-if-missing", dest="bootstrap_if_missing", action="store_false")
+    parser.add_argument("--bootstrap-ticker", default="KRW-BTC")
+    parser.add_argument("--bootstrap-days", type=int, default=180)
+    if argv is None and "ipykernel" in sys.modules:
+        argv = []
     args = parser.parse_args(list(argv) if argv is not None else None)
     return ExperimentConfig(
         db_path=str(resolve_db_path(args.db)),
@@ -1061,6 +1226,9 @@ def parse_args(argv: Iterable[str] | None = None) -> ExperimentConfig:
         grad_clip_norm=args.grad_clip_norm,
         seed=args.seed,
         device=args.device,
+        bootstrap_if_missing=args.bootstrap_if_missing,
+        bootstrap_ticker=args.bootstrap_ticker,
+        bootstrap_days=args.bootstrap_days,
     )
 
 
