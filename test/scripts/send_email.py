@@ -6,6 +6,7 @@ Usage examples:
     python test/scripts/send_email.py --preset independent_variables
     python test/scripts/send_email.py --preset historical_flow_mart
     python test/scripts/send_email.py --preset optimization_context_brief
+    python test/scripts/send_email.py --preset forecasting_methodology_review
 """
 
 from __future__ import annotations
@@ -215,12 +216,72 @@ def optimization_context_brief_email(commit_hash: str) -> tuple[str, str, list[P
     return subject, body, []
 
 
+def forecasting_methodology_review_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    commit_url = f"{GITHUB_BASE}/commit/{commit_hash}"
+    report_path = "test/research_materials/forecasting_methodology_literature_review_20260613.md"
+    report_3_path = "test/results/3_time_series_multi_ticker_test_report_20260526_020000.md"
+    report_5_path = "test/results/5_optimization_diagnostics_quick_probe_20260613.md"
+    plan_6_path = "test/experiment_specs/6_optimization_stabilization_plan_20260613.md"
+    readme_path = "test/README.md"
+    body = f"""교수님 안녕하세요.
+
+현재 진행 중인 업비트/주식 시계열 예측 연구의 논문화 방향과, 왜 지금 최적화 안정화 문제를 먼저 정리해야 하는지를 문헌 리뷰 형태로 정리해 공유드립니다.
+
+이번 정리의 핵심은 최종 목표가 단순히 특정 모델 하나로 가격을 맞히는 것이 아니라, 비정상 고빈도 금융 시계열에서 예측 모델이 실제 신호를 학습했는지 검증하고, 이후 텍스트 독립변수와 historical flow data mart 같은 외생변수를 붙였을 때 개선 원인을 설명할 수 있는 연구 구조를 만드는 것입니다.
+
+문헌을 보면 Autoformer, FEDformer, PatchTST, TimesNet, iTransformer, TimeXer, ModernTCN, Mamba/MambaTS, Chronos/TimesFM/Moirai, TFT, RevIN처럼 최근 시계열 예측 알고리즘은 매우 다양하게 연구되고 있습니다. 다만 금융·코인 예측 논문은 모델 구조만 제시하지 않고, target 정의, normalization, leakage-safe split, validation-only tuning, loss function, baseline, 거래비용, MDD, sensitivity analysis를 함께 둡니다.
+
+따라서 현재 4번, 5번, 6번 실험은 연구 목적에서 벗어난 우회 작업이 아니라 논문으로 넘어가기 위한 필수 기반 작업입니다.
+
+- 3번에서는 Autoformer가 수치상 좋아 보이는 현상이 있었지만, 가격 레벨 직접 회귀와 MinMax 스케일 때문에 직전가 복사 또는 평균 수렴형 착시였을 가능성이 큽니다.
+- 4번은 텍스트 독립변수와 외생변수 후보가 실제 정보 가치를 갖는지 준비하는 단계입니다.
+- 5번은 Linear, LSTM, GRU, TCN, Transformer 대표 구조에서 target/loss 조합이 쉬운 해로 붕괴하는지 진단한 단계입니다.
+- 6번은 독립변수 확장 전에 return target, normalization, loss, collapse-aware model selection을 안정화하는 단계입니다.
+
+보고서에서 특히 보시면 좋은 부분은 다음과 같습니다.
+
+- `3번 Autoformer 결과를 어떻게 이해해야 하는가`: 좋아 보였던 결과가 왜 실제 예측력이라기보다 평가 착시일 수 있는지 정리했습니다.
+- `최근 시계열 예측 알고리즘 흐름`: Autoformer/PatchTST뿐 아니라 TimeXer, iTransformer, ModernTCN, MambaTS, foundation model까지 다음 후보군을 비교했습니다.
+- `논문별 상세 정리`: 각 논문이 무엇을 했고, 학습/최적화 문제를 어디에 넣었고, 결과를 어떤 지표와 그림으로 출력했는지 정리했습니다.
+- `출판되는 논문들은 최적화 문제를 어디에 넣는가`: 최적화가 논문 제목에 드러나지 않더라도 방법론의 data/preprocessing, experimental setup, model training, loss, evaluation, ablation에 포함된다는 점을 정리했습니다.
+- `현재 연구에 바로 반영해야 할 기준`: 6번 이후 어떤 알고리즘을 어떤 순서로 확장해야 하는지 정리했습니다.
+
+이번 보고서의 결론은, 이 논문들처럼 예측 연구로 통과하려면 단순히 모델 종류를 늘리는 것보다 먼저 학습 붕괴와 평가 착시를 충분히 해소해야 한다는 것입니다. 그래야 이후 텍스트 독립변수, historical flow data mart, 온체인/유동성 변수 등을 붙였을 때 성능 개선이 실제 변수 효과인지 논문에서 설득력 있게 주장할 수 있습니다.
+
+커밋 링크:
+{commit_url}
+
+문헌 리뷰 보고서:
+{github_blob(report_path)}
+
+관련 연구 흐름:
+- 3번 다종목 실험 보고서:
+{github_blob(report_3_path)}
+
+- 5번 최적화 진단 보고서:
+{github_blob(report_5_path)}
+
+- 6번 최적화 안정화 계획서:
+{github_blob(plan_6_path)}
+
+- test 연구 공간 안내:
+{github_blob(readme_path)}
+
+자세한 알고리즘별 논문 요약과 다음 실험 후보는 문헌 리뷰 보고서를 보시면 되고, 현재 로컬 노트북 결과 기준의 collapse 진단은 5번 보고서, 이후 서버에서 수행할 안정화 단계는 6번 계획서에 정리해 두었습니다.
+
+감사합니다.
+"""
+    subject = "[시계열 연구] 예측 방법론 문헌 리뷰 및 최적화 안정화 필요성"
+    return subject, body, []
+
+
 PRESETS = {
     "simulation": simulation_email,
     "text_context": text_context_email,
     "independent_variables": independent_variables_email,
     "historical_flow_mart": historical_flow_email,
     "optimization_context_brief": optimization_context_brief_email,
+    "forecasting_methodology_review": forecasting_methodology_review_email,
 }
 
 

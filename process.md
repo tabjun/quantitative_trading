@@ -173,6 +173,14 @@
 - [x] `optuna`를 `pyproject.toml` 의존성에 명시했다. 설치/튜닝/학습 실행은 하지 않았다.
 - [x] `python -m py_compile test\models\4_text_independent_variable_analysis.py` 문법 검증은 통과했다.
 
+## 2026-06-13 예측 방법론 문헌 리뷰 기록
+
+- [x] 3번 실험에서 Autoformer가 좋아 보였던 현상을 가격 레벨 복사/평균수렴 착시 가능성으로 재해석했다.
+- [x] 최근 시계열 예측 흐름을 Autoformer, FEDformer, PatchTST, DLinear, TimesNet, iTransformer, TimeXer, ModernTCN, Mamba/MambaTS, Chronos/TimesFM/Moirai, TFT, RevIN까지 확장해 정리했다.
+- [x] 금융·코인 예측 논문들이 최적화 문제를 data/preprocessing, experimental setup, model training, loss, evaluation, ablation, baseline에 어떻게 포함하는지 정리했다.
+- [x] `test/research_materials/forecasting_methodology_literature_review_20260613.md`를 추가하고, `test/README.md`와 `test/scripts/send_email.py`의 `forecasting_methodology_review` preset에 연결했다.
+- [ ] 다음 체크포인트: 커밋/푸시 후 교수님께 렌더링 링크를 발송하고, 6번 서버 실행 결과 기준으로 안정화 보고서를 작성한다.
+
 ## 2026-06-09 텍스트 독립변수 분석 모델 추가 기록
 
 - [x] `test/models/4_text_independent_variable_analysis.py`를 추가해 뉴스/증시 리포트/SNS 텍스트 피처를 독립변수로 쓰는 연구용 분석 엔트리포인트를 만들었다.

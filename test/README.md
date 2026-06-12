@@ -24,11 +24,14 @@
 - `3_time_series_multi_ticker_test.ipynb`: KRW 다종목 실험
 - `4_text_independent_variable_analysis.ipynb`: 텍스트 독립변수 결합 실험
 - `5_optimization_diagnostics_test.ipynb`: 최적화 경로와 shortcut collapse 진단
+- `6_optimization_stabilization_test.ipynb`: target, normalization, loss, model selection 안정화 실험
 
-## 4. 4번과 5번 실험 요약
+## 4. 4번부터 6번까지의 연구 흐름
 
-- `4번`은 텍스트가 가격 예측에 실제로 도움이 되는지 보는 실험이다.
-- `5번`은 objective, target, architecture가 쉬운 해로 붕괴하는지 보는 진단 실험이다.
+- `4번`은 텍스트와 외생변수가 가격 예측에 실제 정보 가치를 주는지 보는 실험이다.
+- `5번`은 objective, target, architecture가 직전가 복사나 0 수익률 같은 쉬운 해로 붕괴하는지 보는 진단 실험이다.
+- `6번`은 독립변수와 데이터마트를 본격적으로 붙이기 전에 target, normalization, loss, model selection 기준을 안정화하는 실험이다.
+- 문헌 기반 논문화 방향과 후속 알고리즘 후보는 `test/research_materials/forecasting_methodology_literature_review_20260613.md`를 본다.
 - 세부 해석은 각 노트북의 결과 셀과 `test/results/*.md` 보고서를 우선 본다.
 - 설계 메모와 참고문헌은 `test/experiment_specs/`에 둔다.
 
