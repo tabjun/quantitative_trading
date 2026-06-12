@@ -221,66 +221,78 @@ class CaseSpec:
     description: str
 
 
+QUICK_PROBE_OBJECTIVES = [
+    (
+        "level_mse",
+        "next_close_level",
+        "mse",
+        "Direct next-close regression as the fastest copy-risk control case.",
+    ),
+    (
+        "return_huber",
+        "next_log_return",
+        "huber",
+        "Compact robust-return probe for a fast collapse check.",
+    ),
+    (
+        "return_directional_hybrid",
+        "next_log_return",
+        "directional_hybrid",
+        "Return regression plus direction penalty to test shortcut suppression quickly.",
+    ),
+]
+
+OBJECTIVE_PROBE_OBJECTIVES = [
+    (
+        "level_mse",
+        "next_close_level",
+        "mse",
+        "Direct next-close regression. Useful as the copy-risk control case.",
+    ),
+    (
+        "return_mse",
+        "next_log_return",
+        "mse",
+        "One-step log-return regression with plain MSE.",
+    ),
+    (
+        "return_huber",
+        "next_log_return",
+        "huber",
+        "Robust return regression using SmoothL1/Huber loss.",
+    ),
+    (
+        "return_directional_hybrid",
+        "next_log_return",
+        "directional_hybrid",
+        "Regression plus sign-consistency penalty to reduce zero-return collapse.",
+    ),
+]
+
 QUICK_PROBE_CASES = [
     CaseSpec(
-        name="lstm_level_mse",
+        name=f"{algorithm}_{case_name}",
         suite="quick_probe",
-        algorithm="lstm",
-        target_mode="next_close_level",
-        objective_mode="mse",
-        description="Direct next-close regression as the fastest copy-risk control case.",
-    ),
-    CaseSpec(
-        name="lstm_return_huber",
-        suite="quick_probe",
-        algorithm="lstm",
-        target_mode="next_log_return",
-        objective_mode="huber",
-        description="Compact robust-return probe for a fast collapse check.",
-    ),
-    CaseSpec(
-        name="lstm_return_directional_hybrid",
-        suite="quick_probe",
-        algorithm="lstm",
-        target_mode="next_log_return",
-        objective_mode="directional_hybrid",
-        description="Return regression plus direction penalty to test shortcut suppression quickly.",
-    ),
+        algorithm=algorithm,
+        target_mode=target_mode,
+        objective_mode=objective_mode,
+        description=description,
+    )
+    for algorithm in ("linear", "lstm", "gru", "tcn", "transformer")
+    for case_name, target_mode, objective_mode, description in QUICK_PROBE_OBJECTIVES
 ]
 
 OBJECTIVE_PROBE_CASES = [
     CaseSpec(
-        name="lstm_level_mse",
+        name=f"{algorithm}_{case_name}",
         suite="objective_probe",
-        algorithm="lstm",
-        target_mode="next_close_level",
-        objective_mode="mse",
-        description="Direct next-close regression. Useful as the copy-risk control case.",
-    ),
-    CaseSpec(
-        name="lstm_return_mse",
-        suite="objective_probe",
-        algorithm="lstm",
-        target_mode="next_log_return",
-        objective_mode="mse",
-        description="One-step log-return regression with plain MSE.",
-    ),
-    CaseSpec(
-        name="lstm_return_huber",
-        suite="objective_probe",
-        algorithm="lstm",
-        target_mode="next_log_return",
-        objective_mode="huber",
-        description="Robust return regression using SmoothL1/Huber loss.",
-    ),
-    CaseSpec(
-        name="lstm_return_directional_hybrid",
-        suite="objective_probe",
-        algorithm="lstm",
-        target_mode="next_log_return",
-        objective_mode="directional_hybrid",
-        description="Regression plus sign-consistency penalty to reduce zero-return collapse.",
-    ),
+        algorithm=algorithm,
+        target_mode=target_mode,
+        objective_mode=objective_mode,
+        description=description,
+    )
+    for algorithm in ("linear", "lstm", "gru", "tcn", "transformer")
+    for case_name, target_mode, objective_mode, description in OBJECTIVE_PROBE_OBJECTIVES
 ]
 
 ARCHITECTURE_PROBE_CASES = [
@@ -292,7 +304,7 @@ ARCHITECTURE_PROBE_CASES = [
         objective_mode="directional_hybrid",
         description="Shared objective to isolate architectural differences in optimization behavior.",
     )
-    for algorithm in ("linear", "lstm", "gru")
+    for algorithm in ("linear", "lstm", "gru", "tcn", "transformer")
 ]
 
 FULL_MATRIX_CASES = [
@@ -304,7 +316,7 @@ FULL_MATRIX_CASES = [
         objective_mode="mse" if objective_mode == "level_mse" else objective_mode,
         description="Crossed architecture/objective probe.",
     )
-    for algorithm in ("linear", "lstm", "gru")
+    for algorithm in ("linear", "lstm", "gru", "tcn", "transformer")
     for objective_mode in ("level_mse", "huber", "directional_hybrid")
 ]
 
@@ -1437,7 +1449,7 @@ def executive_summary_lines(history_df: pd.DataFrame, summary_df: pd.DataFrame) 
         "## 초록",
         "",
         f"- 문제: 비정상 업비트 시계열에서 loss는 줄어도, 예측이 직전가 복사나 0 수익률 근처로 붕괴할 수 있다.",
-        f"- 방법: `LSTM` 기준으로 `level_mse`, `return_huber`, `directional_hybrid`를 비교하고, loss curve, gap, gradient, persistence gap, collapse score를 함께 봤다.",
+        f"- 방법: `Linear`, `LSTM`, `GRU`, `TCN`, `Transformer` 5개 대표군으로 `level_mse`, `return_huber`, `directional_hybrid`를 비교하고, loss curve, gap, gradient, persistence gap, collapse score를 함께 봤다.",
         f"- 결과: 가장 덜 나쁜 후보는 `{top['case_name']}` 이지만, `persistence_gap`이 여전히 양수라 실전 채택은 아니다.",
         f"- 의미: 이번 실험은 성능 순위표가 아니라, objective와 target이 잘못된 쉬운 해로 빠지는지 확인하는 진단 단계다.",
         "",
@@ -1606,6 +1618,8 @@ def render_suite_report(
             "linear": "선형 모델은 가장 단순한 기준선이라서, 시계열 구조를 거의 쓰지 못하지만 objective가 너무 쉬운 해로 흘러가는지 확인하는 통제군 역할을 한다.",
             "lstm": "LSTM은 과거 상태를 기억하는 능력이 있어 시계열 정보를 더 잘 쓸 수 있지만, 데이터가 적거나 loss가 거칠면 쉽게 평평한 해로 수렴할 수 있다.",
             "gru": "GRU는 LSTM보다 가볍게 학습되므로, 같은 objective에서 더 빨리 안정화되는지 혹은 더 쉽게 붕괴하는지 보기 좋다.",
+            "tcn": "TCN은 1D convolution으로 짧은 국면 패턴을 빠르게 잡는 구조라서, recurrent 계열과 다르게 convolutional smoothing이 쉬운 해를 얼마나 줄이는지 보기 좋다.",
+            "transformer": "Transformer는 attention으로 여러 시점의 상호작용을 직접 보므로, 복잡한 구조가 항상 더 안정적인지 또는 오히려 쉬운 해를 더 잘 찾는지 확인하는 비교군이다.",
         }.get(str(row.algorithm), "이 아키텍처는 이번 실험에서 objective와의 상호작용을 보기 위한 비교군이다.")
         objective_note = {
             "mse": "MSE는 큰 오차를 강하게 벌주므로, 가격 레벨 회귀에서는 복사형 해를 밀어낼 수도 있지만 scale에 민감하다.",

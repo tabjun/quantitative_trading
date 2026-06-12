@@ -27,6 +27,8 @@
 - `Linear`
 - `LSTM`
 - `GRU`
+- `TCN`
+- `Transformer`
 
 ### 손실함수
 
@@ -47,8 +49,8 @@
 ## 결과 읽는 법
 
 - `train loss`와 `validation loss`가 같이 내려가야 한다.
-- `validation - train gap`이 0보다 위로 올라가면 일반화 실패 가능성이 크다.
-- `persistence gap`이 0보다 위면 naive persistence보다 못하다.
+- `validation - train gap`은 검증선이 훈련선보다 얼마나 위에 남는지 보는 지표다. 두 선이 벌어지면 훈련 구간에만 맞는 것이다.
+- `persistence gap`은 단순 직전가 복사와 모델을 직접 비교하는 지표다. 기준선 아래로 내려와야 단순 복사를 이긴다.
 - `sign agreement`가 0.5 근처면 방향성 우위가 거의 없다.
 - `collapse score`는 보조 지표이며 단독 결론으로 쓰지 않는다.
 
@@ -57,6 +59,13 @@
 이 실험의 합격 기준은 단순한 loss 하락이 아니다.
 최소 기준은 validation 개선, naive persistence 돌파, 방향성 우위의 동시 확인이다.
 이 기준을 못 넘으면 독립변수 추가보다 target, loss, head 재설계가 먼저다.
+
+## 6번 실험으로 넘기는 이유
+
+5번은 일부 조합이 왜 무너지는지 빠르게 확인하는 진단 단계다.
+따라서 5번에서 바로 텍스트 독립변수, historical flow mart, 온체인/유동성 변수를 붙이지 않는다.
+먼저 6번에서 target, normalization, loss, epoch selection을 한 번에 하나씩 바꿔 어떤 수정이 실제로 shortcut collapse를 줄이는지 확인한다.
+이 과정을 거친 뒤에야 여러 독립변수와 데이터마트를 붙였을 때 성능 개선의 원인을 해석할 수 있다.
 
 ## 참고문헌 메모
 
