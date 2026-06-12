@@ -12,7 +12,7 @@
 # 핵심 질문:
 # - raw next-close 회귀가 실제로 copy-risk를 키우는가?
 # - return target만으로 충분한가, 아니면 Huber / 방향성 penalty / volatility weighting이 필요한가?
-# - 같은 objective를 두었을 때 Linear / LSTM / GRU 중 어느 쪽이 더 안정적인가?
+# - 같은 objective를 두었을 때 Linear / LSTM / GRU / TCN / Transformer 중 어느 쪽이 더 안정적인가?
 #
 # 기본 실행 예시:
 # - `uv run test/models/5_optimization_diagnostics_test.py`
@@ -70,9 +70,9 @@ print(f"[env-check] python path head: {sys.path[0]}")
 """Optimization diagnostics for research-time training curve analysis.
 
 This module is designed for `/test/models` notebooks that compare
-architecture and objective-function behavior without performing local heavy
-research runs by default. Actual long runs should happen on the approved
-remote/server environment.
+five representative architecture families and objective-function behavior
+without performing local heavy research runs by default. Actual long runs
+should happen on the approved remote/server environment.
 """
 
 import argparse
@@ -1002,7 +1002,7 @@ def optimization_methodology_lines() -> list[str]:
         "- `Linear`: 입력 윈도우를 한 번에 펴서 가장 단순한 선형 조합으로 예측한다. 장점은 빠르고 해석이 쉬우며, 단점은 시계열 순서 정보를 거의 직접 쓰지 못한다는 점이다.",
         "- `LSTM`: 과거 상태를 게이트로 누적하는 순환 구조다. 장점은 시계열의 순서를 기억할 수 있다는 점이고, 단점은 데이터가 적거나 objective가 거칠면 쉽게 평평한 해로 수렴할 수 있다는 점이다.",
         "- `GRU`: LSTM보다 게이트가 단순한 순환 구조다. 장점은 더 가볍고 빠르게 학습된다는 점이며, 단점은 경우에 따라 복잡한 장기 의존성을 덜 잡을 수 있다는 점이다.",
-        "- 이번 실험에서 `Linear`/`LSTM`/`GRU`를 함께 두는 이유는, 복잡도가 높을수록 항상 좋은 것이 아니라는 점을 확인하기 위해서다. 같은 objective에서도 아키텍처가 다르면 붕괴 방식이 달라질 수 있다.",
+        "- 이번 실험에서 5개 아키텍처를 함께 두는 이유는, 복잡도가 높을수록 항상 좋은 것이 아니라는 점을 확인하기 위해서다. 같은 objective에서도 아키텍처가 다르면 붕괴 방식이 달라질 수 있다.",
         "",
     ]
 
@@ -1526,7 +1526,7 @@ def render_suite_report(
             "- raw next-close 회귀가 copy-risk를 키우는가",
             "- return target + Huber가 평평한 해를 덜 허용하는가",
             "- directional hybrid가 0 수익률 붕괴를 줄이는가",
-            "- 같은 objective에서도 Linear, LSTM, GRU의 붕괴 양상이 다른가",
+            "- 같은 objective에서도 Linear, LSTM, GRU, TCN, Transformer의 붕괴 양상이 다른가",
             "",
             "### 1.4 해석 기준",
             "",

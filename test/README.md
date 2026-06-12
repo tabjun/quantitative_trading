@@ -49,13 +49,13 @@
 
 - 현재 next-close 또는 return target 설계가 복사형 shortcut을 유도하는가
 - Huber, 방향성 penalty, volatility weighting 같은 손실 함수 설계가 collapse를 줄이는가
-- 같은 objective를 쓰더라도 Linear, LSTM, GRU 중 어떤 구조가 더 안정적인 학습 곡선을 보이는가
+- 같은 objective를 쓰더라도 Linear, LSTM, GRU, TCN, Transformer 중 어떤 구조가 더 안정적인 학습 곡선을 보이는가
 
 ### 실험 구성
 
-- `quick_probe`: 기본 실행. 작은 endogenous feature set과 줄인 window 수로 LSTM 기반 objective 차이만 빠르게 확인
+- `quick_probe`: 기본 실행. 작은 endogenous feature set과 줄인 window 수로 5개 대표 아키텍처의 objective 차이를 빠르게 확인
 - `objective_probe`: 같은 계열 모델에서 target, loss, prediction head만 바꿔 objective 설계가 붕괴를 유도하는지 확인
-- `architecture_probe`: 같은 objective를 둔 상태에서 Linear, LSTM, GRU를 비교해 구조별 학습 안정성을 점검
+- `architecture_probe`: 같은 objective를 둔 상태에서 Linear, LSTM, GRU, TCN, Transformer를 비교해 구조별 학습 안정성을 점검
 - `full_matrix`: 줄인 objective와 architecture 조합을 교차시켜 특정 조합에서만 발생하는 붕괴 패턴이 있는지 확인
 
 ### 주요 진단 지표
