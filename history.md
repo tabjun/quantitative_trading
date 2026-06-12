@@ -82,3 +82,24 @@
 | 2026-06-09 | 저장소 정리 / 임시 메일 산출물 제거 | 메일 발송용 임시 파일과 repo-local harness 참조 문서를 제거하고, 작업 지침 문서를 루트 기준으로 다시 모았다. | `test/skills.md`, `test/scripts/send_historical_flow_datamart_professor_email_utf8.py`, `test/results/historical_flow_datamart_professor_brief_20260609.{html,pdf,png}`를 제거했다. repo-local `.agents/skills/harness`, `.codex/skills/harness`도 삭제해 중복 참조를 정리했고 Git stage는 비웠다. | 다음 세션에서는 루트 `AGENTS.md`, `skills.md`, `history.md`, `process.md`만 우선 읽고 `/test` 분석 작업을 이어간다. |
 | 2026-06-09 | 저장소 문서 구조 재정리 | 영구 규칙과 최근 요청 캐시가 섞여 길어지던 문서 구조를 역할별로 다시 나눴다. | `AGENTS.md`를 강제 규칙 중심으로 재작성하고, `skills.md`는 기술 철학과 분석 기준 중심으로 재구성했다. `README.md`는 사람용 프로젝트/실행 가이드로 정리했고, `conversation_l2_cache.md`는 최근 요청 5개만 남기는 얇은 캐시로 축소했다. | 다음 세션부터는 루트 문서 4종과 짧은 캐시만 읽고 빠르게 복원한다. |
 | 2026-06-09 | 테스트 스크립트 정리 및 캐시 확장 | `test/scripts`를 실사용 기준으로 줄이고, L2 캐시 보존 개수를 세션 체감에 맞춰 확대했다. | `conversation_l2_cache.md`의 유지 원칙을 최근 요청 최대 20개로 수정했다. `test/scripts/send_email.py`를 preset 기반 공용 UTF-8 메일 모듈로 통합했고, `extract_notebook_images.py`만 노트북 후처리 유틸로 남겼다. `build_*`, `enhanced_report_generator.py`, `notebook_to_md.py`, `reconstruct_test_env.py`, 개별 UTF-8 메일 스크립트들을 제거했다. `test/data/.gitkeep`를 추가하고 `test/README.md`에 데이터 폴더와 남는 스크립트 역할을 문서화했다. | 이후 `/test` 보조 유틸은 공용 모듈만 유지하고, 새 요청이 와도 ad-hoc 스크립트 대신 기존 모듈 확장으로 처리한다. |
+| 2026-06-13 | 5번 최적화 진단 정리 | `test/models/5_optimization_diagnostics_test.py`를 5개 대표 아키텍처 비교 구조로 유지하고, `test/README.md`는 진짜 대문 수준으로 축약했다. | `quick_probe`, `architecture_probe`, `full_matrix`가 `Linear`, `LSTM`, `GRU`, `TCN`, `Transformer`를 실제로 비교하도록 맞췄고, `test/README.md`의 상세 설명은 결과 보고서와 노트북으로 이동했다. | 이후 세션에서는 실험 설명은 `test/results/*.md`, 실행 구조는 `test/models/*.ipynb`와 `test/models/*.py`, 요약은 `test/README.md`를 우선 본다. |
+| 2026-06-13 | research-workflow harness | 반복되는 연구/문서/보고서 흐름을 다음 세션에서 바로 복원할 수 있도록 최소 harness 구조를 추가했다. | `docs/harness/research-workflow/team-spec.md`를 추가했고, `.agents/skills/research-workflow-orchestrator/SKILL.md`를 생성했다. `AGENTS.md`에는 이 team spec을 우선 읽도록 짧은 포인터를 넣었다. | 다음 세션에서는 반복 작업 시 `AGENTS.md -> team-spec -> orchestrator skill` 순서로 복원한다. |
+
+## 2026-06-13 5번 최적화 진단 복구 기록
+
+- [x] `test/models/5_optimization_diagnostics_test.py`의 `architecture_probe`와 `full_matrix`를 대표 아키텍처 5개(`Linear`, `LSTM`, `GRU`, `TCN`, `Transformer`) 기준으로 복구했다.
+- [x] 같은 변경을 `test/models/5_optimization_diagnostics_test.ipynb` 코드 셀에도 반영해 노트북 원본과 `.py` 미러의 의미를 다시 맞췄다.
+- [x] 보고서 템플릿의 아키텍처 해설도 `TCN`/`Transformer` 비교군을 포함하도록 확장했다.
+- [ ] 다음 체크포인트: 승인된 실행 환경에서만 필요 시 노트북을 다시 실행해 출력 셀까지 최신화한다.
+
+## 2026-06-13 5번 진단 범위 전체 복구
+
+- [x] `quick_probe`와 `objective_probe`까지 `Linear`, `LSTM`, `GRU`, `TCN`, `Transformer` 5개 대표군으로 확장했다.
+- [x] 보고서 초록에서 `LSTM 기준` 서술을 제거하고 5개 대표군 비교로 통일했다.
+- [x] 노트북 출력은 전부 비워서 재실행 전 상태를 깔끔하게 정리했다.
+- [ ] 다음 체크포인트: 승인된 환경에서만 필요 시 실제 결과를 다시 생성한다.
+| 2026-06-13 | quick_probe 보고서 정리 | 저장본이 LSTM quick_probe 요약이라는 점과 최신 5개 대표군 결과는 별도 재생성 대상이라는 점을 분리해야 했다. | `test/results/5_optimization_diagnostics_quick_probe_20260613.md` 초록과 결론을 현재 저장본 기준으로 정리했다. | 최신 5개 대표군 결과가 다시 저장되면 보고서를 그 수치로 덮어쓴다. |
+| 2026-06-13 | quick_probe 보고서 서식 전환 | 현재 `ipynb` 출력이 비어 있어 결과 수치 대신 5개 대표군 기준 서식이 필요했다. | `test/results/5_optimization_diagnostics_quick_probe_20260613.md`를 `Linear`, `LSTM`, `GRU`, `TCN`, `Transformer` 전체 비교용 보고서 틀로 재작성했다. | 다음 실행 결과가 생기면 같은 서식에 실제 수치를 채운다. |
+| 2026-06-13 | quick_probe 보고서 로컬 출력 복구 | 보고서 source of truth는 현재 로컬 노트북 출력이어야 하므로, 임시 서식 대신 실제 출력 Markdown과 이미지 번들을 다시 반영해야 했다. | 현재 `test/models/5_optimization_diagnostics_test.ipynb`의 display markdown을 `test/results/5_optimization_diagnostics_quick_probe_20260613.md`로 다시 반영했고, `test/scripts/extract_notebook_images.py`로 PNG 34장을 `test/images/`에 추출했다. | 이후 5번 보고서 수정은 항상 현재 로컬 `.ipynb` 출력과 추출 이미지 기준으로만 이어간다. |
+| 2026-06-13 | 연구 기록 추적성 원칙 명확화 | 최근 요청 캐시는 얇게 유지하되, 연구 시작부터의 문제 제기·방법론 수정·보고서 해석 원칙 변화는 커밋 이력과 이력 문서만 봐도 복원 가능해야 한다는 방향을 명확히 했다. | `conversation_l2_cache.md`에는 최근 의도만 압축 유지하고, 중요한 워크플로우/해석 원칙 변화는 `history.md`와 의미 있는 커밋 메시지에도 남기는 구조를 확정했다. | 이후 세션에서는 캐시를 비대하게 늘리지 않고, 대신 커밋 단위와 history log만으로도 논문용 연구 흐름을 되짚을 수 있게 기록 품질을 유지한다. |
+| 2026-06-13 | 5번 최종 보고서 및 6번 후속 안정화 계획 | 5번 quick_probe 보고서를 교수님 전달용 최종 문서로 다듬고, 15개 케이스 상세 해석을 `무엇을 시험했나 / 좋은 그림 기준 / 이번 그림 해석 / 결과 해석` 구조로 통일했다. 최적화 문제가 해결되어야 독립변수·데이터마트 확장이 해석 가능하다는 다음 단계 원칙도 정리했다. | `test/results/5_optimization_diagnostics_quick_probe_20260613.md`를 최종 보고서로 보강했고, `test/experiment_specs/6_optimization_stabilization_plan_20260613.md`, `test/models/6_optimization_stabilization_test.ipynb`, `test/models/6_optimization_stabilization_test.py`를 추가했다. `test/scripts/send_email.py`의 `optimization_context_brief` preset도 이번 보고서/계획 링크 중심으로 갱신했다. | 커밋/푸시 후 `develop`, `main`에 병합하고, UTF-8 메일 preset으로 교수님께 최종 보고 링크를 발송한다. |

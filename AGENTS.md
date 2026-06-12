@@ -14,6 +14,7 @@
 3. `history.md`
 4. `conversation_l2_cache.md`
 5. `test/README.md`
+6. `docs/harness/research-workflow/team-spec.md` for recurring research/report workflows
 
 `conversation_l2_cache.md`는 전체를 길게 읽지 말고 최근 항목만 확인한다.
 
@@ -88,10 +89,10 @@
    - 모든 데이터를 하나의 정상 표현으로 강제하지 않는다.
    - 원시 가격 수준만 그대로 학습시키지 않는다.
    - 정상성 검정, 롤링 드리프트 점검, log return, diff, rolling z-score, EMA 변형, KRW 역복원 지표를 함께 사용한다.
-
-2. 보고서 기준
+2. 보고서 세부 기준은 `test/README.md`를 따른다.
    - 실행 및 분석 환경
    - 기초 통계량과 정상성
+   - 사용한 방법론/지표/손실함수/진단 도구의 개념, 사용 이유, 수식 또는 정의, 해석 예시, 장단점
    - KRW 원본 스케일 기준 성능 지표
    - DA와 MASE
    - 축/범례를 포함한 시각화 해석
