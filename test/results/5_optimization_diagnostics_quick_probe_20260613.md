@@ -149,6 +149,13 @@
 - 장점: 가격 레벨 RMSE의 착시를 보완한다.
 - 한계: 방향만 맞고 크기를 틀리면 실제 손익은 나쁠 수 있다.
 
+### 4.8 알고리즘 가족 설명
+
+- `Linear`: 입력 윈도우를 한 번에 펴서 가장 단순한 선형 조합으로 예측한다. 장점은 빠르고 해석이 쉬우며, 단점은 시계열 순서 정보를 거의 직접 쓰지 못한다는 점이다.
+- `LSTM`: 과거 상태를 게이트로 누적하는 순환 구조다. 장점은 시계열의 순서를 기억할 수 있다는 점이고, 단점은 데이터가 적거나 objective가 거칠면 쉽게 평평한 해로 수렴할 수 있다는 점이다.
+- `GRU`: LSTM보다 게이트가 단순한 순환 구조다. 장점은 더 가볍고 빠르게 학습된다는 점이며, 단점은 경우에 따라 복잡한 장기 의존성을 덜 잡을 수 있다는 점이다.
+- 이번 실험에서 `Linear`/`LSTM`/`GRU`를 함께 두는 이유는, 복잡도가 높을수록 항상 좋은 것이 아니라는 점을 확인하기 위해서다. 같은 objective에서도 아키텍처가 다르면 붕괴 방식이 달라질 수 있다.
+
 ## 5. 먼저 볼 그래프: 최적화 학습 곡선
 
 아래 그림은 전체 케이스를 한 번에 비교하기 위한 요약 그림이다. 개별 모델별 상세 학습 곡선은 다음 절에 따로 제공한다.
@@ -161,10 +168,11 @@
 
 ### 5.1 그래프별 축과 해석 기준
 
-- `Train/Validation Objective Loss Index`: x축은 epoch, y축은 1번째 epoch의 손실을 1.0으로 둔 상대 손실이다. train과 validation이 함께 내려가야 학습이 진행된다고 본다.
-- `Validation - Train Gap`: x축은 epoch, y축은 validation 손실 지수에서 train 손실 지수를 뺀 값이다. 양수로 벌어지면 train만 외우고 validation은 개선하지 못하는 과적합 또는 일반화 실패 신호다.
-- `Gradient Norm Before Clipping`: x축은 epoch, y축은 gradient clipping 직전의 평균 gradient norm이다. 계속 clipping 기준선에 붙거나 크게 튀면 손실 스케일 또는 objective가 불안정하다는 의미다.
-- `Validation Persistence Gap`: x축은 epoch, y축은 `모델 MAE - 직전가 복사 naive MAE`이다. 0 아래로 내려가야 naive copy보다 낫다는 뜻이다.
+- `Train/Validation Objective Loss Index`: x축은 epoch, y축은 1번째 epoch의 손실을 1.0으로 둔 상대 손실이다. 왼쪽 위 패널에서 본다. 이 값이 함께 내려가야 학습이 실제로 진행된다고 해석한다.
+- `Validation - Train Gap`: x축은 epoch, y축은 validation 손실 지수에서 train 손실 지수를 뺀 값이다. 오른쪽 위 패널에서 본다. 양수로 벌어지면 train만 외우고 validation은 개선하지 못하는 과적합 또는 일반화 실패 신호다.
+- `Gradient Norm Before Clipping`: x축은 epoch, y축은 gradient clipping 직전의 평균 gradient norm이다. 왼쪽 아래 패널에서 본다. 계속 clipping 기준선에 붙거나 크게 튀면 손실 스케일 또는 objective가 불안정하다는 의미다.
+- `Validation Persistence Gap`: x축은 epoch, y축은 `모델 MAE - 직전가 복사 naive MAE`이다. 오른쪽 아래 패널에서 본다. 0 아래로 내려가야 naive copy보다 낫다는 뜻이다.
+- 왼쪽 위는 학습이 되고 있는가를, 오른쪽 위는 generalization이 되는가를, 왼쪽 아래는 최적화가 안정적인가를, 오른쪽 아래는 baseline을 이기는가를 본다고 기억하면 된다.
 
 ### 5.2 현재 결과를 읽는 핵심 기준
 
@@ -183,12 +191,15 @@
 ## 6. 모델별 학습 곡선
 
 각 모델/손실함수 조합을 분리해서 본 그림이다. 이전 2번 실험의 모델별 loss curve처럼, 여기서는 최적화 과정만 빠르게 확인하기 위해 케이스별로 분리했다.
+아래 각 패널은 모두 같은 읽는 법을 따른다. 왼쪽 위는 loss가 내려가는지, 오른쪽 위는 train과 validation의 차이가 커지는지, 왼쪽 아래는 gradient가 과하게 튀는지, 오른쪽 아래는 직전가 복사 baseline을 이기는지 본다.
 
 ### 6.1 lstm_return_huber
 
 ![lstm_return_huber 학습 곡선](../images/5_optimization_diagnostics_test_cell003_03.png)
 
 이 케이스는 return target에 Huber loss를 적용했을 때 학습 곡선이 얼마나 안정적으로 내려가는지 보여준다.
+- 알고리즘 해설: LSTM은 과거 상태를 기억하는 능력이 있어 시계열 정보를 더 잘 쓸 수 있지만, 데이터가 적거나 loss가 거칠면 쉽게 평평한 해로 수렴할 수 있다.
+- 손실함수 해설: Huber는 큰 outlier에 덜 민감해서, 비정상 구간에서 학습을 조금 더 부드럽게 만들 수 있다.
 이 케이스의 그림은 노트북 출력 셀의 모델별 figure로 표시된다.
 
 - 왼쪽 위: train/validation loss가 함께 하락하는지 확인한다.
@@ -203,6 +214,8 @@
 ![lstm_return_directional_hybrid 학습 곡선](../images/5_optimization_diagnostics_test_cell003_04.png)
 
 이 케이스는 값 예측과 방향성 penalty를 함께 둘 때 최적화가 어떻게 달라지는지 보여준다.
+- 알고리즘 해설: LSTM은 과거 상태를 기억하는 능력이 있어 시계열 정보를 더 잘 쓸 수 있지만, 데이터가 적거나 loss가 거칠면 쉽게 평평한 해로 수렴할 수 있다.
+- 손실함수 해설: directional hybrid는 값 예측에 방향성 penalty를 얹어, 0 수익률로 도망가는 쉬운 해를 줄이려는 설계다.
 이 케이스의 그림은 노트북 출력 셀의 모델별 figure로 표시된다.
 
 - 왼쪽 위: train/validation loss가 함께 하락하는지 확인한다.
@@ -217,6 +230,8 @@
 ![lstm_level_mse 학습 곡선](../images/5_optimization_diagnostics_test_cell003_02.png)
 
 이 케이스는 가격 레벨을 직접 맞추는 통제군으로서, 복사형 shortcut 위험을 가장 강하게 드러낸다.
+- 알고리즘 해설: LSTM은 과거 상태를 기억하는 능력이 있어 시계열 정보를 더 잘 쓸 수 있지만, 데이터가 적거나 loss가 거칠면 쉽게 평평한 해로 수렴할 수 있다.
+- 손실함수 해설: MSE는 큰 오차를 강하게 벌주므로, 가격 레벨 회귀에서는 복사형 해를 밀어낼 수도 있지만 scale에 민감하다.
 이 케이스의 그림은 노트북 출력 셀의 모델별 figure로 표시된다.
 
 - 왼쪽 위: train/validation loss가 함께 하락하는지 확인한다.
