@@ -84,9 +84,13 @@ uv run test/models/5_optimization_diagnostics_test.py --suite full_matrix --feat
 
 ## 7. 결과물 해석
 
-- `results/`의 CSV는 epoch별 학습 곡선과 케이스 요약 표를 담습니다.
-- PNG는 학습 곡선과 collapse 진단 지표를 한 번에 보여 줍니다.
-- Markdown 보고서는 어떤 objective / architecture 조합이 현재 연구 방향에서 더 안전한지 서술형으로 정리합니다.
+- 기본 원칙은 `ipynb` 출력 셀을 1차 결과물로 보는 것입니다.
+- 서버 커널로 실행한 뒤 노트북에는 Markdown, 표, figure를 모두 출력하고, 로컬 Codex는 그 출력 셀과 이미지를 파싱해서 보고서를 작성합니다.
+- `test/scripts/extract_notebook_images.py`는 노트북 출력 이미지 추출용 보조 유틸리티입니다.
+- `results/`의 CSV는 필요할 때만 저장하는 보조 산출물입니다.
+- PNG는 학습 곡선, 모델별 curve, collapse 진단 지표를 보여 줍니다.
+- Markdown 보고서는 어떤 objective / architecture 조합이 현재 연구 방향에서 더 안전한지, 그리고 그 이유가 무엇인지 서술형으로 정리합니다.
+- 보고서는 먼저 방법론과 지표 정의를 설명하고, 그다음 데이터 조건과 기초통계량, 마지막으로 결과를 해석하는 순서를 따릅니다.
 
 ## 8. 참고 문서
 
