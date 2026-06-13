@@ -432,7 +432,12 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--run-all", action="store_true", help="Run every executable stage sequentially in an approved environment.")
     parser.add_argument("--dry-run", action="store_true", help="Print commands without executing them.")
     parser.add_argument("--continue-on-failure", action="store_true", help="Continue later stages even if a stage fails.")
-    return parser.parse_args(list(argv) if argv is not None else None)
+    if argv is None:
+        if "ipykernel" in sys.modules:
+            args, _unknown = parser.parse_known_args()
+            return args
+        return parser.parse_args()
+    return parser.parse_args(list(argv))
 
 
 def main(argv: Iterable[str] | None = None) -> int:
@@ -455,4 +460,7 @@ def main(argv: Iterable[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    if "ipykernel" in sys.modules:
+        main()
+    else:
+        raise SystemExit(main())
