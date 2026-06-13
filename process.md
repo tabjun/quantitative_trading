@@ -1,6 +1,6 @@
 # 연구 수행 프로세스 (Research Process)
 
-본 문서느 긴 호흡의 AI 에이전트 세션(Codex CLI 등)이 토큰 한계로 인해 망가지는 것을 방지하고, 사용자의 주기적 세션 초기화 요구에 완벽하게 대응하기 위해 작업을 모듈화된 **'단위 프로세스(Step)'**로 나눈 가이드라인입니다.
+본 문서는 긴 호흡의 AI 에이전트 세션(Codex CLI 등)이 토큰 한계로 인해 망가지는 것을 방지하고, 사용자의 주기적 세션 초기화 요구에 완벽하게 대응하기 위해 작업을 모듈화된 **'단위 프로세스(Step)'**로 나눈 가이드라인입니다.
 
 ## 💡 AI 에이전트 프로세스 진행 및 세션 복원 규칙
 - **세션당 범위 제한:** 한 세션(대화)에서는 **최대 1~2개의 Step**만 완료하는 것을 목표로 합니다.
@@ -172,6 +172,62 @@
 - [x] `--optuna-trials` 옵션을 추가하고, 요청 시 작은 검증 split과 `MedianPruner`, `gc_after_trial=True`로 소규모 튜닝만 수행하도록 했다.
 - [x] `optuna`를 `pyproject.toml` 의존성에 명시했다. 설치/튜닝/학습 실행은 하지 않았다.
 - [x] `python -m py_compile test\models\4_text_independent_variable_analysis.py` 문법 검증은 통과했다.
+
+## 2026-06-13 예측 방법론 문헌 리뷰 기록
+
+- [x] 3번 실험에서 Autoformer가 좋아 보였던 현상을 가격 레벨 복사/평균수렴 착시 가능성으로 재해석했다.
+- [x] 최근 시계열 예측 흐름을 Autoformer, FEDformer, PatchTST, DLinear, TimesNet, iTransformer, TimeXer, ModernTCN, Mamba/MambaTS, Chronos/TimesFM/Moirai, TFT, RevIN까지 확장해 정리했다.
+- [x] 금융·코인 예측 논문들이 최적화 문제를 data/preprocessing, experimental setup, model training, loss, evaluation, ablation, baseline에 어떻게 포함하는지 정리했다.
+- [x] `test/research_materials/forecasting_methodology_literature_review_20260613.md`를 추가하고, `test/README.md`와 `test/scripts/send_email.py`의 `forecasting_methodology_review` preset에 연결했다.
+- [ ] 다음 체크포인트: 커밋/푸시 후 교수님께 렌더링 링크를 발송하고, 6번 서버 실행 결과 기준으로 안정화 보고서를 작성한다.
+
+## 2026-06-13 서버 환경 재구성 기록
+
+- [x] 학교 서버 터미널에서 `py`가 없고 `python3.10`만 보이는 상황을 확인했다.
+- [x] `uv venv --python 3.12`, `uv sync`, `ipykernel install` 흐름을 `test/README.md`에 추가했다.
+- [x] JupyterLab에서 파일별 실행 후 `Kernel -> Shut Down All Kernels`를 반드시 수행하도록 공통 규칙을 문서화했다.
+- [ ] 다음 체크포인트: 서버에서 새 kernel을 등록할 때 `uv`가 실제로 3.12를 내려받을 수 있는지, 아니면 3.10 커널로 고정해야 하는지 확인한다.
+
+## 2026-06-13 서버 환경 3.12 고정 기록
+
+- [x] `.python-version`을 `3.12`로 추가해 `uv`가 기본적으로 3.12를 선택하도록 맞췄다.
+- [x] `test/README.md`의 서버용 복붙 명령을 `uv venv --python 3.12`, `UV_CACHE_DIR`, `cu126` torch wheel, `quant312` kernel 등록 순서로 다시 정리했다.
+- [ ] 다음 체크포인트: 서버에서 `python -m ipykernel install --user --name quant312 ...` 후 JupyterLab에서 해당 커널이 정상 노출되는지 확인한다.
+
+## 2026-06-13 서버 환경 분기 문서화
+
+- [x] `test/README.md`에 `uv` 기준 경로와 `python3.12`가 실제로 설치된 경우의 일반 `venv` 경로를 분리해 넣었다.
+- [x] 일반 `venv` 경로는 `uv export --format requirements-txt`로 의존성을 풀어 설치하도록 적었다.
+- [ ] 다음 체크포인트: 서버에서 어떤 경로가 가능한지 확인한 뒤 하나만 골라 반복 사용한다.
+
+## 2026-06-13 서버 환경 bootstrap 스크립트 추가
+
+- [x] `test/scripts/bootstrap_uv_313.sh`, `bootstrap_uv_312.sh`, `bootstrap_venv_313.sh`, `bootstrap_venv_312.sh`를 추가했다.
+- [x] `test/README.md`는 긴 설치 설명 대신 스크립트 호출 방법과 서버에서의 git pull / commit / push 순서만 남기도록 줄였다.
+- [ ] 다음 체크포인트: 서버에서 상황에 맞는 스크립트 하나만 실행해서 kernel 등록까지 끝나는지 확인한다.
+
+## 2026-06-13 서버 환경 이름 충돌 방지
+
+- [x] bootstrap 공통 로직을 `test/scripts/bootstrap_env_common.sh`로 분리했다.
+- [x] 모든 bootstrap 스크립트가 고정 `.venv` 대신 `.venvs/<env_name>`에 새 환경을 만들도록 바꿨다.
+- [x] 기본 env 이름은 timestamp 기반으로 자동 생성되고, 기존 env/kernels 목록과 제거 명령도 함께 출력되도록 바꿨다.
+- [ ] 다음 체크포인트: 서버에서 실제 실행 시 생성된 env 이름과 kernel 이름이 JupyterLab에서 기대대로 보이는지 확인한다.
+
+## 2026-06-13 `ipykernel` 기본 의존성 반영
+
+- [x] `pyproject.toml` 기본 dependencies에 `ipykernel`을 추가했다.
+- [x] bootstrap 스크립트는 이미 `ipykernel` 설치를 별도로 하고 있으므로 추가 수정은 하지 않았다.
+- [ ] 다음 체크포인트: 서버에서 기존 env에 `uv sync`를 한 번 더 실행한 뒤 `python -m ipykernel install ...`이 바로 되는지 확인한다.
+
+## 2026-06-13 6번 결과 보고와 7번 후속 확장 분리
+
+- [x] 5번을 진단 기준선, 6번을 안정화 오케스트레이터, 7번을 넓은 폭의 후속 확장 실험으로 역할 분리했다.
+- [x] 6번은 실제 대규모 결과 leaderboard가 아니라 stage plan과 의사결정 gate를 보존하는 보고서로 정리했다.
+- [x] `test/results/6_optimization_stabilization_stage_report_20260613.md`를 추가해 의도/설계/현재 결과/결과 해석/추가 연구 필요성/다음 스텝을 독립 문서로 작성했다.
+- [x] 7번 후속 확장 실험 계획서와 notebook+mirror를 `test/experiment_specs/7_optimization_breadth_expansion_plan_20260613.md`, `test/models/7_optimization_breadth_expansion_test.ipynb`, `test/models/7_optimization_breadth_expansion_test.py`로 추가했다.
+- [x] 7번은 `breadth_probe`, `ensemble_probe`, `normalization_cross_check`, `loss_cross_check`, `scale_confirmation` suite를 포함하도록 정의했다.
+- [x] `AGENTS.md`, `docs/harness/research-workflow/team-spec.md`, `test/README.md`에 “후속 연구는 새 번호”와 “새 보고서는 항상 독립 문서” 규칙을 명시했다.
+- [ ] 다음 체크포인트: 커밋/푸시 후 `test/scripts/send_email.py --preset optimization_stabilization_stage`로 교수님 메일을 발송하고, 서버 실행 결과가 생기면 7번 실제 결과 보고서를 작성한다.
 
 ## 2026-06-09 텍스트 독립변수 분석 모델 추가 기록
 

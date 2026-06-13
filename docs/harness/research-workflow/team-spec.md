@@ -41,6 +41,8 @@ This spec applies when a task repeats across sessions:
 5. Keep `.ipynb` and same-name `.py` together.
 6. Avoid local heavy research runs; use the approved remote kernel for actual results.
 7. Reuse existing scripts and docs before creating new ones.
+8. If a follow-on study changes the meaning or scope of an existing numbered experiment, create a new numbered artifact set instead of overwriting the old one.
+9. Write each new report as a standalone document; repeat core methodology and interpretation guidance even when earlier reports already explained it.
 
 ## Handoff Contract
 
