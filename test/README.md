@@ -80,6 +80,64 @@ ENV_NAME=my_quant_313 KERNEL_NAME=my_quant_313 bash test/scripts/bootstrap_uv_31
 - 스크립트 실행이 끝나면 해당 env 경로, 커널 이름, 제거 명령(`rm -rf ...`, `jupyter kernelspec uninstall ...`)도 같이 출력된다.
 - smoke test가 실패하면 그 환경은 바로 쓰지 말고, 실패한 import 이름이나 CUDA 체크 메시지를 기준으로 다시 점검한다.
 
+### 로컬 VSCode에서 학교 Jupyter 서버 커널 연결
+
+로컬 VSCode에서는 서버의 `.venv` 경로를 직접 넣지 않고, 실행 중인 Jupyter 서버 URL로 접속한 뒤 등록된 Jupyter 커널을 선택한다.
+
+```bash
+# 1. 학교 JupyterLab 터미널에서 실행 중인 서버 URL 확인
+jupyter server list
+```
+
+출력 예시는 다음과 같다.
+
+```text
+Currently running servers:
+http://127.0.0.1:56205/user/std_jun99120/?token=<TOKEN> :: /home/std_jun99120
+```
+
+VSCode에는 `127.0.0.1` 주소를 그대로 넣지 않고, 학교 JupyterHub 외부 주소로 바꿔 입력한다.
+
+```text
+https://stat5.kmu.ac.kr:9500/user/std_jun99120/?token=<TOKEN>
+```
+
+그다음 VSCode에서 다음 순서로 연결한다.
+
+```text
+Select Kernel
+-> Existing Jupyter Server
+-> 위 서버 URL 입력
+-> 등록된 커널 선택
+```
+
+서버에 등록된 커널 목록은 다음 명령어로 확인한다.
+
+```bash
+jupyter kernelspec list
+```
+
+특정 커널이 실제 어떤 Python 환경을 사용하는지 확인하려면 다음처럼 `kernel.json`을 조회한다.
+
+```bash
+cat ~/.local/share/jupyter/kernels/quant313/kernel.json
+```
+
+정상이라면 `argv`에 원하는 uv/venv Python 경로가 들어 있어야 한다.
+
+```text
+/home/std_jun99120/personal_ai_project/quantitative_trading/.venv/bin/python
+```
+
+즉, 연결 구조는 다음과 같다.
+
+```text
+로컬 VSCode
+-> 학교 Jupyter 서버 URL
+-> 서버에 등록된 Jupyter 커널
+-> 서버 내부 uv/venv Python
+```
+
 ## 7. 참고 문서
 
 - [루트 README](/c:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/README.md)
