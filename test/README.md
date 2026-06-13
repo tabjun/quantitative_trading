@@ -57,6 +57,7 @@
 - `test/scripts/bootstrap_venv_312.sh`: 서버에 `python3.12`가 실제로 있을 때만 plain `venv` 방식으로 같은 작업을 수행한다.
 - 모든 스크립트는 고정 `.venv`를 덮어쓰지 않고 `.venvs/<env_name>` 형태로 새 환경을 만든다.
 - 기본 환경 이름은 날짜/시간이 붙은 형태로 자동 생성되며, 실행 전에 기존 env 디렉터리와 Jupyter kernel 목록도 같이 출력한다.
+- 각 스크립트는 설치 후 최소 smoke test를 자동 수행한다. 기본 import(`numpy`, `pandas`, `duckdb`, `statsmodels`, `optuna`, `torch`, `ipykernel`, `openai`, `google.generativeai`, `fastdtw`)와 `torch.cuda.is_available()` 확인까지 포함한다.
 
 실행 예시는 다음처럼 쓴다.
 
@@ -77,6 +78,7 @@ ENV_NAME=my_quant_313 KERNEL_NAME=my_quant_313 bash test/scripts/bootstrap_uv_31
 - 커널을 파일별로 바꿔 가며 실행할 때는 항상 `Kernel -> Shut Down All Kernels`를 먼저 수행한다.
 - JupyterLab에서 커널이 안 보이면, 스크립트가 만든 `Python 3.12 (Quant Stat) [env_name]` 또는 `Python 3.13 (Quant Stat) [env_name]` 커널을 다시 선택한다.
 - 스크립트 실행이 끝나면 해당 env 경로, 커널 이름, 제거 명령(`rm -rf ...`, `jupyter kernelspec uninstall ...`)도 같이 출력된다.
+- smoke test가 실패하면 그 환경은 바로 쓰지 말고, 실패한 import 이름이나 CUDA 체크 메시지를 기준으로 다시 점검한다.
 
 ## 7. 참고 문서
 

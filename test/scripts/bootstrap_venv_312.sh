@@ -40,4 +40,5 @@ python -m pip install --index-url "$TORCH_INDEX_URL" \
   "torchaudio==$TORCHAUDIO_VERSION"
 
 install_kernel "$KERNEL_DISPLAY_PREFIX [$ENV_NAME]"
+run_smoke_test
 print_runtime_summary

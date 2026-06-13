@@ -79,3 +79,66 @@ print_runtime_summary() {
   python -c "import torch; print(torch.__version__); print(torch.version.cuda); print(torch.cuda.is_available())"
   print_cleanup_help
 }
+
+run_smoke_test() {
+  echo "[bootstrap] Running smoke test..."
+  python - <<'PY'
+import importlib
+import json
+import sys
+from pathlib import Path
+
+packages = [
+    "dotenv",
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "scipy",
+    "duckdb",
+    "statsmodels",
+    "optuna",
+    "torch",
+    "ipykernel",
+    "openai",
+    "google.generativeai",
+    "fastdtw",
+]
+
+failed = []
+for name in packages:
+    try:
+        importlib.import_module(name)
+        print(f"[smoke] import ok: {name}")
+    except Exception as exc:
+        failed.append((name, repr(exc)))
+        print(f"[smoke] import failed: {name} -> {exc}")
+
+try:
+    import torch
+    print(f"[smoke] torch version: {torch.__version__}")
+    print(f"[smoke] torch cuda version: {torch.version.cuda}")
+    print(f"[smoke] torch cuda available: {torch.cuda.is_available()}")
+    if torch.cuda.is_available():
+        print(f"[smoke] torch device count: {torch.cuda.device_count()}")
+        print(f"[smoke] torch current device: {torch.cuda.current_device()}")
+        print(f"[smoke] torch device name: {torch.cuda.get_device_name(torch.cuda.current_device())}")
+except Exception as exc:
+    failed.append(("torch_cuda_check", repr(exc)))
+    print(f"[smoke] torch cuda check failed: {exc}")
+
+kernel_name = Path.home() / ".local" / "share" / "jupyter" / "kernels"
+if not kernel_name.exists():
+    failed.append(("jupyter_kernel_dir", "kernel directory missing"))
+    print("[smoke] kernel directory missing")
+else:
+    print(f"[smoke] kernel directory ok: {kernel_name}")
+
+if failed:
+    print("[smoke] bootstrap smoke test failed")
+    for name, detail in failed:
+        print(f"  - {name}: {detail}")
+    sys.exit(1)
+
+print("[smoke] bootstrap smoke test passed")
+PY
+}
