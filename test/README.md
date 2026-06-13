@@ -138,6 +138,87 @@ cat ~/.local/share/jupyter/kernels/quant313/kernel.json
 -> 서버 내부 uv/venv Python
 ```
 
+### 장시간 환경 스크립트 백그라운드 실행
+
+JupyterLab 터미널에서 오래 걸리는 환경 구성 스크립트는 `nohup`으로 백그라운드 실행한다. 이렇게 하면 로컬 브라우저나 VSCode 연결이 끊겨도 서버에서 작업이 계속 진행된다.
+
+#### 단일 스크립트 실행
+
+```bash
+cd ~/personal_ai_project/quantitative_trading
+
+# logs 디렉터리가 없으면 생성한다. 이미 있으면 그대로 둔다.
+mkdir -p logs
+
+LOG="logs/bootstrap_uv_313_$(TZ=Asia/Seoul date +%Y%m%d_%H%M%S).log"
+
+nohup bash test/scripts/bootstrap_uv_313.sh > "$LOG" 2>&1 &
+
+echo $! | tee logs/bootstrap_uv_313.pid
+echo "$LOG" | tee logs/bootstrap_uv_313.latest
+
+tail -f "$LOG"
+```
+
+로그 확인을 멈출 때는 `Ctrl + C`를 누른다. 이는 `tail -f`만 종료하며, `nohup`으로 실행된 스크립트는 계속 실행된다.
+
+```bash
+ps -p "$(cat logs/bootstrap_uv_313.pid)" -o pid,stat,etime,%cpu,%mem,cmd
+disown %1
+```
+
+#### 3.13 완료 후 3.12 순차 실행
+
+두 환경을 동시에 만들면 다운로드, 디스크, 캐시 작업이 겹쳐 느려질 수 있으므로 순차 실행을 기본으로 한다. 아래 명령은 이미 실행 중인 3.13 작업이 끝난 뒤 3.12 작업을 자동으로 시작한다.
+
+```bash
+cd ~/personal_ai_project/quantitative_trading
+
+# 위 단일 실행 블록에서 이미 mkdir -p logs를 실행했다면 생략해도 된다.
+mkdir -p logs
+
+LOG="logs/bootstrap_uv_312_after_313_$(TZ=Asia/Seoul date +%Y%m%d_%H%M%S).log"
+
+nohup bash -lc '
+cd ~/personal_ai_project/quantitative_trading
+while kill -0 "$(cat logs/bootstrap_uv_313.pid)" 2>/dev/null; do
+  sleep 60
+done
+bash test/scripts/bootstrap_uv_312.sh
+' > "$LOG" 2>&1 &
+
+echo $! | tee logs/bootstrap_uv_312.pid
+echo "$LOG" | tee logs/bootstrap_uv_312.latest
+```
+
+#### 실행 상태 확인
+
+```bash
+cd ~/personal_ai_project/quantitative_trading
+
+ps -p "$(cat logs/bootstrap_uv_313.pid)" -o pid,stat,etime,%cpu,%mem,cmd
+ps -p "$(cat logs/bootstrap_uv_312.pid)" -o pid,stat,etime,%cpu,%mem,cmd
+
+tail -n 80 "$(cat logs/bootstrap_uv_313.latest)"
+tail -n 80 "$(cat logs/bootstrap_uv_312.latest)"
+```
+
+#### 완료 확인
+
+```bash
+jupyter kernelspec list
+find . -maxdepth 4 -name "pyvenv.cfg" -print | sort
+```
+
+#### 실행 중단
+
+```bash
+kill "$(cat logs/bootstrap_uv_313.pid)"
+kill "$(cat logs/bootstrap_uv_312.pid)"
+```
+
+`nohup: ignoring input`은 정상 메시지다. 백그라운드 작업이 키보드 입력을 받지 않고 실행된다는 의미다.
+
 ## 7. 참고 문서
 
 - [루트 README](/c:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/README.md)
