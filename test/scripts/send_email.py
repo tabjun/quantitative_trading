@@ -6,6 +6,8 @@ Usage examples:
     python test/scripts/send_email.py --preset independent_variables
     python test/scripts/send_email.py --preset historical_flow_mart
     python test/scripts/send_email.py --preset optimization_context_brief
+    python test/scripts/send_email.py --preset forecasting_methodology_review
+    python test/scripts/send_email.py --preset optimization_stabilization_stage
 """
 
 from __future__ import annotations
@@ -215,12 +217,147 @@ def optimization_context_brief_email(commit_hash: str) -> tuple[str, str, list[P
     return subject, body, []
 
 
+def forecasting_methodology_review_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    commit_url = f"{GITHUB_BASE}/commit/{commit_hash}"
+    report_path = "test/research_materials/forecasting_methodology_literature_review_20260613.md"
+    report_3_path = "test/results/3_time_series_multi_ticker_test_report_20260526_020000.md"
+    report_5_path = "test/results/5_optimization_diagnostics_quick_probe_20260613.md"
+    plan_6_path = "test/experiment_specs/6_optimization_stabilization_plan_20260613.md"
+    readme_path = "test/README.md"
+    body = f"""교수님 안녕하세요.
+
+현재 진행 중인 업비트/주식 시계열 예측 연구의 논문화 방향과, 왜 지금 최적화 안정화 문제를 먼저 정리해야 하는지를 문헌 리뷰 형태로 정리해 공유드립니다.
+
+이번 정리의 핵심은 최종 목표가 단순히 특정 모델 하나로 가격을 맞히는 것이 아니라, 비정상 고빈도 금융 시계열에서 예측 모델이 실제 신호를 학습했는지 검증하고, 이후 텍스트 독립변수와 historical flow data mart 같은 외생변수를 붙였을 때 개선 원인을 설명할 수 있는 연구 구조를 만드는 것입니다.
+
+문헌을 보면 Autoformer, FEDformer, PatchTST, TimesNet, iTransformer, TimeXer, ModernTCN, Mamba/MambaTS, Chronos/TimesFM/Moirai, TFT, RevIN처럼 최근 시계열 예측 알고리즘은 매우 다양하게 연구되고 있습니다. 다만 금융·코인 예측 논문은 모델 구조만 제시하지 않고, target 정의, normalization, leakage-safe split, validation-only tuning, loss function, baseline, 거래비용, MDD, sensitivity analysis를 함께 둡니다.
+
+따라서 현재 4번, 5번, 6번 실험은 연구 목적에서 벗어난 우회 작업이 아니라 논문으로 넘어가기 위한 필수 기반 작업입니다.
+
+- 3번에서는 Autoformer가 수치상 좋아 보이는 현상이 있었지만, 가격 레벨 직접 회귀와 MinMax 스케일 때문에 직전가 복사 또는 평균 수렴형 착시였을 가능성이 큽니다.
+- 4번은 텍스트 독립변수와 외생변수 후보가 실제 정보 가치를 갖는지 준비하는 단계입니다.
+- 5번은 Linear, LSTM, GRU, TCN, Transformer 대표 구조에서 target/loss 조합이 쉬운 해로 붕괴하는지 진단한 단계입니다.
+- 6번은 독립변수 확장 전에 return target, normalization, loss, collapse-aware model selection을 안정화하는 단계입니다.
+
+보고서에서 특히 보시면 좋은 부분은 다음과 같습니다.
+
+- `3번 Autoformer 결과를 어떻게 이해해야 하는가`: 좋아 보였던 결과가 왜 실제 예측력이라기보다 평가 착시일 수 있는지 정리했습니다.
+- `최근 시계열 예측 알고리즘 흐름`: Autoformer/PatchTST뿐 아니라 TimeXer, iTransformer, ModernTCN, MambaTS, foundation model까지 다음 후보군을 비교했습니다.
+- `논문별 상세 정리`: 각 논문이 무엇을 했고, 학습/최적화 문제를 어디에 넣었고, 결과를 어떤 지표와 그림으로 출력했는지 정리했습니다.
+- `출판되는 논문들은 최적화 문제를 어디에 넣는가`: 최적화가 논문 제목에 드러나지 않더라도 방법론의 data/preprocessing, experimental setup, model training, loss, evaluation, ablation에 포함된다는 점을 정리했습니다.
+- `현재 연구에 바로 반영해야 할 기준`: 6번 이후 어떤 알고리즘을 어떤 순서로 확장해야 하는지 정리했습니다.
+
+이번 보고서의 결론은, 이 논문들처럼 예측 연구로 통과하려면 단순히 모델 종류를 늘리는 것보다 먼저 학습 붕괴와 평가 착시를 충분히 해소해야 한다는 것입니다. 그래야 이후 텍스트 독립변수, historical flow data mart, 온체인/유동성 변수 등을 붙였을 때 성능 개선이 실제 변수 효과인지 논문에서 설득력 있게 주장할 수 있습니다.
+
+커밋 링크:
+{commit_url}
+
+문헌 리뷰 보고서:
+{github_blob(report_path)}
+
+관련 연구 흐름:
+- 3번 다종목 실험 보고서:
+{github_blob(report_3_path)}
+
+- 5번 최적화 진단 보고서:
+{github_blob(report_5_path)}
+
+- 6번 최적화 안정화 계획서:
+{github_blob(plan_6_path)}
+
+- test 연구 공간 안내:
+{github_blob(readme_path)}
+
+자세한 알고리즘별 논문 요약과 다음 실험 후보는 문헌 리뷰 보고서를 보시면 되고, 현재 로컬 노트북 결과 기준의 collapse 진단은 5번 보고서, 이후 서버에서 수행할 안정화 단계는 6번 계획서에 정리해 두었습니다.
+
+감사합니다.
+"""
+    subject = "[시계열 연구] 예측 방법론 문헌 리뷰 및 최적화 안정화 필요성"
+    return subject, body, []
+
+
+def optimization_stabilization_stage_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    commit_url = f"{GITHUB_BASE}/commit/{commit_hash}"
+    report_5_path = "test/results/5_optimization_diagnostics_quick_probe_20260613.md"
+    report_6_path = "test/results/6_optimization_stabilization_stage_report_20260613.md"
+    plan_6_path = "test/experiment_specs/6_optimization_stabilization_plan_20260613.md"
+    plan_7_path = "test/experiment_specs/7_optimization_breadth_expansion_plan_20260613.md"
+    notebook_6_path = "test/models/6_optimization_stabilization_test.ipynb"
+    notebook_7_path = "test/models/7_optimization_breadth_expansion_test.ipynb"
+    body = f"""교수님 안녕하세요.
+
+5번 최적화 진단 이후, 후속 연구를 어떤 순서로 진행해야 하는지 정리한 6번 단계 보고와 7번 확장 실험 계획을 함께 공유드립니다.
+
+이번에 6번을 따로 만든 이유
+- 5번에서는 `Linear`, `LSTM`, `GRU`, `TCN`, `Transformer` 5개 대표 구조를 기준으로, 가격 레벨 직접 회귀와 수익률 기반 목표가 어떤 식으로 무너지는지 약식 진단했습니다.
+- 그 결과 train loss는 줄어도 예측이 직전가 복사나 0 수익률 근처의 쉬운 해로 붕괴하는 문제가 확인됐습니다.
+- 이 상태에서 바로 텍스트 독립변수나 데이터마트를 더 붙이면, 개선/악화가 변수 때문인지 최적화 문제 때문인지 해석하기 어려워집니다.
+
+6번의 실제 역할
+- 6번은 대규모 확장 실험 완료본이 아니라, 5번 결과를 바탕으로 후속 안정화 실험을 어떤 순서로 실행할지 고정하는 오케스트레이터입니다.
+- 현재 저장된 6번 노트북 출력도 성능표 묶음이 아니라 stage plan 출력입니다.
+- 즉 6번의 핵심 결과는 “무엇을 먼저 확인하고, 어떤 그림이면 통과이며, 어떤 경우 재설계해야 하는가”라는 연구 의사결정 기준입니다.
+
+이번 단계에서 다시 확인한 핵심 방법론
+- `level_mse`는 다음 가격 수준을 직접 맞히는 방식이고, 자기상관이 강한 가격 데이터에서는 직전가 복사형 답으로 빠지기 쉽습니다.
+- `return_huber`는 다음 수익률을 보다 안정적으로 학습하려는 손실입니다.
+- `return_directional_hybrid`는 값 오차뿐 아니라 방향성도 같이 보려는 손실입니다.
+- 성능 판단은 단순 loss 감소가 아니라 `KRW MAE/RMSE`, `DA`, `MASE`, `persistence_gap`, `collapse_score`, `near_zero_return_share`, `sign_agreement`를 함께 봐야 합니다.
+
+현재 결과와 해석
+- 6번만으로는 “어떤 모델이 최종 우승이다”라고 결론낼 수 없습니다.
+- 대신 5번에서 드러난 붕괴 문제를 기준으로, 6번에서 `target -> normalization -> loss -> resource scale -> independent variable gate` 순서로 확인해야 한다는 점을 고정했습니다.
+- 이 결과는 연구 흐름상 중요하지만, 실제로 더 넓은 모델 변형과 앙상블을 비교한 결과까지 포함하지는 않습니다.
+
+그래서 7번이 필요한 이유
+- 사용 중인 기본 5개 구조만으로는 후속 방향을 충분히 고르기 어렵습니다.
+- 7번에서는 `Autoformer-like`, `PatchTST-like`, `DLinear/NLinear-like`, `TimesNet/TimeXer-like`, `iTransformer-like`, `ModernTCN-like`, `Mamba-like` 같은 확장 단일 모델군과, `LSTM + Autoformer`, `TCN + Transformer`, `validation weighted top-k ensemble` 같은 앙상블군까지 포함해 더 넓은 폭으로 확인할 계획입니다.
+- 즉 6번은 “순서를 정하는 단계”, 7번은 “더 넓게 실제 비교해 방향을 고르는 단계”로 역할을 분리했습니다.
+
+커밋 링크:
+{commit_url}
+
+보고서 및 계획 링크:
+- 5번 진단 보고서:
+{github_blob(report_5_path)}
+
+- 6번 안정화 단계 보고서:
+{github_blob(report_6_path)}
+
+- 6번 안정화 실행 계획서:
+{github_blob(plan_6_path)}
+
+- 7번 넓은 폭 후속 확장 실험 계획서:
+{github_blob(plan_7_path)}
+
+관련 노트북:
+- 6번 노트북:
+{github_blob(notebook_6_path)}
+
+- 7번 노트북:
+{github_blob(notebook_7_path)}
+
+보고서를 보실 때,
+- 5번 보고서에서는 실제 붕괴 양상과 대표 5개 구조의 quick probe 해석을,
+- 6번 보고서에서는 왜 6번이 결과 보고서이면서도 동시에 연결 문서인지,
+- 7번 계획서에서는 다음 단계에서 어떤 모델군과 앙상블군을 어떤 기준으로 넓게 볼지를 확인하실 수 있습니다.
+
+이번 연구의 핵심 목표는 결국 업비트 비정상 시계열에서 모델이 쉬운 해로 무너지지 않도록 학습 구조를 먼저 안정화한 뒤, 그 위에 독립변수와 데이터마트를 결합해 논문 형태의 예측 연구로 확장하는 것입니다.
+
+감사합니다.
+"""
+    subject = "[시계열 연구] 6번 안정화 단계 보고 및 7번 후속 확장 계획"
+    return subject, body, []
+
+
 PRESETS = {
     "simulation": simulation_email,
     "text_context": text_context_email,
     "independent_variables": independent_variables_email,
     "historical_flow_mart": historical_flow_email,
     "optimization_context_brief": optimization_context_brief_email,
+    "forecasting_methodology_review": forecasting_methodology_review_email,
+    "optimization_stabilization_stage": optimization_stabilization_stage_email,
 }
 
 
