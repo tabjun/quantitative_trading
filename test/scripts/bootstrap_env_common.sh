@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_ROOT="$(cd "$ROOT_DIR/.." && pwd)"
 ENV_ROOT="$PROJECT_ROOT/.venvs"
 KERNEL_ROOT="$HOME/.local/share/jupyter/kernels"
-TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+TIMESTAMP="$(TZ=Asia/Seoul date +%Y%m%d_%H%M%S)"
 
 ensure_gpu_server() {
   if ! command -v nvidia-smi >/dev/null 2>&1; then
@@ -44,6 +44,9 @@ detect_torch_index_url() {
   esac
 
   export TORCH_INDEX_URL
+  CUDA_VERSION="$cuda_version"
+  export CUDA_VERSION
+
   echo "[bootstrap] CUDA_VERSION=$cuda_version"
   echo "[bootstrap] TORCH_INDEX_URL=$TORCH_INDEX_URL"
 }
@@ -157,4 +160,32 @@ if failed:
 
 print("[smoke] bootstrap smoke test passed")
 PY
+}
+
+print_vscode_jupyter_connection_hint() {
+  local raw_url
+  local path_query
+  local external_url
+
+  raw_url="$(jupyter server list 2>/dev/null | grep -Eo 'https?://[^ ]+\?token=[^ ]+' | head -n 1 || true)"
+
+  if [[ -z "$raw_url" ]]; then
+    echo "[vscode] No running Jupyter server URL found."
+    echo "[vscode] Run: jupyter server list"
+    return 0
+  fi
+
+  path_query="$(echo "$raw_url" | sed -E 's#^https?://[^/]+##')"
+  external_url="https://stat5.kmu.ac.kr:9500${path_query}"
+
+  echo
+  echo "[vscode] Copy this Jupyter server URL:"
+  echo "$external_url"
+  echo
+  echo "[vscode] VSCode connection order:"
+  echo "  Select Kernel"
+  echo "  -> Existing Jupyter Server"
+  echo "  -> paste the URL above"
+  echo "  -> select the registered kernel"
+  echo
 }

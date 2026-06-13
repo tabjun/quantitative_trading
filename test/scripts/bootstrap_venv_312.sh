@@ -55,3 +55,4 @@ PY
 install_kernel "$KERNEL_DISPLAY_PREFIX [$ENV_NAME]"
 run_smoke_test
 print_runtime_summary
+print_vscode_jupyter_connection_hint
