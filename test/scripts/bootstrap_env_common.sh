@@ -16,20 +16,36 @@ ensure_gpu_server() {
 
 detect_torch_index_url() {
   local cuda_version
-  cuda_version="$(nvidia-smi | awk -F': ' '/CUDA Version/ {print $2; exit}' | awk '{print $1}')"
+
+  cuda_version="$(nvidia-smi | grep -oP 'CUDA Version:\s*\K[0-9]+\.[0-9]+' | head -n 1)"
+
+  if [[ -z "$cuda_version" ]]; then
+    echo "[bootstrap] Failed to detect CUDA version from nvidia-smi."
+    nvidia-smi
+    exit 1
+  fi
+
   case "$cuda_version" in
-    12.6*|12.7*|12.8*|13.*)
+    12.6)
       TORCH_INDEX_URL="https://download.pytorch.org/whl/cu126"
       ;;
-    11.8*|11.7*|11.6*)
-      TORCH_INDEX_URL="https://download.pytorch.org/whl/cu118"
+    12.4)
+      TORCH_INDEX_URL="https://download.pytorch.org/whl/cu124"
+      ;;
+    12.1)
+      TORCH_INDEX_URL="https://download.pytorch.org/whl/cu121"
       ;;
     *)
-      echo "[bootstrap] Unsupported CUDA version: ${cuda_version:-unknown}"
+      echo "[bootstrap] Unsupported CUDA version: $cuda_version"
+      echo "[bootstrap] nvidia-smi output:"
+      nvidia-smi
       exit 1
       ;;
   esac
-  CUDA_VERSION="$cuda_version"
+
+  export TORCH_INDEX_URL
+  echo "[bootstrap] CUDA_VERSION=$cuda_version"
+  echo "[bootstrap] TORCH_INDEX_URL=$TORCH_INDEX_URL"
 }
 
 print_existing_envs() {
