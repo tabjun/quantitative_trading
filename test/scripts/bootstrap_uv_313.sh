@@ -26,7 +26,13 @@ source "$VENV_PATH/bin/activate"
 # Install project dependencies first. If pyproject.toml/uv.lock installs a default torch build,
 # the next step forcibly replaces it with the CUDA build matching this server.
 UV_NO_CONFIG=1 uv sync --active --no-cache
-uv pip install --reinstall ipykernel
+uv pip install --reinstall \
+  "ipykernel==6.29.5" \
+  "jupyter_client==8.6.3" \
+  "traitlets==5.14.3" \
+  "pyzmq==26.2.1" \
+  "ipywidgets==8.1.8" \
+  "jupyterlab_widgets"
 
 # Force PyTorch to match the detected CUDA runtime, e.g. cu126 on RTX 4090 server.
 uv pip install --reinstall --index-url "$TORCH_INDEX_URL" \

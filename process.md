@@ -229,6 +229,25 @@
 - [x] `AGENTS.md`, `docs/harness/research-workflow/team-spec.md`, `test/README.md`에 “후속 연구는 새 번호”와 “새 보고서는 항상 독립 문서” 규칙을 명시했다.
 - [ ] 다음 체크포인트: 커밋/푸시 후 `test/scripts/send_email.py --preset optimization_stabilization_stage`로 교수님 메일을 발송하고, 서버 실행 결과가 생기면 7번 실제 결과 보고서를 작성한다.
 
+## 2026-06-15 7번 서버 자원 프로필 및 커널 복구 보강
+
+- [x] `test/models/7_optimization_breadth_expansion_test.py`에 `school_4090_15gb` 자원 프로필과 CPU/RAM/GPU/CUDA/PyTorch 자동 감지 로그를 추가했다.
+- [x] 7번은 현재 GPU 학습 엔진 전체가 아니라 breadth expansion 오케스트레이터라는 점을 코드 출력에 명시했다.
+- [x] `OMP_NUM_THREADS`, `MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, `NUMEXPR_NUM_THREADS`와 `torch.set_num_threads`, `torch.set_num_interop_threads` 적용 로직을 7번에 추가했다.
+- [x] suite별로 “실행 가능한 representative pre-check backend”와 “아직 backend 미구현”을 구분해 출력하도록 정리했다.
+- [x] `test/models/7_optimization_breadth_expansion_test.ipynb`의 실패 출력과 원격 커널 이름 고정을 지우고 generic kernelspec으로 정리했다.
+- [x] `pyproject.toml`과 bootstrap 스크립트에 `ipywidgets` 설치를 추가하고 smoke test에 포함했다.
+- [x] `test/README.md`에 VSCode 원격 Jupyter의 `Password ... was invalid`, stale kernel metadata, `Canceled future ...` 점검 순서를 추가했다.
+- [ ] 다음 체크포인트: 서버에서 `bootstrap_uv_312.sh`를 다시 실행해 `ipywidgets`까지 포함한 새 커널을 등록하고, VSCode를 새 token URL로 재연결한 뒤 7번 노트북을 generic kernelspec 상태에서 다시 연다.
+
+## 2026-06-16 학교 서버 JupyterLab 저버전 호환 세트 고정
+
+- [x] 실제 서버 점검 결과, 문제의 핵심은 단순 `ipywidgets` 누락이 아니라 학교 서버 JupyterLab 저버전과 최신 kernel/widget stack의 호환성 문제라는 점을 반영했다.
+- [x] `pyproject.toml`에 `ipykernel==6.29.5`, `jupyter-client==8.6.3`, `traitlets==5.14.3`, `pyzmq==26.2.1`, `ipywidgets==8.1.8`, `jupyterlab-widgets`를 고정했다.
+- [x] `bootstrap_uv_312.sh`, `bootstrap_uv_313.sh`, `bootstrap_venv_312.sh`, `bootstrap_venv_313.sh`가 위 known-good compatibility set을 재설치하도록 바꿨다.
+- [x] `test/README.md`에 “커널 Python/CUDA는 정상인데 JupyterLab 버전 때문에 꼬이는 경우”를 위한 호환 블록과 부분 복구 명령을 남겼다.
+- [ ] 다음 체크포인트: 서버에서 현재 살아 있는 env에 위 compatibility set만 다시 맞춘 뒤 VSCode에서 fresh token URL로 재연결하고, 커널 idle 진입이 안정적인지 본다.
+
 ## 2026-06-09 텍스트 독립변수 분석 모델 추가 기록
 
 - [x] `test/models/4_text_independent_variable_analysis.py`를 추가해 뉴스/증시 리포트/SNS 텍스트 피처를 독립변수로 쓰는 연구용 분석 엔트리포인트를 만들었다.

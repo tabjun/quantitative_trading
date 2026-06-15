@@ -59,6 +59,25 @@
 - 기본 환경 이름은 날짜/시간이 붙은 형태로 자동 생성되며, 실행 전에 기존 env 디렉터리와 Jupyter kernel 목록도 같이 출력한다.
 - 각 스크립트는 설치 후 최소 smoke test를 자동 수행한다. 기본 import(`numpy`, `pandas`, `duckdb`, `statsmodels`, `optuna`, `torch`, `ipykernel`, `openai`, `google.generativeai`, `fastdtw`)와 `torch.cuda.is_available()` 확인까지 포함한다.
 
+### 학교 서버 JupyterLab 저버전 호환 고정값
+
+학교 서버에서는 커널 Python이나 CUDA가 정상이더라도, 상위 JupyterLab/JupyterHub 버전이 낮으면 최신 widget/kernel stack과 충돌할 수 있다. 이 저장소에서는 다음 조합을 **known-good compatibility set**으로 취급한다.
+
+```bash
+UV_NO_CONFIG=1 uv pip install --reinstall \
+  "ipykernel==6.29.5" \
+  "jupyter_client==8.6.3" \
+  "traitlets==5.14.3" \
+  "pyzmq==26.2.1" \
+  "ipywidgets==8.1.8" \
+  "jupyterlab_widgets"
+```
+
+- 이 조합은 "커널 Python은 정상인데 JupyterLab 쪽 버전이 낮아서 커널 시작/위젯 호환이 꼬이는 경우"를 기준으로 고정한 값이다.
+- bootstrap 스크립트는 위 버전 세트를 기본으로 재설치한다.
+- 서버에서 이미 env가 살아 있고 `ipywidgets`/`jupyterlab_widgets` 계열만 부족한 것이 확인되면, env 전체를 다시 만들기보다 위 명령만 추가 수행해도 된다.
+- 반대로 `torch`, `cuda`, `ipykernel`까지 모두 깨졌다면 새 env 재구축을 우선한다.
+
 실행 예시는 다음처럼 쓴다.
 
 ```bash
@@ -137,6 +156,13 @@ cat ~/.local/share/jupyter/kernels/quant313/kernel.json
 -> 서버에 등록된 Jupyter 커널
 -> 서버 내부 uv/venv Python
 ```
+
+원격 연결 문제를 볼 때는 다음도 함께 확인한다.
+
+- VSCode 로그에 `Password ... was invalid`가 반복되면, 저장된 비밀번호/세션이 꼬였다는 뜻일 수 있다. `Existing Jupyter Server`를 다시 선택하고 `jupyter server list`에서 얻은 **새 token URL**로 재연결한다.
+- 노트북 메타데이터에 오래된 커널 이름이 박혀 있으면, 환경을 지운 뒤에도 예전 커널을 다시 잡으려 할 수 있다. 이 경우 VSCode에서 다른 커널을 직접 다시 선택한다.
+- 커널이 `Started session` 뒤 `Canceled future for execute_request message before replies were done`로 멈추면, 서버에서 먼저 `jupyter kernelspec list`, 해당 `kernel.json`, 그리고 `.../bin/python -c "import ipykernel, torch; print(torch.cuda.is_available())"`를 확인한다.
+- `ipykernel`, `torch`, `cuda`는 정상이지만 widget 계열만 깨져 있고 학교 서버 JupyterLab 버전이 낮다면, 위의 compatibility set으로 다시 맞춘 뒤 커널을 재선택한다.
 
 ### 장시간 환경 스크립트 백그라운드 실행
 

@@ -118,6 +118,8 @@ packages = [
     "optuna",
     "torch",
     "ipykernel",
+    "ipywidgets",
+    "jupyterlab_widgets",
     "openai",
     "google.generativeai",
     "fastdtw",
