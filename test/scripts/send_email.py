@@ -357,22 +357,27 @@ def breadth_expansion_interpretation_email(commit_hash: str) -> tuple[str, str, 
     report_8_path = "test/experiment_specs/8_optimization_breadth_training_plan_20260616.md"
     body = f"""교수님 안녕하세요.
 
-7번 확장 실험 결과를 정리해 공유드립니다. 이번 7번은 실제 학습 결과가 아니라, 6번 안정화 이후 어떤 breadth expansion을 어떤 자원 프로필과 단계로 돌려야 하는지 정리한 stage plan 출력이었습니다.
+7번 확장 실험 결과를 정리해 공유드립니다. 결론부터 말씀드리면, 7번은 모델 성능 결과가 아니라 6번 안정화 이후의 후속 breadth expansion을 어떤 자원 프로필과 실행 순서로 돌릴지 정리한 stage plan입니다.
 
-무엇을 확인했는지
-- 학교 서버 환경에서 `school_4090_15gb` 자원 프로필을 기준으로 CPU/RAM/GPU/CUDA/PyTorch 상태를 감지했습니다.
-- `breadth_probe`, `ensemble_probe`, `normalization_cross_check`, `loss_cross_check`, `scale_confirmation` 같은 후속 실험 순서를 정리했습니다.
-- 다만 7번 코드 자체에는 아직 확장 모델군 전체를 실제로 학습하는 backend가 없어서, 학습 곡선/예측 그래프/collapse 진단을 보여주는 결과는 아니었습니다.
+이번 7번에서 실제로 나온 것
+- 학교 서버/로컬 환경의 CPU, RAM, GPU, CUDA, PyTorch 상태를 감지했습니다.
+- `school_4090_15gb` 자원 프로필을 적용했고, 과도한 병렬화와 장시간 단일 실행을 피하도록 실행 원칙을 고정했습니다.
+- `breadth_probe`, `ensemble_probe`, `normalization_cross_check`, `loss_cross_check`, `scale_confirmation` 같은 후속 실험 suite를 정의했습니다.
 
-왜 이 해석이 중요한가
-- 7번을 성능 결과로 읽으면 안 되고, 다음 실험 설계와 자원 관리 기준을 고정한 중간 산출물로 읽어야 합니다.
-- 실제로 필요한 것은 알고리즘 이름을 늘리는 것뿐 아니라 preprocessing, normalization, loss, optimizer, scheduler, gradient policy, ensemble 조합까지 넓히는 것입니다.
-- 그래서 8번은 새 번호로 분리해 실제 GPU 학습 실험으로 작성했습니다.
+왜 이 해석이 필요한가
+- 7번은 학습 곡선, 예측 그래프, collapse 진단, leaderboard를 만든 실험이 아닙니다.
+- 따라서 7번을 성능 순위표로 읽으면 안 되고, 다음 실험을 돌릴 때 어떤 축을 먼저 확인해야 하는지 정리한 중간 산출물로 읽어야 합니다.
+- 특히 지금 연구의 핵심은 모델 이름만 늘리는 것이 아니라 preprocessing, normalization, loss, optimizer/scheduler, gradient policy, ensemble 조합까지 함께 넓혀서 무엇이 실제로 영향을 주는지 보는 것입니다.
 
 현재 결론
-- 7번은 확장 학습의 결과가 아니라 확장 학습을 어떻게 안전하게 돌릴지 정리한 계획 문서입니다.
-- 따라서 7번만으로는 모델 우열을 말할 수 없고, 실제 판단은 8번 breadth training에서 해야 합니다.
-- 8번에서는 같은 5개 기본 모델뿐 아니라 전처리/정규화/손실/최적화/기울기 안정화/앙상블 조합까지 함께 비교하도록 바꾸었습니다.
+- 7번은 확장 학습의 결과가 아니라 확장 학습을 안전하게 설계하는 문서입니다.
+- 7번만으로는 모델 우열을 말할 수 없고, 실제 판단은 8번 breadth training에서 해야 합니다.
+- 그래서 8번은 새 번호로 분리해 실제 GPU 학습 실험으로 다시 작성했습니다.
+
+교수님께서 보실 때는
+- 7번 보고서는 “왜 이 뒤에 8번이 필요한가”를 설명하는 해석 문서로 보시면 됩니다.
+- 8번 계획서는 “앞으로 어떤 축을 실제 학습으로 비교할 것인가”를 보여줍니다.
+- 이 두 문서를 합쳐 보시면, 현재 연구가 단순 모델 비교가 아니라 학습 붕괴를 먼저 해소한 뒤 외생변수와 데이터마트를 붙이려는 흐름이라는 점을 확인하실 수 있습니다.
 
 커밋 링크:
 {commit_url}
