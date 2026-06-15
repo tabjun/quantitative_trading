@@ -28,12 +28,16 @@
 - `4_text_independent_variable_analysis.ipynb`: 텍스트 독립변수 결합 실험
 - `5_optimization_diagnostics_test.ipynb`: 최적화 경로와 shortcut collapse 진단
 - `6_optimization_stabilization_test.ipynb`: target, normalization, loss, model selection 안정화 실험
+- `7_optimization_breadth_expansion_test.ipynb`: 6번 이후 확장 실험의 자원 인식형 stage plan
+- `8_optimization_breadth_training_test.ipynb`: 7번 계획을 실제 GPU 학습/시각화/붕괴 진단으로 연결한 breadth training 실험. 알고리즘뿐 아니라 preprocessing, normalization, loss, optimizer/scheduler, gradient policy, ensemble 축을 함께 비교한다.
 
-## 4. 4번부터 6번까지의 연구 흐름
+## 4. 4번부터 8번까지의 연구 흐름
 
 - `4번`은 텍스트와 외생변수가 가격 예측에 실제 정보 가치를 주는지 보는 실험이다.
 - `5번`은 objective, target, architecture가 직전가 복사나 0 수익률 같은 쉬운 해로 붕괴하는지 보는 진단 실험이다.
 - `6번`은 독립변수와 데이터마트를 본격적으로 붙이기 전에 target, normalization, loss, model selection 기준을 안정화하는 실험이다.
+- `7번`은 실제 학습 결과가 아니라, 6번 안정화 이후 확장 실험을 어떤 자원 profile과 stage로 실행할지 정리한 계획/점검 산출물이다.
+- `8번`은 7번에서 빠진 실제 학습 backend를 새 번호로 분리한 실험이며, 모델군 확장만이 아니라 전처리/정규화/손실함수/최적화/기울기 안정화/앙상블 조합까지 서버 GPU에서 비교한다.
 - 문헌 기반 논문화 방향과 후속 알고리즘 후보는 `test/research_materials/forecasting_methodology_literature_review_20260613.md`를 본다.
 - 세부 해석은 각 노트북의 결과 셀과 `test/results/*.md` 보고서를 우선 본다.
 - 설계 메모와 참고문헌은 `test/experiment_specs/`에 둔다.

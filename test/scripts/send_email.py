@@ -8,6 +8,7 @@ Usage examples:
     python test/scripts/send_email.py --preset optimization_context_brief
     python test/scripts/send_email.py --preset forecasting_methodology_review
     python test/scripts/send_email.py --preset optimization_stabilization_stage
+    python test/scripts/send_email.py --preset breadth_expansion_interpretation
 """
 
 from __future__ import annotations
@@ -350,6 +351,46 @@ def optimization_stabilization_stage_email(commit_hash: str) -> tuple[str, str, 
     return subject, body, []
 
 
+def breadth_expansion_interpretation_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    commit_url = f"{GITHUB_BASE}/commit/{commit_hash}"
+    report_7_path = "test/results/7_optimization_breadth_expansion_interpretation_20260616.md"
+    report_8_path = "test/experiment_specs/8_optimization_breadth_training_plan_20260616.md"
+    body = f"""교수님 안녕하세요.
+
+7번 확장 실험 결과를 정리해 공유드립니다. 이번 7번은 실제 학습 결과가 아니라, 6번 안정화 이후 어떤 breadth expansion을 어떤 자원 프로필과 단계로 돌려야 하는지 정리한 stage plan 출력이었습니다.
+
+무엇을 확인했는지
+- 학교 서버 환경에서 `school_4090_15gb` 자원 프로필을 기준으로 CPU/RAM/GPU/CUDA/PyTorch 상태를 감지했습니다.
+- `breadth_probe`, `ensemble_probe`, `normalization_cross_check`, `loss_cross_check`, `scale_confirmation` 같은 후속 실험 순서를 정리했습니다.
+- 다만 7번 코드 자체에는 아직 확장 모델군 전체를 실제로 학습하는 backend가 없어서, 학습 곡선/예측 그래프/collapse 진단을 보여주는 결과는 아니었습니다.
+
+왜 이 해석이 중요한가
+- 7번을 성능 결과로 읽으면 안 되고, 다음 실험 설계와 자원 관리 기준을 고정한 중간 산출물로 읽어야 합니다.
+- 실제로 필요한 것은 알고리즘 이름을 늘리는 것뿐 아니라 preprocessing, normalization, loss, optimizer, scheduler, gradient policy, ensemble 조합까지 넓히는 것입니다.
+- 그래서 8번은 새 번호로 분리해 실제 GPU 학습 실험으로 작성했습니다.
+
+현재 결론
+- 7번은 확장 학습의 결과가 아니라 확장 학습을 어떻게 안전하게 돌릴지 정리한 계획 문서입니다.
+- 따라서 7번만으로는 모델 우열을 말할 수 없고, 실제 판단은 8번 breadth training에서 해야 합니다.
+- 8번에서는 같은 5개 기본 모델뿐 아니라 전처리/정규화/손실/최적화/기울기 안정화/앙상블 조합까지 함께 비교하도록 바꾸었습니다.
+
+커밋 링크:
+{commit_url}
+
+7번 해석 보고서:
+{github_blob(report_7_path)}
+
+8번 계획서:
+{github_blob(report_8_path)}
+
+조금 더 자세히 보실 때는 7번 해석 보고서에서 “왜 7번이 stage plan인지”와 “왜 8번이 필요한지”를 보시면 되고, 8번 계획서에서는 앞으로 어떤 축으로 실제 학습을 돌릴지 보실 수 있습니다.
+
+감사합니다.
+"""
+    subject = "[시계열 연구] 7번 확장 실험 해석 및 8번 breadth training 계획"
+    return subject, body, []
+
+
 PRESETS = {
     "simulation": simulation_email,
     "text_context": text_context_email,
@@ -358,6 +399,7 @@ PRESETS = {
     "optimization_context_brief": optimization_context_brief_email,
     "forecasting_methodology_review": forecasting_methodology_review_email,
     "optimization_stabilization_stage": optimization_stabilization_stage_email,
+    "breadth_expansion_interpretation": breadth_expansion_interpretation_email,
 }
 
 

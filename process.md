@@ -248,6 +248,16 @@
 - [x] `test/README.md`에 “커널 Python/CUDA는 정상인데 JupyterLab 버전 때문에 꼬이는 경우”를 위한 호환 블록과 부분 복구 명령을 남겼다.
 - [ ] 다음 체크포인트: 서버에서 현재 살아 있는 env에 위 compatibility set만 다시 맞춘 뒤 VSCode에서 fresh token URL로 재연결하고, 커널 idle 진입이 안정적인지 본다.
 
+## 2026-06-16 7번 결과 해석과 8번 실제 학습 실험 분리
+
+- [x] 7번 결과는 모델 학습 결과가 아니라 `school_4090_15gb` 자원 프로필과 suite 실행 순서를 출력한 stage plan이라는 점을 명확히 했다.
+- [x] `test/results/7_optimization_breadth_expansion_interpretation_20260616.md`에 7번 결과의 한계와 8번이 필요한 이유를 별도 기록했다.
+- [x] 8번을 새 번호로 분리해 실제 GPU 학습 backend, 확장 모델군, 앙상블, 학습 곡선, 예측 그래프, collapse 진단 저장 로직을 추가했다.
+- [x] 8번 설계는 `test/experiment_specs/8_optimization_breadth_training_plan_20260616.md`에 정리했다.
+- [x] 8번을 단순 알고리즘 확장이 아니라 preprocessing, normalization, loss, optimizer/scheduler, gradient policy, ensemble 조합까지 보는 학습 방식 확장 실험으로 보강했다.
+- [x] `test/research_materials/optimization_training_case_design_20260616.md`에 Non-stationary Transformer, Dish-TS, FAN, NoRIN, DLinear/NLinear, PatchTST, gradient clipping, Adam/AdamW/SGDR/Lookahead 근거를 정리했다.
+- [ ] 다음 체크포인트: 학교 서버 CUDA 커널에서 8번을 작은 suite로 먼저 실행하고, 생성된 CSV/PNG/Markdown 보고서 기준으로 모델별 해석을 작성한다.
+
 ## 2026-06-09 텍스트 독립변수 분석 모델 추가 기록
 
 - [x] `test/models/4_text_independent_variable_analysis.py`를 추가해 뉴스/증시 리포트/SNS 텍스트 피처를 독립변수로 쓰는 연구용 분석 엔트리포인트를 만들었다.
