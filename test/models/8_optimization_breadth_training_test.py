@@ -11,6 +11,19 @@
 # 실제 실행은 학교 서버 CUDA 커널에서 수행하고, 결과 CSV/PNG/Markdown 보고서를 `test/results`와 `test/images`에 저장합니다.
 
 # %%
+# [FOR COMMIT TRACKING ONLY - DO NOT EXECUTE]
+# This file is automatically mirrored from the corresponding .ipynb for git diff purposes.
+# Actual research execution should be performed in the Jupyter Notebook (.ipynb)
+# or in an approved remote/server environment.
+
+# %% [markdown]
+# # 8번 최적화 breadth training 실험
+#
+# 6번 안정화 기준과 7번 stage plan을 실제 GPU 학습 backend로 연결하는 노트북입니다.
+# 이번 버전은 알고리즘뿐 아니라 preprocessing, normalization, loss, optimizer/scheduler, gradient policy, ensemble 축을 함께 비교합니다.
+# 실제 실행은 학교 서버 CUDA 커널에서 수행하고, 결과 CSV/PNG/Markdown 보고서를 `test/results`와 `test/images`에 저장합니다.
+
+# %%
 #!/usr/bin/env python
 # coding: utf-8
 
@@ -56,8 +69,22 @@ from torch.utils.data import DataLoader, TensorDataset
 
 
 def find_repo_root(start: Path) -> Path:
-    for path in [start, *start.parents]:
-        if (path / "pyproject.toml").exists() and (path / "test").exists():
+    def is_repo_root(path: Path) -> bool:
+        return (path / "pyproject.toml").exists() and (path / "test").exists()
+
+    env_root = os.environ.get("QUANTITATIVE_TRADING_ROOT")
+    candidates = []
+    if env_root:
+        candidates.append(Path(env_root))
+    candidates.extend([start, *start.parents])
+    candidates.extend(
+        [
+            Path.home() / "personal_ai_project" / "quantitative_trading",
+            Path.home() / "OneDrive" / "바탕 화면" / "Analysis" / "toy_agent_project" / "quantitative_trading",
+        ]
+    )
+    for path in candidates:
+        if is_repo_root(path):
             return path
     return start
 
@@ -212,21 +239,17 @@ def log_environment(profile: ResourceProfile) -> dict[str, object]:
 
 
 def resolve_db_path(db_arg: str | None) -> Path:
-    candidates: list[Path] = []
     if db_arg:
-        candidates.append(Path(db_arg))
-    candidates.extend(
-        [
-            REPO_ROOT / "upbit_data.db",
-            REPO_ROOT.parent / "upbit_data.db",
-            REPO_ROOT / "test" / "data" / "upbit_data.db",
-        ]
-    )
-    for candidate in candidates:
+        candidate = Path(db_arg)
         if candidate.exists():
             return candidate
+        raise FileNotFoundError(f"지정한 DuckDB 파일이 없다: {candidate}")
+
+    candidate = REPO_ROOT / "data" / "upbit_data.db"
+    if candidate.exists():
+        return candidate
     raise FileNotFoundError(
-        "DuckDB 파일을 찾지 못했다. --db 경로를 지정하거나 upbit_data.db를 repo root/test/data에 둔다."
+        "DuckDB 파일을 찾지 못했다. 기본 경로는 repo root/data/upbit_data.db 이며, 필요하면 --db로만 오버라이드한다."
     )
 
 
