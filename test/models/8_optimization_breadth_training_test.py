@@ -8,7 +8,7 @@
 #
 # 6번 안정화 기준과 7번 stage plan을 실제 GPU 학습 backend로 연결하는 노트북입니다.
 # 이번 버전은 알고리즘뿐 아니라 preprocessing, normalization, loss, optimizer/scheduler, gradient policy, ensemble 축을 함께 비교합니다.
-# 실제 실행은 학교 서버 CUDA 커널에서 수행하고, 결과 CSV/PNG/Markdown 보고서를 `test/results`와 `test/images`에 저장합니다.
+# 실제 실행은 학교 서버 CUDA 커널에서 수행하고, 기본 동작은 파일 저장이 아니라 노트북 inline 출력입니다.
 
 # %%
 # [FOR COMMIT TRACKING ONLY - DO NOT EXECUTE]
@@ -21,7 +21,20 @@
 #
 # 6번 안정화 기준과 7번 stage plan을 실제 GPU 학습 backend로 연결하는 노트북입니다.
 # 이번 버전은 알고리즘뿐 아니라 preprocessing, normalization, loss, optimizer/scheduler, gradient policy, ensemble 축을 함께 비교합니다.
-# 실제 실행은 학교 서버 CUDA 커널에서 수행하고, 결과 CSV/PNG/Markdown 보고서를 `test/results`와 `test/images`에 저장합니다.
+# 실제 실행은 학교 서버 CUDA 커널에서 수행하고, 결과는 노트북 출력 셀에서 바로 확인한다.
+
+# %%
+# [FOR COMMIT TRACKING ONLY - DO NOT EXECUTE]
+# This file is automatically mirrored from the corresponding .ipynb for git diff purposes.
+# Actual research execution should be performed in the Jupyter Notebook (.ipynb)
+# or in an approved remote/server environment.
+
+# %% [markdown]
+# # 8번 최적화 breadth training 실험
+#
+# 6번 안정화 기준과 7번 stage plan을 실제 GPU 학습 backend로 연결하는 노트북입니다.
+# 이번 버전은 알고리즘뿐 아니라 preprocessing, normalization, loss, optimizer/scheduler, gradient policy, ensemble 축을 함께 비교합니다.
+# 실제 실행은 학교 서버 CUDA 커널에서 수행하고, 결과는 노트북 출력 셀에서 바로 확인한다.
 
 # %%
 #!/usr/bin/env python
@@ -42,7 +55,6 @@ from __future__ import annotations
 
 import argparse
 import gc
-import hashlib
 import json
 import math
 import os
@@ -51,7 +63,6 @@ import random
 import sys
 import time
 from dataclasses import asdict, dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
@@ -92,11 +103,6 @@ def find_repo_root(start: Path) -> Path:
 REPO_ROOT = find_repo_root(Path.cwd())
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
-
-RESULTS_DIR = REPO_ROOT / "test" / "results"
-IMAGES_DIR = REPO_ROOT / "test" / "images"
-ARTIFACT_PREFIX = "8_optimization_breadth_training"
-
 
 def set_seed(seed: int) -> None:
     random.seed(seed)
@@ -1036,10 +1042,7 @@ def evaluate_predictions(split: dict[str, np.ndarray], pred_return: np.ndarray) 
 # ---------------------------------------------------------------------------
 
 
-def save_learning_curve(curves: pd.DataFrame, out_path: Path, title: str) -> None:
-    import matplotlib
-
-    matplotlib.use("Agg")
+def show_learning_curve(curves: pd.DataFrame, title: str) -> None:
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(figsize=(8, 4.8), dpi=160)
@@ -1059,14 +1062,11 @@ def save_learning_curve(curves: pd.DataFrame, out_path: Path, title: str) -> Non
     else:
         ax.legend()
     fig.tight_layout()
-    fig.savefig(out_path)
+    plt.show()
     plt.close(fig)
 
 
-def save_prediction_plot(split: dict[str, np.ndarray], pred_return: np.ndarray, out_path: Path, title: str) -> None:
-    import matplotlib
-
-    matplotlib.use("Agg")
+def show_prediction_plot(split: dict[str, np.ndarray], pred_return: np.ndarray, title: str) -> None:
     import matplotlib.pyplot as plt
 
     n = min(300, len(pred_return))
@@ -1094,14 +1094,11 @@ def save_prediction_plot(split: dict[str, np.ndarray], pred_return: np.ndarray, 
     axes[1].grid(alpha=0.25)
     fig.suptitle(title)
     fig.tight_layout()
-    fig.savefig(out_path)
+    plt.show()
     plt.close(fig)
 
 
-def save_collapse_bar(summary: pd.DataFrame, out_path: Path) -> None:
-    import matplotlib
-
-    matplotlib.use("Agg")
+def show_collapse_bar(summary: pd.DataFrame) -> None:
     import matplotlib.pyplot as plt
 
     if summary.empty:
@@ -1115,18 +1112,16 @@ def save_collapse_bar(summary: pd.DataFrame, out_path: Path) -> None:
     ax.set_ylabel("diagnostic value")
     ax.grid(axis="y", alpha=0.25)
     fig.tight_layout()
-    fig.savefig(out_path)
+    plt.show()
     plt.close(fig)
 
 
 def write_report(
-    report_path: Path,
     env: dict[str, object],
     stats: dict[str, object],
     args: argparse.Namespace,
     summary: pd.DataFrame,
-    image_paths: list[Path],
-) -> None:
+) -> str:
     lines = [
         "# 8번 최적화 breadth training 결과 보고서",
         "",
@@ -1180,10 +1175,6 @@ def write_report(
             "- 나쁜 그림은 loss만 줄지만 예측 수익률 분산이 거의 0이거나, KRW 예측이 직전가 baseline과 사실상 겹치는 경우다.",
         ]
     )
-    lines.extend(["", "## 저장된 시각화", ""])
-    for path in image_paths:
-        rel = path.relative_to(REPO_ROOT).as_posix()
-        lines.append(f"- `{rel}`")
     lines.extend(
         [
             "",
@@ -1191,9 +1182,14 @@ def write_report(
             "",
             "이 보고서는 단일 수치 1등 모델을 고르는 것이 아니라, 어떤 모델군/정규화/loss 조합이 쉬운 해로 붕괴하는지 먼저 거르는 데 사용한다. collapse 진단을 통과한 조합만 후속 독립변수, 데이터마트, 텍스트 컨텍스트 결합 연구로 넘긴다.",
             "",
+            "## 주의",
+            "",
+            "이 노트북은 결과 파일을 저장하지 않는다. 모든 해석은 노트북 출력 셀과 아래에 출력되는 Markdown 본문을 기준으로 읽는다.",
+            "",
         ]
     )
-    report_path.write_text("\n".join(lines), encoding="utf-8")
+    report_text = "\n".join(lines)
+    return report_text
 
 
 # ---------------------------------------------------------------------------
@@ -1319,7 +1315,6 @@ def run_case(
     base_df: pd.DataFrame,
     args: argparse.Namespace,
     profile: ResourceProfile,
-    timestamp: str,
 ) -> tuple[dict[str, object], pd.DataFrame, np.ndarray]:
     feature_columns = FEATURE_SETS[case["feature_set"]]
     data = build_windows(
@@ -1385,21 +1380,8 @@ def run_case(
         **metrics,
     }
 
-    digest = hashlib.sha1(case_id.encode("utf-8")).hexdigest()[:10]
-    safe_id = f"{case['model']}__{digest}"
-    curve_path = RESULTS_DIR / f"{ARTIFACT_PREFIX}_{timestamp}_{safe_id}_curves.csv"
-    curves.assign(case_id=case_id).to_csv(curve_path, index=False, encoding="utf-8-sig")
-    save_learning_curve(
-        curves,
-        IMAGES_DIR / f"{ARTIFACT_PREFIX}_{timestamp}_{safe_id}_learning_curve.png",
-        f"{case_id} learning curve",
-    )
-    save_prediction_plot(
-        splits["test"],
-        pred,
-        IMAGES_DIR / f"{ARTIFACT_PREFIX}_{timestamp}_{safe_id}_prediction.png",
-        f"{case_id} prediction diagnostics",
-    )
+    show_learning_curve(curves, f"{case_id} learning curve")
+    show_prediction_plot(splits["test"], pred, f"{case_id} prediction diagnostics")
     return result, curves.assign(case_id=case_id), pred
 
 
@@ -1498,9 +1480,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
     set_seed(args.seed)
     profile = build_resource_profile(args.profile, args.device)
@@ -1525,17 +1504,14 @@ def main(argv: list[str] | None = None) -> None:
     print("[data]", json.dumps(stats, ensure_ascii=False, indent=2))
 
     summary_rows: list[dict[str, object]] = []
-    curve_frames: list[pd.DataFrame] = []
     predictions_by_model: dict[str, np.ndarray] = {}
     latest_test_split: dict[str, np.ndarray] | None = None
-    image_paths: list[Path] = []
 
     for index, case in enumerate(cases, start=1):
         print(f"\n[case {index}/{len(cases)}] {case}")
         try:
-            result, curves, pred = run_case(case, features, args, profile, timestamp)
+            result, curves, pred = run_case(case, features, args, profile)
             summary_rows.append(result)
-            curve_frames.append(curves)
             predictions_by_model[case["model"]] = pred
 
             feature_columns = FEATURE_SETS[case["feature_set"]]
@@ -1550,19 +1526,6 @@ def main(argv: list[str] | None = None) -> None:
             )
             latest_test_split = time_split(data, args.train_ratio, args.val_ratio)["test"]
 
-            digest = hashlib.sha1(str(result["case_id"]).encode("utf-8")).hexdigest()[:10]
-            safe_id = f"{result['model']}__{digest}"
-            image_paths.extend(
-                [
-                    IMAGES_DIR / f"{ARTIFACT_PREFIX}_{timestamp}_{safe_id}_learning_curve.png",
-                    IMAGES_DIR / f"{ARTIFACT_PREFIX}_{timestamp}_{safe_id}_prediction.png",
-                ]
-            )
-            pd.DataFrame(summary_rows).to_csv(
-                RESULTS_DIR / f"{ARTIFACT_PREFIX}_{timestamp}_summary.csv",
-                index=False,
-                encoding="utf-8-sig",
-            )
         except RuntimeError as exc:
             if "out of memory" in str(exc).lower() and torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -1580,21 +1543,15 @@ def main(argv: list[str] | None = None) -> None:
         if ensemble_rows:
             summary = pd.concat([summary, pd.DataFrame(ensemble_rows)], ignore_index=True)
 
-    summary_path = RESULTS_DIR / f"{ARTIFACT_PREFIX}_{timestamp}_summary.csv"
-    curves_path = RESULTS_DIR / f"{ARTIFACT_PREFIX}_{timestamp}_curves.csv"
-    collapse_path = IMAGES_DIR / f"{ARTIFACT_PREFIX}_{timestamp}_collapse_diagnostics.png"
-    report_path = RESULTS_DIR / f"{ARTIFACT_PREFIX}_{timestamp}_report.md"
+    show_collapse_bar(summary)
+    report_text = write_report(env, stats, args, summary)
+    try:
+        from IPython.display import Markdown, display
 
-    summary.to_csv(summary_path, index=False, encoding="utf-8-sig")
-    if curve_frames:
-        pd.concat(curve_frames, ignore_index=True).to_csv(curves_path, index=False, encoding="utf-8-sig")
-    save_collapse_bar(summary, collapse_path)
-    image_paths.append(collapse_path)
-    write_report(report_path, env, stats, args, summary, image_paths)
-
-    print(f"[done] summary: {summary_path}")
-    print(f"[done] curves: {curves_path}")
-    print(f"[done] report: {report_path}")
+        display(Markdown(report_text))
+    except Exception:
+        print(report_text)
+    print("[done] notebook outputs displayed inline; artifacts are not persisted.")
 
 
 if __name__ == "__main__":

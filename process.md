@@ -256,7 +256,16 @@
 - [x] 8번 설계는 `test/experiment_specs/8_optimization_breadth_training_plan_20260616.md`에 정리했다.
 - [x] 8번을 단순 알고리즘 확장이 아니라 preprocessing, normalization, loss, optimizer/scheduler, gradient policy, ensemble 조합까지 보는 학습 방식 확장 실험으로 보강했다.
 - [x] `test/research_materials/optimization_training_case_design_20260616.md`에 Non-stationary Transformer, Dish-TS, FAN, NoRIN, DLinear/NLinear, PatchTST, gradient clipping, Adam/AdamW/SGDR/Lookahead 근거를 정리했다.
-- [ ] 다음 체크포인트: 학교 서버 CUDA 커널에서 8번을 작은 suite로 먼저 실행하고, 생성된 CSV/PNG/Markdown 보고서 기준으로 모델별 해석을 작성한다.
+- [ ] 다음 체크포인트: 학교 서버 CUDA 커널에서 8번을 작은 suite로 먼저 실행하고, 노트북 inline 출력 기준으로 모델별 해석을 작성한다. 필요한 경우에만 로컬 `test/scripts`로 이미지 추출을 한다.
+
+## 2026-06-23 8번 결과 마감과 9번 전처리·불확실성 진단
+
+- [x] 8번 notebook 출력 14개 모델의 persistence MAE, copy-risk, variance ratio, near-zero share, direction accuracy를 독립 보고서로 해석했다.
+- [x] 최저 MAE 계열이 실제 패턴을 학습한 것이 아니라 0수익률 collapse로 persistence에 근접했다는 점을 분리했다.
+- [x] LSTM/GRU/AutoformerLike는 기울기 소실보다 출력 분산 과대와 폭주 증거가 더 강하다고 정리했다.
+- [x] Black–Scholes 영상은 점예측이 아닌 분포·변동성·예측구간 관점으로, Double Descent 영상은 width·parameter count·seed·epoch 변화 진단으로 번역했다.
+- [x] 9번 notebook/`.py`에 28개 전처리 pipeline, preprocessing matrix, uncertainty probe, capacity probe, conformal interval, seed ensemble과 단계별 inline 시각화를 구현했다.
+- [ ] 다음 체크포인트: 서버에서 9번의 작은 preprocessing matrix를 먼저 실행해 inline 그림이 실제 `image/png` 출력으로 남는지 확인한 뒤 전체 112 cases를 실행한다.
 
 ## 2026-06-09 텍스트 독립변수 분석 모델 추가 기록
 

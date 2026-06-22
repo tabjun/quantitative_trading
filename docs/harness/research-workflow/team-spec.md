@@ -43,6 +43,7 @@ This spec applies when a task repeats across sessions:
 7. Reuse existing scripts and docs before creating new ones.
 8. If a follow-on study changes the meaning or scope of an existing numbered experiment, create a new numbered artifact set instead of overwriting the old one.
 9. Write each new report as a standalone document; repeat core methodology and interpretation guidance even when earlier reports already explained it.
+10. For notebook-driven experiments, prefer `plt.show()` and inline cell output. Do not call `savefig()` by default, and do not treat server-side PNG/CSV/Markdown files as the primary result unless the user explicitly asks for file artifacts.
 
 ## Handoff Contract
 

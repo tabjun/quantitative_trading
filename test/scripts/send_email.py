@@ -396,6 +396,94 @@ def breadth_expansion_interpretation_email(commit_hash: str) -> tuple[str, str, 
     return subject, body, []
 
 
+def preprocessing_uncertainty_diagnostics_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    commit_url = f"{GITHUB_BASE}/commit/{commit_hash}"
+    report_8_path = "test/results/8_optimization_breadth_training_report_20260623.md"
+    plan_9_path = "test/experiment_specs/9_preprocessing_uncertainty_diagnostics_plan_20260623.md"
+    notebook_9_path = "test/models/9_preprocessing_uncertainty_diagnostics_test.ipynb"
+    video_black_scholes = "https://www.youtube.com/watch?v=99BHnu64pu8"
+    video_double_descent = "https://www.youtube.com/watch?v=5ruiphjlOwo"
+    body = f"""교수님 안녕하세요.
+
+업비트 비정상 시계열의 최적화 문제를 확인하기 위해 수행한 8번 breadth training 결과와, 이를 반영해 설계한 9번 전처리·불확실성 진단 실험을 공유드립니다.
+
+1. 왜 8번을 수행했는가
+
+앞선 5번과 6번에서는 loss가 감소하더라도 예측이 직전 가격 복사 또는 0수익률 근처로 붕괴할 수 있다는 문제를 확인했습니다. 7번은 실제 학습 결과가 아니라 서버 자원과 실행 단계를 정리한 계획이었기 때문에, 8번에서는 Linear, LSTM, GRU, TCN, Transformer와 Autoformer-like, PatchTST-like, DLinear/NLinear-like, TimesNet-like, TimeXer-like, iTransformer-like, ModernTCN-like, Mamba-like를 같은 조건에서 실제 학습했습니다.
+
+2. 8번 결과
+
+- 14개 모델 모두 단순 persistence baseline의 MAE 190,608 KRW를 이기지 못했습니다.
+- TimesNetLike, NLinearLike, DLinearLike, TCN은 MAE는 persistence에 가까웠지만 예측 분산이 실제의 1% 미만으로 줄었습니다. 즉 실제 변동을 학습한 것이 아니라 0수익률 근처로 평평해진 결과입니다.
+- Linear와 PatchTSTLike는 MAE는 더 컸지만 방향성과 예측 분산을 상대적으로 더 많이 보존했습니다.
+- LSTM과 GRU는 variance ratio가 각각 약 2.28, 4.39로 실제보다 크게 흔들렸습니다. 이를 단순 기울기 소실로 해석하기보다 출력 분산 과대, heavy-tail 입력, 목적함수와 평가 지표의 불일치로 보는 것이 더 적절합니다.
+- AutoformerLike는 MAE 약 163만 KRW, variance ratio 약 59.39로 가장 크게 폭주했습니다. 과거 3번 실험에서 좋게 보였던 Autoformer 결과를 구조 자체의 우위로 해석할 수 없다는 점이 다시 확인됐습니다.
+
+따라서 현재 단계에서 최신 모델을 더 추가하는 것만으로는 문제가 해결되지 않습니다. 전처리, 분포 이동, 변동성, 불확실성, 모델 용량과 seed 변동을 분리해 확인해야 합니다.
+
+3. 9번에서 무엇을 추가했는가
+
+9번은 8번을 덮어쓰지 않고 새 번호로 분리했습니다.
+
+- 극단값 처리: winsorization 강도 3종, Hampel filter
+- heavy-tail 처리: robust asinh, signed log, winsor+asinh, Hampel+asinh
+- 추세 처리: first/seasonal difference, EMA residual, linear detrend, median residual
+- 주파수 처리: high-pass 강도 3종, band-pass, winsor+frequency 조합
+- 변동성 처리: local volatility scaling과 asinh 결합
+- 총 28개 preprocessing pipeline
+- Linear, PatchTSTLike, TimesNetLike, AutoformerLike 비교
+- seed ensemble과 conformal prediction interval
+- interval coverage, width, miss distance
+- hidden width와 parameter count 변화에 따른 generalization error
+- 원시 데이터부터 전처리 전후, 학습곡선, gradient, 예측, 불확실성, heatmap까지 notebook inline 시각화
+
+4. 영상 내용을 어떻게 반영했는가
+
+Black–Scholes 관련 영상:
+{video_black_scholes}
+
+이 영상에서 참고한 핵심은 미래 가격을 하나의 값으로 단정하지 않고 확률분포와 변동성으로 표현하는 관점입니다. Black–Scholes의 로그정규 가정을 코인에 그대로 적용하지는 않고, seed ensemble과 conformal interval을 이용해 예측구간의 실제 coverage와 폭을 평가하도록 반영했습니다.
+
+Double Descent 관련 영상:
+{video_double_descent}
+
+이 영상에서 참고한 핵심은 모델이 커질수록 일반화 오차가 단순히 증가하거나 감소한다고 가정할 수 없다는 점입니다. 9번에서는 hidden width와 parameter count를 단계적으로 늘리고 seed와 epoch 변화까지 함께 기록해 interpolation threshold 부근의 불안정성을 확인하도록 구성했습니다.
+
+영상은 문제를 이해하기 위한 참고 자료로 사용했고, 실제 설계 근거는 RevIN, Dish-TS, FAN, FredNormer, NoRIN, Double Descent, conformal time-series forecasting 관련 원 논문을 사용했습니다.
+
+5. 현재 시사점
+
+이번 연구의 핵심은 점예측 성능 하나를 높이는 것이 아니라, 모델이 어떤 방식으로 틀리는지를 분리하는 것입니다. MAE가 낮아도 0수익률 collapse일 수 있고, 방향 정확도가 높아도 가격 오차가 클 수 있으며, prediction interval coverage가 높아도 구간이 지나치게 넓으면 실용적이지 않을 수 있습니다.
+
+따라서 9번에서는 다음 조건을 동시에 만족하는 조합만 후속 독립변수·데이터마트 결합 단계로 넘길 예정입니다.
+
+- persistence보다 낮은 MAE
+- 예측 분산 보존
+- 0수익률 쏠림 감소
+- seed 간 안정성
+- 적절한 interval coverage와 width
+- 모델 용량 변화에 대한 일반화 안정성
+
+커밋 링크:
+{commit_url}
+
+8번 결과 보고서:
+{github_blob(report_8_path)}
+
+9번 실험 설계서:
+{github_blob(plan_9_path)}
+
+9번 실행 노트북:
+{github_blob(notebook_9_path)}
+
+8번 보고서에서는 각 모델이 persistence에 미달한 이유와 평탄화/폭주 collapse의 차이를 보실 수 있습니다. 9번 설계서에서는 두 영상과 관련 논문을 전처리·불확실성·모델 용량 실험으로 어떻게 변환했는지 확인하실 수 있습니다.
+
+감사합니다.
+"""
+    subject = "[시계열 연구] 8번 breadth 결과 및 9번 전처리·불확실성 진단 설계"
+    return subject, body, []
+
+
 PRESETS = {
     "simulation": simulation_email,
     "text_context": text_context_email,
@@ -405,6 +493,7 @@ PRESETS = {
     "forecasting_methodology_review": forecasting_methodology_review_email,
     "optimization_stabilization_stage": optimization_stabilization_stage_email,
     "breadth_expansion_interpretation": breadth_expansion_interpretation_email,
+    "preprocessing_uncertainty_diagnostics": preprocessing_uncertainty_diagnostics_email,
 }
 
 

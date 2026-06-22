@@ -16,6 +16,7 @@
 - 같은 이름의 `.py` 미러를 함께 유지한다.
 - 후속 연구가 기존 번호 실험의 의미를 바꾸면, 기존 파일을 덮어쓰지 않고 새 번호 실험(`5 -> 6 -> 7`)으로 분리한다.
 - 무거운 연구 실행은 학교 서버 커널이나 승인된 원격 환경에서 한다.
+- 노트북 결과는 기본적으로 `plt.show()`와 셀 출력으로 본다. `savefig()`나 서버 저장 CSV/Markdown은 예외적으로만 쓴다.
 - 루트 프레임워크로 올릴 로직은 `analysis/`, `contexts/`, `marts/`, `pipelines/`로 옮긴다.
 - 노트북을 파일별로 하나씩 실행한 뒤에는 서버의 `Kernel -> Shut Down All Kernels`로 이전 커널을 완전히 종료하고 다음 파일을 연다.
 - 원격 Jupyter 서버에 다시 붙을 때는 서버 `IP:port`와 `token`으로 접속하며, 커널 상태가 꼬이면 재연결보다 기존 커널 종료를 먼저 한다.
@@ -30,6 +31,7 @@
 - `6_optimization_stabilization_test.ipynb`: target, normalization, loss, model selection 안정화 실험
 - `7_optimization_breadth_expansion_test.ipynb`: 6번 이후 확장 실험의 자원 인식형 stage plan
 - `8_optimization_breadth_training_test.ipynb`: 7번 계획을 실제 GPU 학습/시각화/붕괴 진단으로 연결한 breadth training 실험. 알고리즘뿐 아니라 preprocessing, normalization, loss, optimizer/scheduler, gradient policy, ensemble 축을 함께 비교한다.
+- `9_preprocessing_uncertainty_diagnostics_test.ipynb`: 8번의 전 모델 persistence 미달 결과를 바탕으로 전처리 조합, seed ensemble, conformal interval, 모델 용량과 Double Descent 가능성을 진단한다.
 
 ## 4. 4번부터 8번까지의 연구 흐름
 
@@ -38,6 +40,7 @@
 - `6번`은 독립변수와 데이터마트를 본격적으로 붙이기 전에 target, normalization, loss, model selection 기준을 안정화하는 실험이다.
 - `7번`은 실제 학습 결과가 아니라, 6번 안정화 이후 확장 실험을 어떤 자원 profile과 stage로 실행할지 정리한 계획/점검 산출물이다.
 - `8번`은 7번에서 빠진 실제 학습 backend를 새 번호로 분리한 실험이며, 모델군 확장만이 아니라 전처리/정규화/손실함수/최적화/기울기 안정화/앙상블 조합까지 서버 GPU에서 비교한다.
+- `9번`은 8번에서 관찰된 0수익률 평탄화와 출력 분산 폭주를 분리하기 위해 극단값·heavy-tail·추세·주파수·변동성 전처리를 조합하고, 예측구간과 모델 용량 변화까지 확인한다.
 - 문헌 기반 논문화 방향과 후속 알고리즘 후보는 `test/research_materials/forecasting_methodology_literature_review_20260613.md`를 본다.
 - 세부 해석은 각 노트북의 결과 셀과 `test/results/*.md` 보고서를 우선 본다.
 - 설계 메모와 참고문헌은 `test/experiment_specs/`에 둔다.
@@ -46,6 +49,7 @@
 
 - 기본 실행 예시는 각 연구 노트북 안의 셀과 `test/models/*.py`에 둔다.
 - 결과 해석의 1차 원본은 `ipynb` 출력 셀이다.
+- `8_optimization_breadth_training_test`는 기본적으로 PNG/CSV/Markdown 파일을 서버에 저장하지 않고, 노트북 inline 출력만 남긴다. `savefig()`는 기본 경로가 아니라 예외 경로로만 사용한다. 보고서용 이미지 추출은 `test/scripts/extract_notebook_images.py` 같은 보조 도구로 처리한다.
 - `test/scripts/extract_notebook_images.py`는 노트북 출력 그림 추출용 보조 유틸리티다.
 - `results/`는 보고서와 필요 시 CSV를 둔다.
 - 새 보고서는 이전 보고서를 참고하더라도 알고리즘/손실함수/정규화/지표/그래프 읽는 법을 다시 적는 독립 문서로 작성한다.

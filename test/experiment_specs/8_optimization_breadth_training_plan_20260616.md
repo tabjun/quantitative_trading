@@ -62,7 +62,7 @@
 - `optimization_cross_check`: optimizer와 scheduler 조합이 같은 모델의 학습 경로를 어떻게 바꾸는지 본다.
 - `gradient_cross_check`: gradient clipping 강도와 adaptive clipping이 loss/gradient norm/붕괴 지표를 어떻게 바꾸는지 본다.
 - `ensemble_probe`: 단일 모델 결과를 묶어 앙상블이 collapse와 KRW MAE를 동시에 줄이는지 본다.
-- `full`: 넓은 조합을 순차적으로 확인하되, 서버 시간이 길어질 수 있으므로 중간 CSV/PNG 저장을 전제로 한다.
+- `full`: 넓은 조합을 순차적으로 확인하되, 서버 시간이 길어질 수 있으므로 중간 저장 대신 notebook inline 출력과 단계별 재실행을 전제로 한다.
 
 ## 서버 자원 기준
 
@@ -77,7 +77,7 @@
 - optuna_n_jobs: GPU 학습에서는 1
 - batch_size: 기본 48, OOM 발생 시 자동 절반 축소
 - max_cases: 기본 120개로 제한, 전체 실행은 `--max-cases 0`
-- 중간 결과는 case마다 CSV/PNG로 저장
+- 중간 결과는 case마다 notebook 출력으로 확인하고, 파일 저장은 기본적으로 하지 않는다.
 
 ## 실행 예시
 
