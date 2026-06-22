@@ -46,6 +46,8 @@ This spec applies when a task repeats across sessions:
 10. For notebook-driven experiments, prefer `plt.show()` and inline cell output. Do not call `savefig()` by default, and do not treat server-side PNG/CSV/Markdown files as the primary result unless the user explicitly asks for file artifacts.
 11. Make terminology independently understandable in reports and email. On first use, explain each decision-critical term in the order `plain-language definition -> concrete example -> role in this experiment -> whether the observed value is favorable, unfavorable, or ambiguous`.
 12. Never leave relative statements such as “preserved variance” or “close to baseline” unexplained. Name the comparison baseline, the direction of change, and why the result is necessary but not sufficient for model quality.
+13. For any `/test` request, first evaluate whether it serves the current research question. If it does not, rewrite it into a criticism-driven or methodology-improving version before implementing.
+14. When a request proposes adding a new method, objective, preprocessing path, or visualization, adversarially check whether it strengthens the research path, duplicates an existing axis, or muddies the experiment lineage.
 
 ## Handoff Contract
 
