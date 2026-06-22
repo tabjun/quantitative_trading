@@ -134,11 +134,27 @@ objective, preprocessing, model, seed 전체 조합과 ensemble을 수행한다.
 
 ## 8. 서버 실행 순서
 
+### 10번과 11번 병렬 실행 원칙
+
+10번은 다음 15분 수익률을 직접 예측하는 `점예측 가설`이다. 11번은 향후 16개 15분봉, 즉 약 4시간 안의 급변·하방 위험 발생 확률을 예측하는 `위험 이벤트 가설`이다. 두 실험은 서로의 실행 결과를 파일로 읽지 않으므로 동시에 시작할 수 있다.
+
+학교 서버의 RTX 4090 한 장을 공유하므로 10번 기본 `point_primary` slot은 다음처럼 제한한다.
+
+- GPU allocator 상한: 전체 VRAM의 52%
+- batch size: 32
+- DataLoader workers: 2
+- torch threads: 8
+
+11번은 별도 커널에서 `risk_secondary` slot을 사용한다. 두 slot의 GPU allocator 상한 합계는 약 88%이며, CUDA context와 일시적 메모리를 위해 나머지를 비워 둔다. OOM이 발생하면 각 실험의 기존 batch 절반 재시도 로직이 작동한다.
+
+두 노트북을 동시에 실행할 때는 10번 노트북을 첫 번째 venv 커널, 11번 노트북을 두 번째 venv 커널에 연결한다. 두 venv가 GPU를 분리하는 것은 아니므로 `exclusive` slot 두 개를 동시에 사용하면 안 된다.
+
 ### 문법과 case 구성 확인
 
 ```bash
 python test/models/10_objective_ensemble_confirmation_test.py \
   --suite objective_screen \
+  --parallel-slot point_primary \
   --max-cases 8 \
   --dry-run
 ```
@@ -147,21 +163,27 @@ python test/models/10_objective_ensemble_confirmation_test.py \
 
 ```bash
 python test/models/10_objective_ensemble_confirmation_test.py \
-  --suite objective_screen \
+  --suite parallel_point_probe \
+  --parallel-slot point_primary \
   --models Linear,PatchTSTLike \
   --preprocessings seasonal_diff16,winsor_025 \
-  --objectives huber,variance_huber,anti_collapse_v2,balanced_composite \
-  --epochs 4 \
-  --max-windows 1024 \
-  --max-cases 8 \
+  --objectives huber,balanced_composite \
+  --seeds 42,137,2026 \
+  --epochs 20 \
+  --max-windows 4096 \
+  --max-cases 24 \
+  --ensemble-top-k 5 \
   --continue-on-failure
 ```
 
-### Objective screen 본실험
+이 24개 실험은 10번 점예측 연구선의 종료시험이다. 여러 seed에서 persistence를 이기지 못하면 objective 조합을 계속 늘리지 않고 11번 위험 이벤트 가설과 비교한다.
+
+### 단독 실행이 필요한 경우
 
 ```bash
 python test/models/10_objective_ensemble_confirmation_test.py \
   --suite objective_screen \
+  --parallel-slot exclusive \
   --epochs 20 \
   --max-windows 4096 \
   --continue-on-failure

@@ -385,6 +385,7 @@ GRADIENT_POLICIES = ["none", "clip0.5", "clip1", "clip5", "adaptive"]
 
 def make_features(raw: pd.DataFrame) -> pd.DataFrame:
     df = normalize_columns(raw)
+    open_price = df["open"].astype(float) if "open" in df.columns else df["close"].astype(float)
     close = df["close"].astype(float)
     high = df["high"].astype(float)
     low = df["low"].astype(float)
@@ -406,7 +407,11 @@ def make_features(raw: pd.DataFrame) -> pd.DataFrame:
     df["turnover_proxy"] = np.log1p(value).diff()
     df["target_return"] = df["log_return_1"].shift(-1)
     df["prev_close"] = close
+    df["target_open"] = open_price.shift(-1)
+    df["target_high"] = high.shift(-1)
+    df["target_low"] = low.shift(-1)
     df["target_close"] = close.shift(-1)
+    df["target_timestamp"] = df["timestamp"].shift(-1)
     return df.replace([np.inf, -np.inf], np.nan).dropna().reset_index(drop=True)
 
 
@@ -504,14 +509,17 @@ def build_windows(
     values = df[feature_columns].to_numpy(np.float32)
     targets = df["target_return"].to_numpy(np.float32)
     prev_close = df["prev_close"].to_numpy(np.float32)
+    target_open = df["target_open"].to_numpy(np.float32)
+    target_high = df["target_high"].to_numpy(np.float32)
+    target_low = df["target_low"].to_numpy(np.float32)
     target_close = df["target_close"].to_numpy(np.float32)
-    timestamps = df["timestamp"].astype(str).to_numpy()
+    timestamps = df["target_timestamp"].astype(str).to_numpy()
 
     end_indices = list(range(seq_len, len(df), max(1, stride)))
     if max_windows and len(end_indices) > max_windows:
         end_indices = end_indices[-max_windows:]
 
-    xs, ys, prevs, closes, times = [], [], [], [], []
+    xs, ys, prevs, opens, highs, lows, closes, times = [], [], [], [], [], [], [], []
     for end in end_indices:
         window = values[end - seq_len : end].copy()
         window = apply_window_preprocessing(window, preprocessing)
@@ -519,19 +527,34 @@ def build_windows(
         xs.append(window)
         ys.append(targets[end])
         prevs.append(prev_close[end])
+        opens.append(target_open[end])
+        highs.append(target_high[end])
+        lows.append(target_low[end])
         closes.append(target_close[end])
         times.append(timestamps[end])
 
     x = np.stack(xs).astype(np.float32)
     y = np.asarray(ys, dtype=np.float32)
     prev = np.asarray(prevs, dtype=np.float32)
+    open_next = np.asarray(opens, dtype=np.float32)
+    high_next = np.asarray(highs, dtype=np.float32)
+    low_next = np.asarray(lows, dtype=np.float32)
     close = np.asarray(closes, dtype=np.float32)
     if normalization == "global_standard":
         flat = x.reshape(-1, x.shape[-1])
         mean = flat.mean(axis=0, keepdims=True)
         std = flat.std(axis=0, keepdims=True)
         x = (x - mean.reshape(1, 1, -1)) / np.where(std.reshape(1, 1, -1) < 1e-6, 1.0, std.reshape(1, 1, -1))
-    return {"x": x, "y": y, "prev_close": prev, "target_close": close, "timestamp": np.asarray(times)}
+    return {
+        "x": x,
+        "y": y,
+        "prev_close": prev,
+        "target_open": open_next,
+        "target_high": high_next,
+        "target_low": low_next,
+        "target_close": close,
+        "timestamp": np.asarray(times),
+    }
 
 
 def time_split(data: dict[str, np.ndarray], train_ratio: float, val_ratio: float) -> dict[str, dict[str, np.ndarray]]:

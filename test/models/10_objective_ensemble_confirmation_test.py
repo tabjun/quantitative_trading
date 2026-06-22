@@ -17,11 +17,13 @@ from __future__ import annotations
 
 import argparse
 import copy
+import gc
 import importlib.util
 import json
 import math
 import sys
 from collections import defaultdict
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -77,6 +79,86 @@ DEFAULT_OBJECTIVES = [
 ]
 DEFAULT_SEEDS = [42, 137, 2026]
 
+PARALLEL_RESOURCE_SLOTS = {
+    "exclusive": {
+        "device": None,
+        "gpu_memory_fraction": None,
+        "n_jobs": 16,
+        "max_workers": 16,
+        "num_workers": 4,
+        "torch_num_threads": 16,
+        "torch_interop_threads": 4,
+        "batch_size": 48,
+    },
+    "point_primary": {
+        "device": None,
+        "gpu_memory_fraction": 0.52,
+        "n_jobs": 8,
+        "max_workers": 8,
+        "num_workers": 2,
+        "torch_num_threads": 8,
+        "torch_interop_threads": 2,
+        "batch_size": 32,
+    },
+    "risk_secondary": {
+        "device": None,
+        "gpu_memory_fraction": 0.36,
+        "n_jobs": 6,
+        "max_workers": 6,
+        "num_workers": 2,
+        "torch_num_threads": 6,
+        "torch_interop_threads": 2,
+        "batch_size": 24,
+    },
+    "cpu_companion": {
+        "device": "cpu",
+        "gpu_memory_fraction": None,
+        "n_jobs": 8,
+        "max_workers": 8,
+        "num_workers": 2,
+        "torch_num_threads": 8,
+        "torch_interop_threads": 2,
+        "batch_size": 64,
+    },
+}
+
+
+def apply_parallel_resource_slot(profile, slot_name: str):
+    if slot_name not in PARALLEL_RESOURCE_SLOTS:
+        raise ValueError(f"지원하지 않는 parallel slot: {slot_name}")
+    settings = PARALLEL_RESOURCE_SLOTS[slot_name]
+    device = settings["device"] or profile.device
+    adjusted = replace(
+        profile,
+        name=f"{profile.name}:{slot_name}",
+        device=device,
+        n_jobs=min(int(settings["n_jobs"]), profile.cpu_logical),
+        max_workers=min(int(settings["max_workers"]), profile.cpu_logical),
+        num_workers=min(int(settings["num_workers"]), profile.cpu_logical),
+        torch_num_threads=min(int(settings["torch_num_threads"]), profile.cpu_logical),
+        torch_interop_threads=min(int(settings["torch_interop_threads"]), profile.cpu_logical),
+        optuna_n_jobs=1 if device == "cuda" else min(4, profile.cpu_logical),
+        batch_size=int(settings["batch_size"]),
+        pin_memory=device == "cuda",
+    )
+    fraction = settings["gpu_memory_fraction"]
+    if device == "cuda" and torch.cuda.is_available() and fraction is not None:
+        try:
+            torch.cuda.set_per_process_memory_fraction(float(fraction), torch.cuda.current_device())
+        except RuntimeError as exc:
+            print(f"[parallel-resource] GPU memory fraction 적용을 건너뜀: {exc}")
+    details = {
+        "parallel_slot": slot_name,
+        "device": device,
+        "gpu_memory_fraction": fraction if device == "cuda" else None,
+        "batch_size": adjusted.batch_size,
+        "num_workers": adjusted.num_workers,
+        "torch_num_threads": adjusted.torch_num_threads,
+        "torch_interop_threads": adjusted.torch_interop_threads,
+    }
+    print("[parallel-resource]", json.dumps(details, ensure_ascii=False, indent=2))
+    return adjusted, details
+
 
 def configure_inline_matplotlib() -> None:
     diag.configure_inline_matplotlib()
@@ -84,6 +166,205 @@ def configure_inline_matplotlib() -> None:
 
 def show_figure(fig) -> None:
     diag.show_figure(fig)
+
+
+def display_table(title: str, frame: pd.DataFrame) -> None:
+    print(f"\n[{title}]")
+    try:
+        from IPython.display import display
+
+        display(frame)
+    except Exception:
+        print(frame.to_string(index=False))
+
+
+def estimate_timestamp_gap_count(raw: pd.DataFrame) -> int:
+    if "timestamp" not in raw.columns or len(raw) < 3:
+        return 0
+    ts = pd.to_datetime(raw["timestamp"], errors="coerce").dropna().sort_values()
+    if len(ts) < 3:
+        return 0
+    delta = ts.diff().dropna()
+    if delta.empty:
+        return 0
+    expected = delta.mode().iloc[0]
+    return int((delta > expected).sum())
+
+
+def build_missingness_audit(raw: pd.DataFrame, features: pd.DataFrame, horizon_label: str) -> pd.DataFrame:
+    normalized_raw = base.normalize_columns(raw.copy())
+    raw_ohlc_cols = [col for col in ["open", "high", "low", "close", "volume"] if col in normalized_raw.columns]
+    raw_ohlc_missing = int(normalized_raw[raw_ohlc_cols].isna().sum().sum()) if raw_ohlc_cols else 0
+    rows_dropped = int(len(raw) - len(features))
+    timestamp_gap_count = estimate_timestamp_gap_count(normalized_raw)
+    return pd.DataFrame(
+        [
+            {
+                "case": "원본 OHLC/거래량 결측",
+                "where": "거래소 원천 데이터",
+                "why": "수집 누락 또는 timestamp gap",
+                "interpolate": "조건부",
+                "current_policy": (
+                    f"현재 raw OHLC missing={raw_ohlc_missing}, inferred gaps={timestamp_gap_count}. "
+                    "실제 원천 gap가 있으면 먼저 재수집/재샘플링을 검토하고, 라벨 구간 보간은 기본 금지."
+                ),
+            },
+            {
+                "case": "rolling warm-up",
+                "where": "log_return/std/EMA 파생변수 시작 구간",
+                "why": "lookback 길이가 아직 안 찼기 때문",
+                "interpolate": "아니오",
+                "current_policy": f"`make_features()` 단계에서 dropna로 제거. 현재 제거 행 수={rows_dropped}.",
+            },
+            {
+                "case": "one-step target tail",
+                "where": "next-return / next-close 라벨",
+                "why": "마지막 행에는 다음 봉이 없음",
+                "interpolate": "아니오",
+                "current_policy": f"{horizon_label} 라벨 생성 꼬리 구간은 학습 샘플에서 제외.",
+            },
+            {
+                "case": "window preprocessing 수치 NaN/inf",
+                "where": "diff / robust scale / frequency 변환",
+                "why": "0에 가까운 scale 또는 수치 폭주",
+                "interpolate": "아니오",
+                "current_policy": "시간 보간 대신 clip, robust scale, nan_to_num 같은 안정화 처리 사용.",
+            },
+        ]
+    )
+
+
+def draw_candles(
+    ax,
+    x: np.ndarray,
+    open_: np.ndarray,
+    high: np.ndarray,
+    low: np.ndarray,
+    close: np.ndarray,
+    width: float,
+    up_color: str,
+    down_color: str,
+    alpha: float,
+    linewidth: float = 0.9,
+    fill: bool = True,
+) -> None:
+    from matplotlib.patches import Rectangle
+
+    for xi, o, h, l, c in zip(x, open_, high, low, close):
+        color = up_color if c >= o else down_color
+        ax.vlines(xi, l, h, color=color, linewidth=linewidth, alpha=alpha)
+        lower = min(o, c)
+        height = max(abs(c - o), 1e-9)
+        rect = Rectangle(
+            (xi - width / 2.0, lower),
+            width,
+            height,
+            facecolor=color if fill else "none",
+            edgecolor=color,
+            linewidth=linewidth,
+            alpha=alpha,
+        )
+        ax.add_patch(rect)
+
+
+def candle_proxy_arrays(split, pred_return: np.ndarray, n: int) -> dict[str, np.ndarray]:
+    prev_close = split["prev_close"][-n:]
+    target_open = split.get("target_open", prev_close)[-n:]
+    target_high = split.get("target_high", np.maximum(target_open, split["target_close"]))[-n:]
+    target_low = split.get("target_low", np.minimum(target_open, split["target_close"]))[-n:]
+    target_close = split["target_close"][-n:]
+    predicted_close = prev_close * np.exp(pred_return[-n:])
+    predicted_open = prev_close
+    predicted_high = np.maximum(predicted_open, predicted_close)
+    predicted_low = np.minimum(predicted_open, predicted_close)
+    return {
+        "timestamp": split["timestamp"][-n:],
+        "actual_open": target_open,
+        "actual_high": target_high,
+        "actual_low": target_low,
+        "actual_close": target_close,
+        "pred_open": predicted_open,
+        "pred_high": predicted_high,
+        "pred_low": predicted_low,
+        "pred_close": predicted_close,
+        "persistence_close": prev_close,
+    }
+
+
+def show_candlestick_comparison(ax, split, pred_return: np.ndarray, title: str, n: int = 60) -> None:
+    from matplotlib.lines import Line2D
+
+    n = min(n, len(pred_return))
+    frame = candle_proxy_arrays(split, pred_return, n)
+    x = np.arange(n, dtype=float)
+    draw_candles(
+        ax,
+        x - 0.18,
+        frame["actual_open"],
+        frame["actual_high"],
+        frame["actual_low"],
+        frame["actual_close"],
+        0.32,
+        up_color="tab:red",
+        down_color="tab:blue",
+        alpha=0.65,
+    )
+    draw_candles(
+        ax,
+        x + 0.18,
+        frame["pred_open"],
+        frame["pred_high"],
+        frame["pred_low"],
+        frame["pred_close"],
+        0.28,
+        up_color="tab:orange",
+        down_color="tab:green",
+        alpha=0.85,
+        fill=False,
+    )
+    ax.plot(x, frame["persistence_close"], color="black", linewidth=0.9, alpha=0.55)
+    ax.set_title(title)
+    ax.set_ylabel("KRW")
+    ax.legend(
+        handles=[
+            Line2D([0], [0], color="tab:red", linewidth=6, alpha=0.65, label="actual candle"),
+            Line2D([0], [0], color="tab:orange", linewidth=2, label="predicted proxy candle"),
+            Line2D([0], [0], color="black", linewidth=1, alpha=0.55, label="persistence close"),
+        ],
+        fontsize=8,
+        loc="best",
+    )
+
+
+def prediction_preview_table(
+    split,
+    pred_return: np.ndarray,
+    n_rows: int = 12,
+    lower: np.ndarray | None = None,
+    upper: np.ndarray | None = None,
+) -> pd.DataFrame:
+    n_rows = min(n_rows, len(pred_return))
+    frame = candle_proxy_arrays(split, pred_return, n_rows)
+    actual_return = split["y"][-n_rows:]
+    pred_slice = pred_return[-n_rows:]
+    table = pd.DataFrame(
+        {
+            "timestamp": frame["timestamp"],
+            "actual_open": np.round(frame["actual_open"], 0),
+            "actual_high": np.round(frame["actual_high"], 0),
+            "actual_low": np.round(frame["actual_low"], 0),
+            "actual_close": np.round(frame["actual_close"], 0),
+            "pred_open_proxy": np.round(frame["pred_open"], 0),
+            "pred_close_proxy": np.round(frame["pred_close"], 0),
+            "persistence_close": np.round(frame["persistence_close"], 0),
+            "actual_return": np.round(actual_return, 6),
+            "predicted_return": np.round(pred_slice, 6),
+        }
+    )
+    if lower is not None and upper is not None:
+        table["return_lower"] = np.round(lower[-n_rows:], 6)
+        table["return_upper"] = np.round(upper[-n_rows:], 6)
+    return table
 
 
 def safe_std(values: torch.Tensor) -> torch.Tensor:
@@ -301,7 +582,26 @@ def build_cases(args: argparse.Namespace) -> list[dict[str, object]]:
     seeds = [int(item) for item in args.seeds.split(",") if item.strip()]
     cases: list[dict[str, object]] = []
 
-    if args.suite == "objective_screen":
+    if args.suite == "parallel_point_probe":
+        point_preprocessings = [
+            name for name in ["seasonal_diff16", "winsor_025"] if name in preprocessings
+        ]
+        point_objectives = [
+            name for name in ["huber", "balanced_composite"] if name in objectives
+        ]
+        for preprocessing in point_preprocessings:
+            for model in models:
+                for objective in point_objectives:
+                    for seed in seeds:
+                        cases.append(
+                            {
+                                "model": model,
+                                "preprocessing": preprocessing,
+                                "objective": objective,
+                                "seed": seed,
+                            }
+                        )
+    elif args.suite == "objective_screen":
         for preprocessing in preprocessings:
             for model in models:
                 for objective in objectives:
@@ -446,14 +746,13 @@ def show_case_diagnostics(curves: pd.DataFrame, test_split, pred: np.ndarray, re
     axes[1, 0].set_title("Return prediction")
     axes[1, 0].legend()
 
-    actual_close = test_split["target_close"][-n:]
-    persistence = test_split["prev_close"][-n:]
-    predicted_close = persistence * np.exp(predicted_return)
-    axes[1, 1].plot(actual_close, label="actual KRW")
-    axes[1, 1].plot(predicted_close, label="prediction KRW")
-    axes[1, 1].plot(persistence, label="persistence", alpha=0.8)
-    axes[1, 1].set_title("KRW reconstruction")
-    axes[1, 1].legend()
+    show_candlestick_comparison(
+        axes[1, 1],
+        test_split,
+        pred,
+        "Next-candle comparison",
+        n=min(60, len(pred)),
+    )
 
     limit = max(float(np.max(np.abs(actual_return))), float(np.max(np.abs(predicted_return))), 1e-4)
     axes[1, 2].scatter(actual_return, predicted_return, s=13, alpha=0.5)
@@ -468,6 +767,10 @@ def show_case_diagnostics(curves: pd.DataFrame, test_split, pred: np.ndarray, re
         ax.grid(alpha=0.2)
     fig.suptitle(str(result["case_id"]))
     show_figure(fig)
+    display_table(
+        f"{result['case_id']} prediction preview",
+        prediction_preview_table(test_split, pred),
+    )
 
 
 def ensemble_predictions(
@@ -542,7 +845,7 @@ def show_ensemble_interval(split, output: dict[str, np.ndarray], title: str) -> 
     x = np.arange(n)
     error = np.abs(actual - prediction)
     width = upper - lower
-    fig, axes = plt.subplots(2, 1, figsize=(14, 8), dpi=140)
+    fig, axes = plt.subplots(3, 1, figsize=(14, 11), dpi=140)
     axes[0].plot(x, actual[-n:], label="actual return")
     axes[0].plot(x, prediction[-n:], label="ensemble prediction")
     axes[0].fill_between(x, lower[-n:], upper[-n:], alpha=0.25, label="conformal interval")
@@ -551,14 +854,25 @@ def show_ensemble_interval(split, output: dict[str, np.ndarray], title: str) -> 
     axes[0].set_ylabel("next log return")
     axes[0].set_title("Validation-calibrated prediction interval")
     axes[0].legend()
-    axes[1].scatter(width, error, s=14, alpha=0.5)
-    axes[1].set_xlabel("interval width")
-    axes[1].set_ylabel("absolute return error")
-    axes[1].set_title("Interval width versus realized error")
+    show_candlestick_comparison(
+        axes[1],
+        split,
+        prediction,
+        "Ensemble next-candle comparison",
+        n=min(60, len(prediction)),
+    )
+    axes[2].scatter(width, error, s=14, alpha=0.5)
+    axes[2].set_xlabel("interval width")
+    axes[2].set_ylabel("absolute return error")
+    axes[2].set_title("Interval width versus realized error")
     for ax in axes:
         ax.grid(alpha=0.2)
     fig.suptitle(title)
     show_figure(fig)
+    display_table(
+        f"{title} preview",
+        prediction_preview_table(split, prediction, lower=lower, upper=upper),
+    )
 
 
 def show_summary(summary: pd.DataFrame) -> None:
@@ -621,8 +935,41 @@ def display_markdown(text: str) -> None:
     diag.display_markdown(text)
 
 
+def point_branch_gate(summary: pd.DataFrame) -> tuple[str, str]:
+    if summary.empty:
+        return "NOT_EVALUATED", "완료된 case가 없다."
+    candidates = summary[summary["model"] != "Ensemble"].copy()
+    candidates["gate_pass"] = (
+        (candidates["copy_risk_ratio"] < 1.0)
+        & (candidates["direction_accuracy"] >= 0.52)
+        & candidates["variance_ratio"].between(0.25, 4.0)
+    )
+    grouped = (
+        candidates.groupby(["model", "preprocessing", "objective"], as_index=False)
+        .agg(passed_seeds=("gate_pass", "sum"), tested_seeds=("seed", "nunique"))
+        .sort_values(["passed_seeds", "tested_seeds"], ascending=False)
+    )
+    qualified = grouped[(grouped["passed_seeds"] >= 2) & (grouped["tested_seeds"] >= 2)]
+    if qualified.empty:
+        return (
+            "NO_GO",
+            "두 개 이상 seed에서 persistence·방향·분산 기준을 함께 통과한 조합이 없다.",
+        )
+    winner = qualified.iloc[0]
+    return (
+        "GO",
+        f"{winner['model']} / {winner['preprocessing']} / {winner['objective']}가 "
+        f"{int(winner['passed_seeds'])}개 seed에서 통과했다.",
+    )
+
+
 def build_inline_report(args: argparse.Namespace, summary: pd.DataFrame) -> str:
-    best = summary.sort_values(["collapse_score", "copy_risk_ratio", "mae_krw"]).head(15)
+    best = (
+        summary.sort_values(["collapse_score", "copy_risk_ratio", "mae_krw"]).head(15)
+        if not summary.empty
+        else summary
+    )
+    branch_status, branch_reason = point_branch_gate(summary)
     return "\n".join(
         [
             "# 10번 objective·ensemble 본실험 실행 요약",
@@ -639,6 +986,12 @@ def build_inline_report(args: argparse.Namespace, summary: pd.DataFrame) -> str:
             "- direction accuracy가 0.5 부근의 우연 수준을 안정적으로 넘어야 한다.",
             "- 단일 seed 우승이 아니라 여러 seed와 ensemble에서 재현되어야 한다.",
             "- 모델 선택과 ensemble 가중치는 validation 결과만 사용하고 test 결과를 선택에 쓰지 않는다.",
+            "",
+            "## 점예측 연구선 판정",
+            "",
+            f"- 상태: `{branch_status}`",
+            f"- 근거: {branch_reason}",
+            "- 통과 기준: copy-risk ratio < 1, direction accuracy >= 0.52, variance ratio 0.25~4.0을 두 개 이상 seed에서 동시에 만족한다.",
             "",
             "## 실행 설정",
             "",
@@ -668,15 +1021,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--profile", default="school_4090_15gb")
     parser.add_argument("--device", choices=["cpu", "cuda"], default=None)
     parser.add_argument(
+        "--parallel-slot",
+        choices=sorted(PARALLEL_RESOURCE_SLOTS),
+        default="point_primary",
+        help="10번과 11번을 동시에 실행할 때 사용할 자원 분할 슬롯",
+    )
+    parser.add_argument(
         "--suite",
         choices=[
+            "parallel_point_probe",
             "objective_screen",
             "failure_mode_control",
             "seed_confirmation",
             "ensemble_confirmation",
             "full",
         ],
-        default="objective_screen",
+        default="parallel_point_probe",
     )
     parser.add_argument("--models", default=",".join(DEFAULT_MODELS))
     parser.add_argument("--preprocessings", default=",".join(DEFAULT_PREPROCESSINGS))
@@ -713,8 +1073,10 @@ def main(argv: list[str] | None = None) -> None:
     configure_inline_matplotlib()
     args = parse_args(argv)
     profile = base.build_resource_profile(args.profile, args.device)
+    profile, parallel_settings = apply_parallel_resource_slot(profile, args.parallel_slot)
     base.apply_resource_profile(profile)
     environment = base.log_environment(profile)
+    environment["parallel_settings"] = parallel_settings
     print("[environment]", json.dumps(environment, ensure_ascii=False, indent=2))
 
     cases = build_cases(args)
@@ -727,6 +1089,10 @@ def main(argv: list[str] | None = None) -> None:
     raw = base.load_price_data(db_path, args.table, args.ticker, args.max_rows)
     features = base.make_features(raw)
     print("[statistics]", json.dumps(base.basic_statistics(features), ensure_ascii=False, indent=2))
+    display_table(
+        "missingness audit",
+        build_missingness_audit(raw, features, "다음 15분 next-return / next-close"),
+    )
 
     rows: list[dict[str, object]] = []
     val_predictions: dict[str, np.ndarray] = {}
@@ -747,8 +1113,12 @@ def main(argv: list[str] | None = None) -> None:
             if not args.continue_on_failure:
                 raise
             print(f"[case failed] {case}: {exc}")
+        finally:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
 
-    if args.suite in {"ensemble_confirmation", "full"} and rows and latest_splits is not None:
+    if args.suite in {"parallel_point_probe", "ensemble_confirmation", "full"} and rows and latest_splits is not None:
         ensemble_rows, interval_outputs, selected = ensemble_predictions(
             rows,
             val_predictions,
