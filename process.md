@@ -265,7 +265,11 @@
 - [x] LSTM/GRU/AutoformerLike는 기울기 소실보다 출력 분산 과대와 폭주 증거가 더 강하다고 정리했다.
 - [x] Black–Scholes 영상은 점예측이 아닌 분포·변동성·예측구간 관점으로, Double Descent 영상은 width·parameter count·seed·epoch 변화 진단으로 번역했다.
 - [x] 9번 notebook/`.py`에 28개 전처리 pipeline, preprocessing matrix, uncertainty probe, capacity probe, conformal interval, seed ensemble과 단계별 inline 시각화를 구현했다.
-- [ ] 다음 체크포인트: 서버에서 9번의 작은 preprocessing matrix를 먼저 실행해 inline 그림이 실제 `image/png` 출력으로 남는지 확인한 뒤 전체 112 cases를 실행한다.
+- [x] 서버에서 9번 preprocessing matrix 112개를 실행하고 PNG 231개가 notebook inline output으로 저장된 것을 확인했다.
+- [x] 대표 이미지 12개를 선별해 데이터·알고리즘·x/y축·그래프 목적·결과·다음 반영 순서로 9번 최종 보고서를 작성했다.
+- [x] PatchTSTLike+seasonal_diff16을 최저 MAE 후보, PatchTSTLike+winsor_025를 방향 후보, TimesNetLike와 AutoformerLike를 평탄화/폭주 통제군으로 분리했다.
+- [x] 10번 objective·ensemble 실험에 보조 손실 크기 정규화, 3-epoch warm-up, regime 지표, seed 확인, validation-only ensemble, conformal interval, calibration scatter 축 수정을 반영했다.
+- [ ] 다음 체크포인트: 학교 서버에서 10번 `objective_screen` 소형 실행 후 본실험, `failure_mode_control`, seed confirmation, ensemble confirmation 순서로 진행한다.
 
 ## 2026-06-09 텍스트 독립변수 분석 모델 추가 기록
 

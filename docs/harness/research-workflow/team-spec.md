@@ -44,6 +44,8 @@ This spec applies when a task repeats across sessions:
 8. If a follow-on study changes the meaning or scope of an existing numbered experiment, create a new numbered artifact set instead of overwriting the old one.
 9. Write each new report as a standalone document; repeat core methodology and interpretation guidance even when earlier reports already explained it.
 10. For notebook-driven experiments, prefer `plt.show()` and inline cell output. Do not call `savefig()` by default, and do not treat server-side PNG/CSV/Markdown files as the primary result unless the user explicitly asks for file artifacts.
+11. Make terminology independently understandable in reports and email. On first use, explain each decision-critical term in the order `plain-language definition -> concrete example -> role in this experiment -> whether the observed value is favorable, unfavorable, or ambiguous`.
+12. Never leave relative statements such as “preserved variance” or “close to baseline” unexplained. Name the comparison baseline, the direction of change, and why the result is necessary but not sufficient for model quality.
 
 ## Handoff Contract
 

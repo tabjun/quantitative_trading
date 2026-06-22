@@ -9,6 +9,7 @@ Usage examples:
     python test/scripts/send_email.py --preset forecasting_methodology_review
     python test/scripts/send_email.py --preset optimization_stabilization_stage
     python test/scripts/send_email.py --preset breadth_expansion_interpretation
+    python test/scripts/send_email.py --preset preprocessing_matrix_results
 """
 
 from __future__ import annotations
@@ -407,17 +408,48 @@ def preprocessing_uncertainty_diagnostics_email(commit_hash: str) -> tuple[str, 
 
 업비트 비정상 시계열의 최적화 문제를 확인하기 위해 수행한 8번 breadth training 결과와, 이를 반영해 설계한 9번 전처리·불확실성 진단 실험을 공유드립니다.
 
+앞서 보낸 메일에서 `persistence`, `0수익률 평탄화`, `예측 분산`, `방향성`을 용어 중심으로 너무 압축해 설명한 부분이 있어, 이번 메일에서는 각 용어의 뜻과 숫자 예시, 이번 실험에서의 의미, 좋은 신호와 나쁜 신호를 구분해 보충드립니다.
+
 1. 왜 8번을 수행했는가
 
 앞선 5번과 6번에서는 loss가 감소하더라도 예측이 직전 가격 복사 또는 0수익률 근처로 붕괴할 수 있다는 문제를 확인했습니다. 7번은 실제 학습 결과가 아니라 서버 자원과 실행 단계를 정리한 계획이었기 때문에, 8번에서는 Linear, LSTM, GRU, TCN, Transformer와 Autoformer-like, PatchTST-like, DLinear/NLinear-like, TimesNet-like, TimeXer-like, iTransformer-like, ModernTCN-like, Mamba-like를 같은 조건에서 실제 학습했습니다.
 
-2. 8번 결과
+2. 8번 결과와 핵심 용어 설명
 
-- 14개 모델 모두 단순 persistence baseline의 MAE 190,608 KRW를 이기지 못했습니다.
-- TimesNetLike, NLinearLike, DLinearLike, TCN은 MAE는 persistence에 가까웠지만 예측 분산이 실제의 1% 미만으로 줄었습니다. 즉 실제 변동을 학습한 것이 아니라 0수익률 근처로 평평해진 결과입니다.
-- Linear와 PatchTSTLike는 MAE는 더 컸지만 방향성과 예측 분산을 상대적으로 더 많이 보존했습니다.
-- LSTM과 GRU는 variance ratio가 각각 약 2.28, 4.39로 실제보다 크게 흔들렸습니다. 이를 단순 기울기 소실로 해석하기보다 출력 분산 과대, heavy-tail 입력, 목적함수와 평가 지표의 불일치로 보는 것이 더 적절합니다.
-- AutoformerLike는 MAE 약 163만 KRW, variance ratio 약 59.39로 가장 크게 폭주했습니다. 과거 3번 실험에서 좋게 보였던 Autoformer 결과를 구조 자체의 우위로 해석할 수 없다는 점이 다시 확인됐습니다.
+먼저 persistence baseline이 무엇인지 설명드리겠습니다.
+
+`Persistence`는 “다음 가격도 지금 가격과 같을 것”이라고 예측하는 가장 단순한 기준선입니다. 예를 들어 현재 비트코인 가격이 1억 원이면, 별도의 모델 없이 다음 15분 가격도 1억 원이라고 예측합니다. 수익률로 표현하면 다음 수익률을 항상 0%라고 예측하는 것과 같습니다.
+
+금융 가격은 직전 가격과 매우 비슷한 경우가 많기 때문에 이 단순한 방법도 의외로 강합니다. 그래서 복잡한 모델은 최소한 persistence보다 가격 오차가 작아야 “직전 가격을 그대로 복사하는 것보다 새로운 정보를 학습했다”고 말할 수 있습니다. 이번 실험에서 persistence의 평균절대오차(MAE)는 약 190,608원이었습니다. MAE는 각 시점에서 예측 가격과 실제 가격이 평균적으로 얼마만큼 떨어져 있었는지를 원화로 나타낸 값이며, 작을수록 좋습니다.
+
+이번 14개 모델은 모두 persistence의 MAE를 이기지 못했습니다. 즉 모델을 복잡하게 만들었지만, 평균 가격 오차만 놓고 보면 “다음 가격은 현재 가격과 같다”는 단순 예측보다 정확하지 않았습니다.
+
+다음으로 “0수익률 근처로 평평해졌다”는 표현의 의미를 설명드리겠습니다.
+
+실제 다음 수익률이 순서대로 `+1.0%, -0.8%, +0.6%, -1.2%`처럼 오르내렸다고 가정하겠습니다. 평탄화된 모델은 이를 `+0.02%, -0.01%, 0.00%, -0.02%`처럼 거의 0에 가까운 값으로만 예측합니다. 그래프에서는 실제 수익률 선은 위아래로 움직이는데 예측선은 0을 따라 거의 직선처럼 보입니다.
+
+이런 예측은 급등과 급락의 크기를 맞히지 못했지만, 대부분의 15분 수익률이 작은 값이라는 특성을 이용해 평균 오차를 무난하게 줄일 수 있습니다. 따라서 loss나 MAE가 persistence에 가까워 보여도 실제 시장 움직임을 배운 결과라고 볼 수 없습니다. 이번에 “예측 분산이 실제의 1% 미만”이라는 말은 예측 오차가 1%라는 뜻이 아닙니다. 예측 수익률이 위아래로 퍼진 정도, 즉 움직임의 폭이 실제 수익률 변동 폭의 1%도 되지 않았다는 뜻입니다.
+
+TimesNetLike, NLinearLike, DLinearLike, TCN이 여기에 해당했습니다. 이 모델들은 MAE가 persistence에 비교적 가까웠지만, 예측 분산이 실제의 1% 미만으로 줄었습니다. 따라서 상대적으로 낮은 MAE는 실제 상승·하락 패턴을 잘 맞혀서 얻은 성과라기보다, 대부분의 예측을 0수익률 근처에 놓아 큰 판단을 피한 결과로 해석하는 것이 맞습니다.
+
+“방향성과 예측 분산을 보존했다”는 표현도 좋은 결과와 같은 뜻은 아닙니다.
+
+`방향성`은 다음 수익률이 양수인지 음수인지, 즉 상승과 하락의 부호를 얼마나 맞혔는지를 뜻합니다. 실제가 상승일 때 상승, 하락일 때 하락으로 예측하면 방향을 맞힌 것입니다. 방향 정확도가 50% 정도라면 대체로 동전 던지기 수준이고, 여러 구간과 seed에서 지속적으로 50%를 넘어야 유용한 신호 가능성을 검토할 수 있습니다.
+
+`예측 분산`은 예측값이 평균 주변에서 얼마나 넓게 움직이는지를 나타냅니다. 실제 시장이 크게 움직이는데 예측 분산이 거의 0이면 평탄화이고, 반대로 실제보다 지나치게 크면 폭주입니다. 따라서 예측 분산을 보존한다는 것은 실제처럼 어느 정도 위아래로 움직였다는 뜻이며, 모델이 무조건 0만 출력하지 않았다는 점에서는 좋은 신호입니다. 다만 움직임의 방향과 크기가 실제와 맞아야 하므로, 분산 보존만으로 정확한 모델이라고 할 수는 없습니다.
+
+Linear와 PatchTSTLike는 평탄화된 모델보다 상승·하락 방향과 움직임의 폭을 더 많이 남겼습니다. 이는 “실제 신호를 학습할 후보로 추가 점검할 가치가 있다”는 점에서는 긍정적입니다. 그러나 두 모델의 원화 MAE는 persistence보다 더 컸습니다. 쉽게 말하면 가만히 있지는 않고 시장처럼 움직이려고 했지만, 움직인 방향이나 크기가 충분히 정확하지 않아 가격 예측 오차는 오히려 커졌습니다. 따라서 이 결과는 최종적으로 좋은 모델이라는 결론이 아니라, 평탄화 문제는 덜하지만 정확도 문제가 남은 별도의 실패 유형으로 해석해야 합니다.
+
+반대쪽 실패도 있었습니다. LSTM과 GRU의 variance ratio는 각각 약 2.28, 4.39였습니다. `Variance ratio`는 예측 수익률 분산을 실제 수익률 분산으로 나눈 값입니다. 1이면 움직임의 폭이 실제와 비슷하고, 1보다 매우 작으면 평탄화, 1보다 매우 크면 실제보다 과도하게 흔들리는 폭주를 뜻합니다. 따라서 LSTM은 실제보다 약 2.28배, GRU는 약 4.39배 큰 분산을 만들었습니다.
+
+AutoformerLike는 MAE 약 163만 원, variance ratio 약 59.39로 가장 심하게 폭주했습니다. 이는 실제 수익률의 변동 폭보다 예측이 지나치게 크게 움직였다는 뜻입니다. 과거 3번 실험에서 좋게 보였던 Autoformer 결과를 구조 자체의 우위로 해석할 수 없다는 점이 다시 확인됐습니다.
+
+정리하면 이번 결과에는 두 종류의 실패가 동시에 있었습니다.
+
+- 평탄화 실패: 예측을 거의 0수익률로 만들어 persistence와 비슷해 보이지만 실제 변동을 놓칩니다.
+- 분산 폭주 실패: 예측은 활발하게 움직이지만 실제보다 너무 크게 움직여 가격 오차가 커집니다.
+
+좋은 모델은 이 두 극단 사이에서 단순히 움직임만 만드는 것이 아니라, persistence보다 낮은 원화 MAE, 실제에 가까운 분산, 우연 수준을 넘는 방향 정확도를 여러 seed와 시간 구간에서 동시에 보여야 합니다.
 
 따라서 현재 단계에서 최신 모델을 더 추가하는 것만으로는 문제가 해결되지 않습니다. 전처리, 분포 이동, 변동성, 불확실성, 모델 용량과 seed 변동을 분리해 확인해야 합니다.
 
@@ -480,7 +512,107 @@ Double Descent 관련 영상:
 
 감사합니다.
 """
-    subject = "[시계열 연구] 8번 breadth 결과 및 9번 전처리·불확실성 진단 설계"
+    subject = "[보충 설명] 8번 breadth 결과 용어 해설 및 9번 후속 진단"
+    return subject, body, []
+
+
+def preprocessing_matrix_results_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    commit_url = f"{GITHUB_BASE}/commit/{commit_hash}"
+    report_path = "test/results/9_preprocessing_uncertainty_diagnostics_report_20260623.md"
+    notebook_path = "test/models/9_preprocessing_uncertainty_diagnostics_test.ipynb"
+    plan_10_path = "test/experiment_specs/10_objective_ensemble_confirmation_plan_20260623.md"
+    notebook_10_path = "test/models/10_objective_ensemble_confirmation_test.ipynb"
+    summary_image = "test/images/9_preprocessing_uncertainty_diagnostics_test_cell002_230.png"
+    heatmap_image = "test/images/9_preprocessing_uncertainty_diagnostics_test_cell002_231.png"
+    best_image = "test/images/9_preprocessing_uncertainty_diagnostics_test_cell002_81.png"
+    direction_image = "test/images/9_preprocessing_uncertainty_diagnostics_test_cell002_33.png"
+    flat_image = "test/images/9_preprocessing_uncertainty_diagnostics_test_cell002_11.png"
+    explosion_image = "test/images/9_preprocessing_uncertainty_diagnostics_test_cell002_13.png"
+    body = f"""교수님 안녕하세요.
+
+9번 전처리 진단 112개 케이스 실행이 완료되어, 결과와 다음 10번 본실험 방향을 정리해 공유드립니다.
+
+이번 실행은 비트코인 15분봉 39,935행을 시간 순서대로 train 70%, validation 15%, test 15%로 나누고, Linear·PatchTSTLike·TimesNetLike·AutoformerLike 네 모델과 28개 전처리를 조합한 실험입니다. 목표는 다음 15분 가격 자체가 아니라 다음 로그수익률이며, 예측 수익률을 다시 원화 가격으로 복원해 평가했습니다.
+
+먼저 기준선인 persistence는 “다음 가격도 현재 가격과 같다”고 예측하는 방법입니다. 현재 가격이 1억 원이면 다음 15분 가격도 1억 원이라고 예측하며, 수익률로는 항상 0%를 예측하는 것과 같습니다. 이번 persistence 평균절대오차는 약 190,608원이었습니다. 복잡한 모델은 이 값보다 낮아야 직전 가격 복사 이상의 정보를 학습했다고 말할 수 있습니다.
+
+9번의 결론은 전처리만으로 persistence를 이긴 조합은 없었다는 것입니다.
+
+- 최저 MAE는 `PatchTSTLike + seasonal_diff16`의 약 227,412원이었습니다. persistence보다 약 19.3% 큰 오차입니다.
+- `PatchTSTLike + winsor_025`는 방향 정확도 약 55.45%로 상대적으로 높았지만, MAE는 약 240,822원으로 persistence보다 약 26.3% 컸습니다.
+- 따라서 최종 우승 모델은 없지만, 다음 objective 실험에 넘길 후보와 버려야 할 실패 형태는 분명해졌습니다.
+
+1. 전체 결과를 보는 그래프
+
+전체 요약:
+{github_blob(summary_image)}
+
+왼쪽 막대의 x축은 모델·전처리 조합, y축은 모델 MAE를 persistence MAE로 나눈 copy-risk ratio입니다. 검은 선 1 아래로 내려가야 persistence를 이기지만 모든 막대가 1보다 위에 있습니다.
+
+가운데 산점도의 x축은 예측 분산을 실제 분산으로 나눈 variance ratio, y축은 상승·하락 방향 정확도입니다. x축 1 근처이면서 y축 0.5보다 안정적으로 위에 있어야 합니다. x축 0.01 미만의 점들은 예측이 0수익률에 가깝게 평평해진 경우입니다.
+
+전처리·모델 heatmap:
+{github_blob(heatmap_image)}
+
+y축은 전처리, x축은 모델, 색은 `모델 MAE / persistence MAE`입니다. AutoformerLike는 대부분 전처리에서 큰 오차가 유지됐고, TimesNetLike는 1에 가까워 보이지만 수익률 움직임을 포기해 persistence와 비슷해진 경우였습니다. PatchTSTLike와 Linear는 전처리에 따라 결과가 달라져 다음 실험 후보로 남겼습니다.
+
+2. 다음 방향을 잡는 데 유용한 후보
+
+최저 MAE 후보:
+{github_blob(best_image)}
+
+이 그림은 `PatchTSTLike + seasonal_diff16`의 test 결과입니다. 위쪽 x축은 test 시점 순서, y축은 다음 로그수익률이며 파란 선이 실제, 주황 선이 예측입니다. 예측은 0에 붙어 있지는 않지만 실제 급등락을 축소했습니다. 중간 패널의 y축은 원화 종가이며, 주황 예측선이 초록 persistence에서 벗어나기는 하지만 실제 파란 선보다 일관되게 정확하지 않았습니다.
+
+방향성 후보:
+{github_blob(direction_image)}
+
+`PatchTSTLike + winsor_025`는 예측선이 실제처럼 양수와 음수를 자주 오가며 방향 정확도 약 55.45%를 기록했습니다. 다만 큰 하락 폭을 충분히 맞히지 못해 원화 MAE가 더 컸습니다. 즉 방향 정보는 일부 남겼지만 가격 변화의 크기를 정확히 맞히지는 못했습니다.
+
+3. 좋지 않은 결과로 확인한 두 실패 유형
+
+0수익률 평탄화:
+{github_blob(flat_image)}
+
+`TimesNetLike + none`은 위쪽 수익률 그래프에서 주황 예측선이 거의 0에 붙어 있습니다. 중간 원화 가격 그래프에서는 예측과 persistence가 거의 겹쳐 실제 가격에도 가까워 보이지만, 이는 새로운 신호를 학습한 것이 아니라 다음 변화가 없다고 예측한 결과입니다.
+
+출력 분산 폭주:
+{github_blob(explosion_image)}
+
+`AutoformerLike + none`은 실제 15분 수익률보다 훨씬 큰 약 -7%~+6%의 가짜 장기 파동을 예측했습니다. 원화 복원 가격도 실제와 persistence에서 크게 이탈했습니다. 학습 loss와 gradient는 감소했으므로 단순 기울기 소실 문제가 아니라, 현재 손실함수가 지나치게 큰 출력 변동을 충분히 막지 못한 문제로 해석했습니다.
+
+4. 다음 10번 본실험
+
+9번 결과를 토대로 10번은 전처리를 더 늘리지 않고 다음 축을 확인하도록 수정했습니다.
+
+- 주 실험 모델: Linear, PatchTSTLike
+- 실패 통제군: 평탄화 TimesNetLike, 폭주 AutoformerLike
+- 입력 후보: seasonal_diff16, frequency_bandpass, median_residual_5, linear_detrend+asinh_robust, winsor_025, none
+- objective: Huber, 방향, 분산, 상관, tail, 변동성 regime, anti-collapse, balanced composite
+- 보조 손실이 Huber를 압도하지 않도록 크기를 Huber 기준으로 정규화하고 첫 3 epoch 동안 점진적으로 적용
+- seed 42·137·2026 재현성 확인
+- test 결과를 선택에 사용하지 않는 validation-only ensemble
+- calibration scatter의 축 공유 오류 수정
+
+10번에서는 persistence보다 낮은 MAE, 실제에 가까운 분산, 우연 수준을 안정적으로 넘는 방향 정확도를 여러 seed에서 동시에 만족하는 조합만 통과시키겠습니다.
+
+커밋:
+{commit_url}
+
+9번 최종 보고서:
+{github_blob(report_path)}
+
+9번 실행 노트북:
+{github_blob(notebook_path)}
+
+10번 실험 계획서:
+{github_blob(plan_10_path)}
+
+10번 실행 노트북:
+{github_blob(notebook_10_path)}
+
+감사합니다.
+"""
+    subject = "[시계열 연구] 9번 전처리 진단 최종 결과 및 10번 본실험 계획"
     return subject, body, []
 
 
@@ -494,6 +626,7 @@ PRESETS = {
     "optimization_stabilization_stage": optimization_stabilization_stage_email,
     "breadth_expansion_interpretation": breadth_expansion_interpretation_email,
     "preprocessing_uncertainty_diagnostics": preprocessing_uncertainty_diagnostics_email,
+    "preprocessing_matrix_results": preprocessing_matrix_results_email,
 }
 
 

@@ -32,6 +32,7 @@
 - `7_optimization_breadth_expansion_test.ipynb`: 6번 이후 확장 실험의 자원 인식형 stage plan
 - `8_optimization_breadth_training_test.ipynb`: 7번 계획을 실제 GPU 학습/시각화/붕괴 진단으로 연결한 breadth training 실험. 알고리즘뿐 아니라 preprocessing, normalization, loss, optimizer/scheduler, gradient policy, ensemble 축을 함께 비교한다.
 - `9_preprocessing_uncertainty_diagnostics_test.ipynb`: 8번의 전 모델 persistence 미달 결과를 바탕으로 전처리 조합, seed ensemble, conformal interval, 모델 용량과 Double Descent 가능성을 진단한다.
+- `10_objective_ensemble_confirmation_test.ipynb`: 9번 전처리 후보를 고정하고 방향·분산·상관·tail·regime objective와 validation-only ensemble이 persistence 미달과 collapse를 줄이는지 확인하는 본실험이다.
 
 ## 4. 4번부터 8번까지의 연구 흐름
 
@@ -41,6 +42,7 @@
 - `7번`은 실제 학습 결과가 아니라, 6번 안정화 이후 확장 실험을 어떤 자원 profile과 stage로 실행할지 정리한 계획/점검 산출물이다.
 - `8번`은 7번에서 빠진 실제 학습 backend를 새 번호로 분리한 실험이며, 모델군 확장만이 아니라 전처리/정규화/손실함수/최적화/기울기 안정화/앙상블 조합까지 서버 GPU에서 비교한다.
 - `9번`은 8번에서 관찰된 0수익률 평탄화와 출력 분산 폭주를 분리하기 위해 극단값·heavy-tail·추세·주파수·변동성 전처리를 조합하고, 예측구간과 모델 용량 변화까지 확인한다.
+- `10번`은 전처리만으로 해결되지 않은 학습 붕괴를 objective 구성과 seed/model ensemble 관점에서 다시 확인한다. test 결과는 모델 선택에 사용하지 않고 validation 결과만으로 ensemble 구성원을 고른다.
 - 문헌 기반 논문화 방향과 후속 알고리즘 후보는 `test/research_materials/forecasting_methodology_literature_review_20260613.md`를 본다.
 - 세부 해석은 각 노트북의 결과 셀과 `test/results/*.md` 보고서를 우선 본다.
 - 설계 메모와 참고문헌은 `test/experiment_specs/`에 둔다.
