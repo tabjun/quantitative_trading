@@ -50,6 +50,7 @@ This spec applies when a task repeats across sessions:
 14. When a request proposes adding a new method, objective, preprocessing path, or visualization, adversarially check whether it strengthens the research path, duplicates an existing axis, or muddies the experiment lineage.
 15. A completed-notebook report automatically requires an image-output pass. Enumerate the notebook's `image/png` outputs, reuse `test/scripts/extract_notebook_images.py`, select every decision-relevant visual, and embed it without waiting for the user to repeat the request.
 16. Every embedded research visual must be followed or preceded by a standalone explanation of the data/model, x/y axes, diagnostic purpose, observed shape, favorable/unfavorable interpretation, and concrete downstream decision.
+17. Mail handoff links must point to the rendered Markdown report on GitHub, not to commit-history pages. If a report exists, use its blob/rendered URL in the body and reserve commit hashes for internal traceability only.
 
 ## Handoff Contract
 
