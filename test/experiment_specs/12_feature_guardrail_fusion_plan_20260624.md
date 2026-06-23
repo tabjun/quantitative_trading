@@ -26,17 +26,21 @@
 
 ## 3. 독립변수 후보군
 
-코인 예측 문헌은 보통 다음 입력군을 함께 다룬다.
+코인 예측 문헌과 실무 자료는 보통 다음 입력군을 함께 다룬다. 이번 수정에서는 논문뿐 아니라 YouTube/블로그/실무형 자료에서 반복적으로 강조되는 order flow, liquidity sweep, multi-timeframe, volume shock 관점도 feature group으로 분리했다.
 
 - 기술지표와 OHLCV: 수익률, 이동수익률, EMA gap, RSI, MACD, range
 - 유동성·거래대금: volume, value, turnover, range-volume interaction, illiquidity proxy
 - 변동성·레짐: realized volatility, downside volatility, volatility ratio, drawdown
+- order flow proxy: candle body, upper/lower wick, close location value, signed volume/value, volume pressure
+- multi-timeframe structure: 15분, 1시간, 4시간, 16시간, 2일 근처 수익률·변동성·추세 구조
+- shock/event: return shock, volume shock, value shock, range shock, jump-reversal
+- attention proxy: 검색량·소셜 데이터가 없을 때 거래량/거래대금/range shock으로 만든 관심도 proxy
 - 시간대 효과: 코인은 24시간 거래되므로 한국/미국 시간대와 요일 주기
 - cross-market: ETH, XRP, SOL 등 주요 코인의 동조·선행 관계
 - 텍스트·관심도: 뉴스, SNS, 검색, sentiment shock
 - macro/on-chain/orderflow: 달러, VIX, 금리, 온체인 활동, 오더북 imbalance
 
-현재 저장소에서 바로 쓸 수 있는 것은 OHLCV 기반 proxy, 선택적 text_features_15m, 선택적 다중 ticker cross return이다. on-chain, funding, orderbook은 아직 mart가 없으므로 12번 코드에는 placeholder가 아니라 “향후 데이터마트 후보”로 남긴다.
+현재 저장소에서 바로 쓸 수 있는 것은 OHLCV 기반 proxy, 선택적 `text_features_15m`, 선택적 다중 ticker cross return이다. on-chain, funding/open interest, order book, Google Trends, YouTube/SNS, GitHub activity는 아직 mart가 없을 수 있으므로 12번 코드에서는 컬럼이 있을 때만 자동 feature group으로 등록한다. 컬럼이 없으면 실험이 깨지지 않고 해당 group만 건너뛴다.
 
 ## 4. 12번 feature group
 
@@ -46,9 +50,17 @@
 | `coin_liquidity_micro` | 거래대금, turnover, range, Amihud-style illiquidity proxy | 코인 특유의 유동성 변화가 collapse를 줄이는지 |
 | `coin_volatility_regime` | 변동성 비율, downside/upside vol, drawdown | 11번 risk gate와 잘 맞는지 |
 | `coin_momentum_reversal` | RSI, MACD, EMA gap, trend/reversal | 10번 점예측 direction이 개선되는지 |
+| `coin_orderflow_proxy` | candle body, wick, close location, signed volume/value | order book 없이도 단기 매수·매도 압력 proxy가 도움이 되는지 |
+| `coin_multitimeframe_structure` | 4/16/64/192 window return, vol, z-score, trend | multi-timeframe 구조가 단일 15분 신호보다 안정적인지 |
+| `coin_shock_event` | return/volume/value/range shock, tail, jump-reversal | 이벤트성 급변과 되돌림을 위험 gate가 잡는지 |
+| `coin_attention_proxy` | volume/value/range shock 기반 관심도 proxy | 검색·소셜 데이터 전 단계에서 attention 신호가 유효한지 |
 | `coin_calendar_cycle` | hour/day cycle, 한국/미국 시간대 proxy | 24시간 시장의 유동성 시간대가 도움이 되는지 |
 | `coin_text_context` | 텍스트 mart가 있을 때 sentiment/shock/topic | 텍스트가 있으면 위험 gate에 보조 정보가 되는지 |
 | `coin_cross_market` | 다중 ticker 테이블이 있을 때 주요 코인 return | 시장 전체 흐름이 BTC 예측에 도움이 되는지 |
+| `coin_macro_proxy` | DXY/VIX/금리/주가지수/환율 등 컬럼이 있을 때 | 위험자산 레짐 설명력이 있는지 |
+| `coin_onchain_proxy` | active address, exchange flow, SOPR, MVRV 등 컬럼이 있을 때 | 코인 고유 수급·네트워크 활동이 도움이 되는지 |
+| `coin_derivatives_proxy` | funding, open interest, basis, liquidation 등 컬럼이 있을 때 | 레버리지·청산 압력 정보가 급변 예측에 도움이 되는지 |
+| `coin_search_social_dev` | Google Trends, YouTube, Twitter/X, Reddit, GitHub 등 컬럼이 있을 때 | 관심도·커뮤니티·개발자 활동이 선행 정보인지 |
 | `coin_full_available` | 현재 사용 가능한 모든 feature | feature 과다 결합이 오히려 노이즈를 키우는지 |
 
 ## 5. 실험 구조
@@ -72,7 +84,7 @@ feature group
 - objective: `balanced_composite`
 - risk event: `absolute_move`
 
-기본 case 수는 feature group 수에 따라 약 56개다. 각 case는 point model과 risk model을 모두 학습하므로 실제 학습 model 수는 그 두 배가 된다. 사용자는 12번만 실행할 예정이므로 이 정도는 서버 4090 환경에서 본실험으로 감당 가능한 범위로 본다.
+기본 case 수는 사용 가능한 feature group 수에 따라 늘어난다. 현재 OHLCV만 있어도 기존보다 넓은 proxy group이 자동 생성되며, text/cross/macro/on-chain/derivatives/search-social-dev 컬럼이 있으면 추가 group이 더 붙는다. 각 case는 point model과 risk model을 모두 학습하므로 실제 학습 model 수는 그 두 배가 된다. 사용자는 12번만 실행할 예정이고 RTX 4090 서버 자원이 있으므로, 이번 단계는 넓게 돌려 feature 후보를 많이 탈락시키는 방향으로 간다.
 
 ## 6. 주요 지표
 
@@ -186,5 +198,7 @@ python test/models/12_feature_guardrail_fusion_test.py \
 - `Decoding Bitcoin` 계열 연구는 micro/macro factor를 함께 쓰는 방향이 단일 가격 입력보다 타당하다는 흐름을 제공한다.
 - 코인 price prediction survey들은 OHLCV, order book, social sentiment, on-chain, macro 변수가 넓게 쓰인다고 정리한다.
 - 금융 uncertainty quantification 연구는 점예측만 보는 대신 확률·예측구간·위험 gate를 함께 보는 방향을 지지한다.
+- multi-timeframe feature engineering 연구와 실무 자료는 단일 15분봉만 보지 않고 여러 시간축의 수익률, 변동성, 거래량 구조를 함께 보는 쪽을 강조한다.
+- order flow 실무 자료는 실제 order book이 없더라도 거래량 폭증, candle body/wick, close location, signed volume 같은 proxy를 먼저 검증할 수 있다는 힌트를 준다.
 
 12번은 이 문헌 흐름을 전부 구현하는 최종 데이터마트가 아니라, 어떤 입력군을 정식 데이터마트로 올릴지 고르는 선별 실험이다.

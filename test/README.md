@@ -34,7 +34,7 @@
 - `9_preprocessing_uncertainty_diagnostics_test.ipynb`: 8번의 전 모델 persistence 미달 결과를 바탕으로 전처리 조합, seed ensemble, conformal interval, 모델 용량과 Double Descent 가능성을 진단한다.
 - `10_objective_ensemble_confirmation_test.ipynb`: 9번 전처리 후보를 고정하고 방향·분산·상관·tail·regime objective와 validation-only ensemble이 persistence 미달과 collapse를 줄이는지 확인하는 본실험이다.
 - `11_distributional_capacity_diagnostics_test.ipynb`: 10번 점예측과 병렬 비교할 향후 4시간 급변·하방 위험 확률, Gaussian·Student-t·quantile 분포 예측, 보조 Double Descent를 진단한다.
-- `12_feature_guardrail_fusion_test.ipynb`: 10번 `balanced_composite` 점예측을 기본 토대로 두고, 11번 `absolute_move` 위험 확률을 guardrail로 붙인 뒤 코인 독립변수 조합별로 collapse 완화와 MDD 방어 가능성을 확인한다.
+- `12_feature_guardrail_fusion_test.ipynb`: 10번 `balanced_composite` 점예측을 기본 토대로 두고, 11번 `absolute_move` 위험 확률을 guardrail로 붙인 뒤 OHLCV proxy, liquidity, volatility, order-flow proxy, multi-timeframe, shock/event, attention, text, cross-market, optional macro/on-chain/derivatives/social-dev 독립변수 조합별로 collapse 완화와 MDD 방어 가능성을 확인한다.
 
 ## 4. 4번부터 8번까지의 연구 흐름
 
@@ -46,7 +46,7 @@
 - `9번`은 8번에서 관찰된 0수익률 평탄화와 출력 분산 폭주를 분리하기 위해 극단값·heavy-tail·추세·주파수·변동성 전처리를 조합하고, 예측구간과 모델 용량 변화까지 확인한다.
 - `10번`은 전처리만으로 해결되지 않은 학습 붕괴를 objective 구성과 seed/model ensemble 관점에서 다시 확인한다. test 결과는 모델 선택에 사용하지 않고 validation 결과만으로 ensemble 구성원을 고른다.
 - `11번`은 10번 결과를 기다리지 않고 별도 venv/kernel에서 병렬 실행할 경쟁 가설이다. 기본 연구 질문은 향후 4시간 급변·하방 위험 확률이며, Gaussian·Student-t·quantile 분포와 Double Descent는 후속·보조 suite로 둔다.
-- `12번`은 10번을 점예측 최적화 토대로 유지하고 11번을 위험 guardrail로 결합한다. 새 알고리즘 확장보다 OHLCV, 유동성, 변동성 레짐, momentum/reversal, 시간대, 선택적 텍스트·cross-market feature group을 비교해 어떤 독립변수군을 데이터마트로 승격할지 고른다.
+- `12번`은 10번을 점예측 최적화 토대로 유지하고 11번을 위험 guardrail로 결합한다. 새 알고리즘 확장보다 OHLCV, 유동성, 변동성 레짐, momentum/reversal, order-flow proxy, multi-timeframe, shock/event, attention, 시간대, 선택적 텍스트·cross-market·macro·on-chain·derivatives·social-dev feature group을 넓게 비교해 어떤 독립변수군을 데이터마트로 승격할지 고른다.
 - 문헌 기반 논문화 방향과 후속 알고리즘 후보는 `test/research_materials/forecasting_methodology_literature_review_20260613.md`를 본다.
 - 세부 해석은 각 노트북의 결과 셀과 `test/results/*.md` 보고서를 우선 본다.
 - 설계 메모와 참고문헌은 `test/experiment_specs/`에 둔다.

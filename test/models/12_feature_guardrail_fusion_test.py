@@ -14,6 +14,7 @@
 # MDD/거래비용 관점의 의사결정 품질을 높이는지 확인합니다.
 #
 # 모든 표와 그림은 notebook inline output으로만 표시하며 서버에 PNG/CSV/Markdown 파일을 저장하지 않습니다.
+#
 
 # %%
 """12번: 10번 point objective와 11번 risk gate를 feature group별로 결합한다."""
@@ -68,8 +69,17 @@ DEFAULT_FEATURE_GROUPS = [
     "coin_liquidity_micro",
     "coin_volatility_regime",
     "coin_momentum_reversal",
+    "coin_orderflow_proxy",
+    "coin_multitimeframe_structure",
+    "coin_shock_event",
+    "coin_attention_proxy",
     "coin_calendar_cycle",
     "coin_text_context",
+    "coin_cross_market",
+    "coin_macro_proxy",
+    "coin_onchain_proxy",
+    "coin_derivatives_proxy",
+    "coin_search_social_dev",
     "coin_full_available",
 ]
 DEFAULT_POINT_MODELS = ["Linear", "PatchTSTLike"]
@@ -82,9 +92,17 @@ FEATURE_GROUP_EXPLANATIONS = {
     "coin_liquidity_micro": "코인 시장에서 중요한 거래대금, turnover, range, Amihud-style illiquidity proxy를 포함한다.",
     "coin_volatility_regime": "급변과 저변동 국면을 나누기 위해 변동성 비율, 상승/하락 변동성, 꼬리 위험 proxy를 포함한다.",
     "coin_momentum_reversal": "RSI, MACD gap, EMA gap, 추세 강도와 단기 되돌림을 포함해 방향성 신호를 확인한다.",
+    "coin_orderflow_proxy": "실제 order book이 없을 때 캔들 몸통, 위/아래 꼬리, 종가 위치, signed volume/value로 매수·매도 압력 proxy를 만든다.",
+    "coin_multitimeframe_structure": "15분 단일 봉만 보지 않고 1시간, 4시간, 16시간, 2일 근처의 수익률·변동성·추세 구조를 함께 본다.",
+    "coin_shock_event": "급등락, 거래량 폭증, range 확장, 점프 후 되돌림을 묶어 이벤트성 시장 충격을 확인한다.",
+    "coin_attention_proxy": "검색량·소셜 데이터가 없더라도 거래대금/거래량/range shock으로 시장 관심도 proxy를 만든다.",
     "coin_calendar_cycle": "코인은 24시간 거래되므로 hour/day 주기와 한국/미국 시간대 proxy를 포함한다.",
     "coin_text_context": "뉴스/텍스트 context mart가 있을 때만 감성, shock, topic count를 붙인다. 없으면 core와 동일한 fallback으로 기록한다.",
     "coin_cross_market": "다중 ticker 테이블이 있을 때 ETH/XRP/SOL 등 cross-asset return을 붙인다. 없으면 자동 제외된다.",
+    "coin_macro_proxy": "DXY, VIX, 금리, 주가지수, 원/달러, 금·유가 같은 macro/cross-asset 컬럼이 있을 때만 위험자산 레짐 proxy로 쓴다.",
+    "coin_onchain_proxy": "active address, exchange flow, whale, SOPR, MVRV, NVT 같은 on-chain 컬럼이 있을 때만 코인 고유 수급 proxy로 쓴다.",
+    "coin_derivatives_proxy": "funding rate, open interest, basis, liquidation, long/short ratio 컬럼이 있을 때만 레버리지·청산 압력 proxy로 쓴다.",
+    "coin_search_social_dev": "Google Trends, YouTube, Twitter/X, Reddit, Telegram, GitHub activity 같은 관심도·커뮤니티·개발자 활동 컬럼이 있을 때만 쓴다.",
     "coin_full_available": "현재 데이터에서 쓸 수 있는 모든 코인 특화 feature를 합친 상한선 후보이다.",
 }
 
@@ -93,6 +111,8 @@ LITERATURE_NOTES = {
     "sentiment_interest": "뉴스, SNS, 검색 관심도는 가격 자체보다 regime과 이벤트 확률을 보조하는 변수로 쓰는 편이 안전하다.",
     "macro_cross_market": "달러, VIX, 금리, 전통시장 지수와 cross-asset 변수는 BTC가 위험자산처럼 움직이는 구간을 설명할 수 있다.",
     "onchain_orderflow": "온체인/오더북 변수는 코인 고유 정보지만 현재 로컬 mart에 없으면 proxy feature로 먼저 검증한다.",
+    "practitioner_orderflow": "실무·영상 자료에서 자주 강조되는 order flow, liquidity sweep, volume spike는 현재 OHLCV proxy로 먼저 테스트한다.",
+    "multi_timeframe": "단기 캔들 하나보다 여러 시간축의 추세·변동성·거래량을 함께 보는 multi-timeframe 설계가 단기 코인 예측에 자주 쓰인다.",
 }
 
 
@@ -123,6 +143,18 @@ def safe_divide(numerator: pd.Series | np.ndarray, denominator: pd.Series | np.n
     return pd.Series(out).replace([np.inf, -np.inf], np.nan).fillna(fill)
 
 
+def columns_by_keywords(frame: pd.DataFrame, keywords: list[str], exclude: set[str] | None = None) -> list[str]:
+    exclude = exclude or set()
+    columns: list[str] = []
+    for column in frame.columns:
+        lowered = column.lower()
+        if column in exclude:
+            continue
+        if any(keyword in lowered for keyword in keywords):
+            columns.append(column)
+    return columns
+
+
 def add_optional_text_features(db_path: Path, features: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     """`text_features_15m`가 있으면 timestamp 기준으로 결합한다.
 
@@ -143,7 +175,32 @@ def add_optional_text_features(db_path: Path, features: pd.DataFrame) -> tuple[p
                 column
                 for column in columns
                 if column != "timestamp"
-                and any(key in column.lower() for key in ["sentiment", "shock", "topic", "event", "risk", "macro", "regulation", "liquidity"])
+                and any(
+                    key in column.lower()
+                    for key in [
+                        "sentiment",
+                        "shock",
+                        "topic",
+                        "event",
+                        "risk",
+                        "macro",
+                        "regulation",
+                        "liquidity",
+                        "google",
+                        "trend",
+                        "search",
+                        "youtube",
+                        "twitter",
+                        "tweet",
+                        "reddit",
+                        "telegram",
+                        "discord",
+                        "github",
+                        "commit",
+                        "developer",
+                        "social",
+                    ]
+                )
             ]
             if not candidate_columns:
                 return features, text_columns
@@ -219,9 +276,11 @@ def add_coin_specific_features(features: pd.DataFrame) -> pd.DataFrame:
     close = df["close"].astype(float)
     high = df["high"].astype(float)
     low = df["low"].astype(float)
+    open_ = df["open"].astype(float)
     volume = df["volume"].astype(float)
     value = df["value"].astype(float) if "value" in df.columns else close * volume
     ret = df["log_return_1"].astype(float)
+    candle_range = (high - low).replace(0, np.nan)
 
     # Liquidity / microstructure proxies from OHLCV.
     df["range_z_96"] = base.rolling_z((high - low) / close.replace(0, np.nan), 96)
@@ -231,6 +290,19 @@ def add_coin_specific_features(features: pd.DataFrame) -> pd.DataFrame:
     df["range_volume_interaction"] = df["hl_range_pct"] * df["volume_z_96"]
     df["turnover_absorption_proxy"] = safe_divide(df["hl_range_pct"], np.log1p(value), fill=0.0)
 
+    # Order-flow proxies. These are not true order-book features; they are candle-derived
+    # pressure indicators used until depth/imbalance data is available in the mart.
+    df["candle_body_pct"] = (close - open_) / open_.replace(0, np.nan)
+    df["upper_wick_pct"] = (high - np.maximum(open_, close)) / close.replace(0, np.nan)
+    df["lower_wick_pct"] = (np.minimum(open_, close) - low) / close.replace(0, np.nan)
+    df["close_location_value"] = ((close - low) - (high - close)) / candle_range
+    df["signed_volume_proxy"] = np.sign(close - open_) * np.log1p(volume)
+    df["signed_value_proxy"] = np.sign(close - open_) * np.log1p(value)
+    df["volume_pressure_16"] = df["signed_volume_proxy"].rolling(16, min_periods=4).sum()
+    df["value_pressure_16"] = df["signed_value_proxy"].rolling(16, min_periods=4).sum()
+    df["range_expansion_16"] = safe_divide(df["hl_range_pct"], df["hl_range_pct"].rolling(16, min_periods=4).mean(), fill=1.0)
+    df["intrabar_reversal_proxy"] = np.sign(close - open_) * df["close_location_value"]
+
     # Volatility and regime proxies.
     df["vol_ratio_16_64"] = safe_divide(df["realized_vol_16"], df["realized_vol_64"], fill=1.0)
     df["downside_vol_64"] = ret.clip(upper=0.0).rolling(64, min_periods=16).std()
@@ -238,6 +310,27 @@ def add_coin_specific_features(features: pd.DataFrame) -> pd.DataFrame:
     df["tail_abs_return_96"] = ret.abs().rolling(96, min_periods=24).quantile(0.90)
     df["vol_of_vol_64"] = df["realized_vol_16"].rolling(64, min_periods=16).std()
     df["drawdown_96"] = close / close.rolling(96, min_periods=24).max() - 1.0
+
+    # Multi-timeframe and shock/attention proxies.
+    df["return_192"] = ret.rolling(192, min_periods=48).sum()
+    df["realized_vol_192"] = ret.rolling(192, min_periods=48).std()
+    df["vol_ratio_64_192"] = safe_divide(df["realized_vol_64"], df["realized_vol_192"], fill=1.0)
+    df["price_z_192"] = base.rolling_z(close, 192)
+    df["volume_z_192"] = base.rolling_z(np.log1p(volume), 192)
+    df["value_z_192"] = base.rolling_z(np.log1p(value), 192)
+    df["range_mean_192"] = df["hl_range_pct"].rolling(192, min_periods=48).mean()
+    df["trend_strength_192"] = close / close.rolling(192, min_periods=48).mean() - 1.0
+    df["abs_return_z_96"] = base.rolling_z(ret.abs(), 96)
+    df["volume_shock_z_96"] = base.rolling_z(np.log1p(volume), 96)
+    df["value_shock_z_96"] = base.rolling_z(np.log1p(value), 96)
+    df["range_shock_z_96"] = base.rolling_z(df["hl_range_pct"], 96)
+    df["jump_reversal_4"] = ret.rolling(4, min_periods=2).sum() * -np.sign(ret.shift(4).rolling(4, min_periods=2).sum())
+    df["attention_pressure_proxy"] = (
+        df["volume_shock_z_96"].clip(lower=0.0)
+        + df["value_shock_z_96"].clip(lower=0.0)
+        + df["range_shock_z_96"].clip(lower=0.0)
+    )
+    df["attention_direction_proxy"] = np.sign(ret.rolling(4, min_periods=2).sum()) * df["attention_pressure_proxy"]
 
     # Momentum and reversal proxies.
     delta = close.diff()
@@ -267,6 +360,34 @@ def add_coin_specific_features(features: pd.DataFrame) -> pd.DataFrame:
 
 
 def register_feature_groups(features: pd.DataFrame, text_columns: list[str], cross_columns: list[str]) -> dict[str, list[str]]:
+    base_columns = [
+        "log_return_1",
+        "return_4",
+        "return_16",
+        "realized_vol_16",
+        "volume_z_96",
+        "value_z_96",
+    ]
+    macro_columns = columns_by_keywords(
+        features,
+        ["dxy", "vix", "nasdaq", "spx", "s&p", "rate", "yield", "cpi", "fed", "gold", "oil", "kospi", "usdkrw", "usdt"],
+        exclude={"timestamp", "ticker"},
+    )
+    onchain_columns = columns_by_keywords(
+        features,
+        ["onchain", "active_address", "address", "hash", "miner", "exchange_flow", "reserve", "sopr", "mvrv", "nvt", "utxo", "whale"],
+        exclude={"timestamp", "ticker"},
+    )
+    derivatives_columns = columns_by_keywords(
+        features,
+        ["funding", "open_interest", "basis", "liquidation", "long_short", "longshort", "perpetual", "futures"],
+        exclude={"timestamp", "ticker"},
+    )
+    search_social_dev_columns = columns_by_keywords(
+        features,
+        ["google", "trend", "search", "twitter", "tweet", "reddit", "youtube", "telegram", "discord", "github", "commit", "developer", "social"],
+        exclude={"timestamp", "ticker"},
+    )
     groups = {
         "ohlcv_core": [
             "log_return_1",
@@ -322,6 +443,65 @@ def register_feature_groups(features: pd.DataFrame, text_columns: list[str], cro
             "trend_strength_64",
             "reversal_4",
         ],
+        "coin_orderflow_proxy": [
+            "log_return_1",
+            "return_4",
+            "realized_vol_16",
+            "hl_range_pct",
+            "candle_body_pct",
+            "upper_wick_pct",
+            "lower_wick_pct",
+            "close_location_value",
+            "signed_volume_proxy",
+            "signed_value_proxy",
+            "volume_pressure_16",
+            "value_pressure_16",
+            "range_expansion_16",
+            "intrabar_reversal_proxy",
+        ],
+        "coin_multitimeframe_structure": [
+            "log_return_1",
+            "return_4",
+            "return_16",
+            "return_64",
+            "return_192",
+            "realized_vol_16",
+            "realized_vol_64",
+            "realized_vol_192",
+            "vol_ratio_16_64",
+            "vol_ratio_64_192",
+            "price_z_192",
+            "volume_z_192",
+            "value_z_192",
+            "range_mean_192",
+            "trend_strength_64",
+            "trend_strength_192",
+        ],
+        "coin_shock_event": [
+            "log_return_1",
+            "return_4",
+            "realized_vol_16",
+            "abs_return_z_96",
+            "volume_shock_z_96",
+            "value_shock_z_96",
+            "range_shock_z_96",
+            "tail_abs_return_96",
+            "vol_of_vol_64",
+            "drawdown_96",
+            "jump_reversal_4",
+        ],
+        "coin_attention_proxy": [
+            "log_return_1",
+            "return_4",
+            "realized_vol_16",
+            "volume_shock_z_96",
+            "value_shock_z_96",
+            "range_shock_z_96",
+            "attention_pressure_proxy",
+            "attention_direction_proxy",
+            "korea_active_session",
+            "us_active_session",
+        ],
         "coin_calendar_cycle": [
             "log_return_1",
             "return_4",
@@ -354,6 +534,22 @@ def register_feature_groups(features: pd.DataFrame, text_columns: list[str], cro
             "value_z_96",
             *cross_columns,
         ],
+        "coin_macro_proxy": [
+            *base_columns,
+            *macro_columns,
+        ],
+        "coin_onchain_proxy": [
+            *base_columns,
+            *onchain_columns,
+        ],
+        "coin_derivatives_proxy": [
+            *base_columns,
+            *derivatives_columns,
+        ],
+        "coin_search_social_dev": [
+            *base_columns,
+            *search_social_dev_columns,
+        ],
     }
     all_candidate_columns = []
     for columns in groups.values():
@@ -366,6 +562,14 @@ def register_feature_groups(features: pd.DataFrame, text_columns: list[str], cro
         if name == "coin_text_context" and not text_columns:
             available = groups["ohlcv_core"]
         if name == "coin_cross_market" and not cross_columns:
+            continue
+        if name == "coin_macro_proxy" and not macro_columns:
+            continue
+        if name == "coin_onchain_proxy" and not onchain_columns:
+            continue
+        if name == "coin_derivatives_proxy" and not derivatives_columns:
+            continue
+        if name == "coin_search_social_dev" and not search_social_dev_columns:
             continue
         if len(available) >= 4:
             available_groups[name] = available

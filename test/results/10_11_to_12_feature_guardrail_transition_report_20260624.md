@@ -92,12 +92,20 @@
 | `coin_liquidity_micro` | turnover, range, Amihud-style illiquidity, volume acceleration | 코인 유동성 변화가 예측 붕괴를 줄이는지 |
 | `coin_volatility_regime` | vol ratio, downside/upside vol, drawdown, tail return | 위험 gate와 맞는 regime 정보가 있는지 |
 | `coin_momentum_reversal` | RSI, MACD, EMA gap, trend strength, reversal | 점예측 방향성이 개선되는지 |
+| `coin_orderflow_proxy` | candle body, upper/lower wick, close location, signed volume/value | 실제 order book 없이도 단기 매수·매도 압력 proxy가 도움이 되는지 |
+| `coin_multitimeframe_structure` | 4/16/64/192 window return, volatility, z-score, trend | 단일 15분봉보다 여러 시간축 구조가 더 안정적인지 |
+| `coin_shock_event` | return shock, volume shock, value shock, range shock, jump-reversal | 이벤트성 급변과 되돌림이 위험 gate와 맞물리는지 |
+| `coin_attention_proxy` | volume/value/range shock 기반 관심도 proxy | 검색·소셜 데이터 전 단계에서 attention 신호가 유효한지 |
 | `coin_calendar_cycle` | hour/day sin/cos, 한국/미국 시간대 proxy | 24시간 거래 시장의 시간대 효과 |
 | `coin_text_context` | sentiment, shock, topic/event count | 텍스트 mart가 있으면 위험확률 개선에 쓰이는지 |
 | `coin_cross_market` | ETH/XRP/SOL 등 cross return | 시장 전체 흐름이 BTC 예측에 도움 되는지 |
+| `coin_macro_proxy` | DXY/VIX/금리/주가지수/환율 등 컬럼이 있을 때 | BTC가 위험자산처럼 움직이는 레짐을 설명하는지 |
+| `coin_onchain_proxy` | active address, exchange flow, whale, SOPR, MVRV 등 컬럼이 있을 때 | 코인 고유 수급·네트워크 활동이 도움이 되는지 |
+| `coin_derivatives_proxy` | funding, open interest, basis, liquidation 등 컬럼이 있을 때 | 레버리지·청산 압력이 급변 예측에 도움이 되는지 |
+| `coin_search_social_dev` | Google Trends, YouTube, Twitter/X, Reddit, GitHub 등 컬럼이 있을 때 | 관심도·커뮤니티·개발자 활동이 선행 정보인지 |
 | `coin_full_available` | 현재 사용 가능한 모든 feature | feature를 많이 넣는 것이 오히려 노이즈인지 확인 |
 
-이 선택은 기존 문헌 흐름과도 맞다. 코인 예측 연구들은 보통 OHLCV/기술지표만이 아니라 유동성, sentiment/search, macro, cross-market, on-chain/orderflow를 함께 검토한다. 다만 현재 저장소에 아직 on-chain, funding, orderbook mart가 없으므로, 12번에서는 OHLCV 기반 proxy와 이미 존재할 수 있는 text/cross-market 데이터를 먼저 시험한다.
+이 선택은 기존 문헌 흐름과도 맞다. 코인 예측 연구들은 보통 OHLCV/기술지표만이 아니라 유동성, sentiment/search, macro, cross-market, on-chain/orderflow를 함께 검토한다. 여기에 실무형 자료에서 자주 강조되는 multi-timeframe, order flow, liquidity sweep, volume shock 관점도 넣었다. 다만 현재 저장소에 아직 on-chain, funding/open interest, orderbook, Google Trends, YouTube/SNS, GitHub activity mart가 없을 수 있으므로, 12번에서는 OHLCV 기반 proxy를 먼저 계산하고 외부 컬럼이 있으면 자동으로 추가 group을 등록한다.
 
 ## 7. 12번 그래프는 어떻게 읽을 것인가
 
