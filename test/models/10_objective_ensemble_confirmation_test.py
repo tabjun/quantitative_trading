@@ -268,17 +268,19 @@ def draw_candles(
 
 
 def candle_proxy_arrays(split, pred_return: np.ndarray, n: int) -> dict[str, np.ndarray]:
-    prev_close = split["prev_close"][-n:]
-    target_open = split.get("target_open", prev_close)[-n:]
-    target_high = split.get("target_high", np.maximum(target_open, split["target_close"]))[-n:]
-    target_low = split.get("target_low", np.minimum(target_open, split["target_close"]))[-n:]
-    target_close = split["target_close"][-n:]
-    predicted_close = prev_close * np.exp(pred_return[-n:])
+    prev_close = np.asarray(split["prev_close"][-n:], dtype=np.float32)
+    target_close = np.asarray(split["target_close"][-n:], dtype=np.float32)
+    target_open = np.asarray(split.get("target_open", prev_close)[-n:], dtype=np.float32)
+    target_high_source = np.asarray(split.get("target_high", target_close)[-n:], dtype=np.float32)
+    target_low_source = np.asarray(split.get("target_low", target_close)[-n:], dtype=np.float32)
+    target_high = np.maximum(target_high_source, np.maximum(target_open, target_close))
+    target_low = np.minimum(target_low_source, np.minimum(target_open, target_close))
+    predicted_close = prev_close * np.exp(np.asarray(pred_return[-n:], dtype=np.float32))
     predicted_open = prev_close
     predicted_high = np.maximum(predicted_open, predicted_close)
     predicted_low = np.minimum(predicted_open, predicted_close)
     return {
-        "timestamp": split["timestamp"][-n:],
+        "timestamp": np.asarray(split["timestamp"][-n:]),
         "actual_open": target_open,
         "actual_high": target_high,
         "actual_low": target_low,
