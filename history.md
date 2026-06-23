@@ -126,3 +126,22 @@
 | 2026-06-23 | 10번 점예측과 11번 위험 이벤트를 병렬 경쟁 가설로 분리 | 10번 결과를 기다리지 않고 두 venv/kernel에서 독립 실행하되, 한 RTX 4090의 VRAM·CPU worker를 과점유하지 않아야 했다. | 10번에 `point_primary` GPU slot, 11번에 `risk_secondary` slot을 적용했다. 11번 기본 suite를 향후 4시간 downside/absolute-move event 확률 예측으로 확장하고 Average Precision, Brier, calibration, risk-coverage 그래프를 추가했다. 분포 head와 Double Descent는 후속·보조 suite로 유지했다. | 두 노트북을 별도 커널에서 동시에 실행하고 10번 persistence 통과 여부와 11번 위험 확률 기준선 개선 여부를 비교한다. |
 | 2026-06-23 | 10·11번 결측 정책과 candle preview 보강 | 사용자가 실제 거래 데이터에서 어떤 결측이 생기는지와, 예측 결과를 봉 차트 감각으로 바로 읽을 수 있게 해 달라고 요청했다. 구조적 라벨 tail과 rolling warm-up은 보간 대상이 아니며, 노트북 출력에서 이를 분명히 보여줄 필요가 있었다. | 8번 backend window에 `target_open/high/low`와 `target_timestamp`를 추가했다. 10번과 11번에는 raw gap/rolling warm-up/target tail/수치 NaN에 대한 `missingness audit` 표, 실제 다음 봉과 예측 종가 기반 proxy candle 비교 그래프, 마지막 예측 구간 preview 표를 inline 출력으로 추가했다. 11번 위험 이벤트 suite에는 candle 대신 event probability preview 표를 추가했다. | 서버에서 10번과 11번 노트북을 다시 실행해 `missingness audit`, candle preview, event preview가 의도대로 보이는지 확인하고, 이후 보고서에는 “보간 금지/허용 기준”을 이 표 기준으로 설명한다. |
 | 2026-06-23 | `/test` 요청의 연구 목적 적합성 우선 검토 규칙 추가 | 사용자가 `test` 아래 요청은 무조건 수행하지 말고, 연구 목적에 맞는지 먼저 비판적으로 재구성해 달라고 요청했다. 새 방법론 추가도 목적 강화 여부를 먼저 따져야 했다. | `AGENTS.md`와 `docs/harness/research-workflow/team-spec.md`에 `/test` 요청은 먼저 연구 질문과 artifact 경계를 평가하고, 어긋나면 critic-driven rewrite 후에만 수행한다는 규칙을 추가했다. 새 방법론/축 추가도 연구 선행성, 중복성, lineage 훼손 여부를 먼저 점검하도록 명시했다. | 이후 `/test` 작업은 요청을 그대로 받기보다 연구 질문에 맞게 먼저 재정의하고, 방법론 추가는 실험 라인업에 실제로 도움이 되는지 검토한 뒤 진행한다. |
+
+## 2026-06-23 10번과 11번 결과 보고
+
+| 날짜 | 단계 | 수행 내용 | 산출물 및 결과 | 다음 목표 |
+| :--- | :--- | :--- | :--- | :--- |
+| 2026-06-23 | 10번 결과 보고 | 10번 objective·ensemble 본실험의 inline 출력과 leaderboard를 읽고, `huber`와 `balanced_composite`, 단일 모델과 validation-only ensemble의 차이를 독립 보고서로 정리했다. `persistence`를 못 넘는 상태지만 `balanced_composite`가 쉬운 해를 줄이고 방향성과 분산을 더 남긴다는 점을 명확히 했다. | `test/results/10_objective_ensemble_confirmation_report_20260623.md` | 10번 보고서를 바탕으로 objective branch와 ensemble branch의 후속 실험 범위를 좁힌다. |
+| 2026-06-23 | 11번 결과 보고 | 11번 위험 이벤트 진단의 leaderboard와 결측/preview 출력, AP lift, Brier skill, ECE를 정리하고 점예측과 별개의 분기라는 점을 독립 보고서로 작성했다. `PatchTSTLike + seasonal_diff16 + absolute_move`가 가장 강한 위험 이벤트 후보였다. | `test/results/11_distributional_capacity_diagnostics_report_20260623.md` | 11번 보고서를 바탕으로 위험 이벤트 branch는 `absolute_move`를 우선 안정화하고, 분포/용량 진단은 보조 축으로 유지한다. |
+
+## 2026-06-24 10·11번 종합 의사결정
+
+| 날짜 | 단계 | 수행 내용 | 산출물 및 결과 | 다음 목표 |
+| :--- | :--- | :--- | :--- | :--- |
+| 2026-06-24 | 점예측·위험 이벤트 종합 | 10번과 11번 노트북의 inline 그래프 51장을 기존 `test/scripts/extract_notebook_images.py`로 추출하고, objective·ensemble 점예측과 absolute-move/downside 위험 확률을 같은 의사결정 기준에서 비교했다. 10번 점예측은 persistence 미달이라 단독 알파로 쓰지 않고, 11번 absolute-move 확률은 AP/Brier 기준선을 넘어 위험 게이트 후보로 우선 적용하기로 했다. 향후 완료 노트북 보고서는 별도 요청 없이 이미지 출력을 추출·선별·해석하도록 AGENTS와 team spec에도 강제했다. | `test/results/10_11_point_risk_synthesis_report_20260624.md`, 10·11번 개별 보고서의 대표 그래프 해설 보강, `AGENTS.md`, `docs/harness/research-workflow/team-spec.md` | 새 번호 12번에서 point forecast를 low-risk regime에서만 허용하는 risk-gated decision fusion을 walk-forward, 거래비용, MDD 기준으로 검증한다. |
+
+## 2026-06-24 12번 feature guardrail 전환
+
+| 날짜 | 단계 | 수행 내용 | 산출물 및 결과 | 다음 목표 |
+| :--- | :--- | :--- | :--- | :--- |
+| 2026-06-24 | 독립변수 기반 최적화 후속 설계 | 10번은 `balanced_composite` 점예측 최적화 토대로, 11번은 `absolute_move` 위험확률 guardrail로 유지하는 방향을 확정했다. 새 알고리즘 추가보다 코인 독립변수 조합이 collapse와 MDD 방어에 미치는 영향을 확인하는 쪽이 현재 연구 질문에 더 맞다고 판단했다. | `test/models/12_feature_guardrail_fusion_test.ipynb`, `test/models/12_feature_guardrail_fusion_test.py`, `test/experiment_specs/12_feature_guardrail_fusion_plan_20260624.md`, `test/results/10_11_to_12_feature_guardrail_transition_report_20260624.md`, `test/scripts/send_email.py`의 `feature_guardrail_transition` preset | 학교 서버에서 12번을 실행하고, 노트북 inline 그래프를 추출해 feature group별로 어떤 독립변수군을 데이터마트 정식 스키마로 승격할지 판단한다. |

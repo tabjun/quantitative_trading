@@ -48,6 +48,8 @@ This spec applies when a task repeats across sessions:
 12. Never leave relative statements such as “preserved variance” or “close to baseline” unexplained. Name the comparison baseline, the direction of change, and why the result is necessary but not sufficient for model quality.
 13. For any `/test` request, first evaluate whether it serves the current research question. If it does not, rewrite it into a criticism-driven or methodology-improving version before implementing.
 14. When a request proposes adding a new method, objective, preprocessing path, or visualization, adversarially check whether it strengthens the research path, duplicates an existing axis, or muddies the experiment lineage.
+15. A completed-notebook report automatically requires an image-output pass. Enumerate the notebook's `image/png` outputs, reuse `test/scripts/extract_notebook_images.py`, select every decision-relevant visual, and embed it without waiting for the user to repeat the request.
+16. Every embedded research visual must be followed or preceded by a standalone explanation of the data/model, x/y axes, diagnostic purpose, observed shape, favorable/unfavorable interpretation, and concrete downstream decision.
 
 ## Handoff Contract
 
