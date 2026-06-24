@@ -51,6 +51,9 @@ This spec applies when a task repeats across sessions:
 15. A completed-notebook report automatically requires an image-output pass. Enumerate the notebook's `image/png` outputs, reuse `test/scripts/extract_notebook_images.py`, select every decision-relevant visual, and embed it without waiting for the user to repeat the request.
 16. Every embedded research visual must be followed or preceded by a standalone explanation of the data/model, x/y axes, diagnostic purpose, observed shape, favorable/unfavorable interpretation, and concrete downstream decision.
 17. Mail handoff links must point to the rendered Markdown report on GitHub, not to commit-history pages. If a report exists, use its blob/rendered URL in the body and reserve commit hashes for internal traceability only.
+18. Once a research `.ipynb` has completed analysis, treat it as read-only during report writing, mail writing, image extraction, and result cleanup. Do not strip outputs, re-save the notebook, clear outputs, or rewrite code cells unless the user explicitly approves that exact notebook edit.
+19. Image extraction from a completed notebook is allowed only when the extraction tool leaves the original notebook unchanged. Put result cleanup in `test/results/*.md`, `test/images/*`, or mail presets instead of mutating the completed notebook.
+20. If a follow-up needs to change a completed experiment's meaning, create the next numbered artifact set rather than repurposing the completed notebook.
 
 ## Handoff Contract
 
