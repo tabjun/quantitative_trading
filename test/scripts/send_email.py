@@ -726,6 +726,58 @@ def feature_guardrail_transition_email(commit_hash: str) -> tuple[str, str, list
     return subject, body, []
 
 
+def feature_guardrail_results_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    report_path = "test/results/12_feature_guardrail_fusion_report_20260624.md"
+    summary_image = "test/images/12_feature_guardrail_fusion_test_cell002_289.png"
+    point_image = "test/images/12_feature_guardrail_fusion_test_cell002_121.png"
+    risk_image = "test/images/12_feature_guardrail_fusion_test_cell002_122.png"
+    policy_image = "test/images/12_feature_guardrail_fusion_test_cell002_123.png"
+    body = f"""교수님 안녕하세요.
+
+12번 feature guardrail fusion 결과를 짧게 정리해서 공유드립니다.
+
+결론부터 말씀드리면, 이번 실험의 1순위는 `coin_multitimeframe_structure`입니다. 12개 feature group 중 평균 fusion MDD가 가장 좋았고, `seasonal_diff16 + Linear + seed42` 조합의 case 41에서 유일한 양의 fusion return을 냈습니다.
+
+top3만 먼저 말씀드리면 다음과 같습니다.
+
+|순위|feature group / case|핵심 수치|한 줄 해석|
+|---:|---|---|---|
+|1|`coin_multitimeframe_structure`, case 41|fusion return `+1.7899%`, fusion MDD `-0.8542%`|이번 96케이스 중 가장 좋았고, 점예측과 risk gate가 같이 맞아떨어진 케이스입니다.|
+|2|`coin_calendar_cycle`, case 68|fusion MDD `-0.4145%`, fusion return `-0.0595%`|낙폭은 가장 작았지만 거래가 4회뿐이라 안정성은 더 봐야 합니다.|
+|3|`coin_momentum_reversal`, case 28|fusion MDD `-1.0469%`, fusion return `-0.2873%`|방향성은 괜찮았지만, 평균적으로는 multi-timeframe보다 약했습니다.|
+
+대표 그림도 같이 보시면 해석이 빠릅니다.
+
+- 최종 요약 그림: {github_blob(summary_image)}
+- case 41 점예측 진단: {github_blob(point_image)}
+- case 41 risk 진단: {github_blob(risk_image)}
+- case 41 policy 진단: {github_blob(policy_image)}
+
+보고서에서는 총 96케이스를 모두 정리했고, 각 feature group별 평균과 전체 표도 넣어두었습니다.
+특히 이번 결과는 `Linear`와 `PatchTSTLike`, 그리고 `seed42`와 `seed2026`을 독립변수 자체가 아니라 재현성/우연성 검증축으로 같이 돌려본 결과입니다.
+
+다음 스텝은 두 가지입니다.
+1. `coin_multitimeframe_structure`를 데이터마트 정식 feature group 1순위 후보로 유지합니다.
+2. `text`, `cross-market`, `macro`, `on-chain`, `derivatives`는 실제 mart 컬럼 overlap이 확보되는 대로 다시 같은 방식으로 검증합니다.
+
+자세한 내용은 보고서에서 보실 수 있습니다.
+
+12번 최종 보고서:
+{github_blob(report_path)}
+
+감사합니다.
+"""
+    subject = "[시계열 연구] 12번 feature guardrail 결과 요약"
+    attachments = [
+        ROOT / report_path,
+        ROOT / summary_image,
+        ROOT / point_image,
+        ROOT / risk_image,
+        ROOT / policy_image,
+    ]
+    return subject, body, attachments
+
+
 PRESETS = {
     "simulation": simulation_email,
     "text_context": text_context_email,
@@ -738,6 +790,7 @@ PRESETS = {
     "preprocessing_uncertainty_diagnostics": preprocessing_uncertainty_diagnostics_email,
     "preprocessing_matrix_results": preprocessing_matrix_results_email,
     "feature_guardrail_transition": feature_guardrail_transition_email,
+    "feature_guardrail_results": feature_guardrail_results_email,
 }
 
 

@@ -63,6 +63,9 @@
   - 차트 매칭 결과 및 자산 곡선을 시각화하는 모듈을 개발합니다.
 - **Step 4.2: AI 상황 복기 리포트 생성기**
   - "왜 떨어지고 있으며, 과거 유사 사례에서 반등의 트리거는 무엇이었는가"를 설명하는 논리적 텍스트 리포트를 LLM을 통해 자동 생성합니다.
+- **Step 4.3: 12번 feature guardrail 결과 요약 발송 (Completed - 2026-06-25)**
+  - 12번 feature group ablation 결과를 교수님께 요약 메일로 발송하고, 본문에는 top3 수치와 대표 그림 링크를 먼저 배치해 빠르게 읽을 수 있도록 정리했습니다.
+  - 다음 단계에서는 `coin_multitimeframe_structure`를 1순위 후보로 유지한 채 text/cross-market/macro/on-chain/derivatives overlap 확보 후 재검증합니다.
 ## MCP 복구 기록
 
 - [x] `.agents/mcp_config.json`, `.codex/config.toml`, `.mcp.json`의 arXiv MCP 실행 대상을 `arxiv-mcp-server`로 맞췄다.
