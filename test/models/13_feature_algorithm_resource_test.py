@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import dataclasses
 import gc
 import importlib.util
 import json
@@ -645,7 +646,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--cost-bps", type=float, default=14.0)
     parser.add_argument("--min-signal-bps", type=float, default=3.0)
-    parser.add_argument("--case-plots", action=argparse.BooleanOptionalAction, default=True)
+    # 2026-06-28 안정화: case별 plot은 기본 OFF (출력 폭주로 인한 노트북 저장 실패 방지).
+    # 대표 그래프가 필요하면 --case-plots 로 명시적으로 켠다.
+    parser.add_argument("--case-plots", action=argparse.BooleanOptionalAction, default=False)
+    # 2026-06-28 안정화: DataLoader worker 수 (기본 0).
+    # 0이면 worker process를 띄우지 않아 /dev/shm(공유 메모리)을 전혀 쓰지 않으므로
+    # "RuntimeError: unable to allocate shared memory(shm)" 를 원천 차단한다.
+    # WSL2 등 RAM/shm이 작은 환경에서는 반드시 0을 유지한다.
+    parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--continue-on-failure", action="store_true")
     return parser.parse_known_args(argv)[0]
@@ -656,6 +664,17 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     profile = base.build_resource_profile(args.profile, args.device)
     profile, slot_details = obj.apply_parallel_resource_slot(profile, args.parallel_slot)
+    # 2026-06-28 안정화 override: slot이 정한 num_workers(예: exclusive=4)를 사용자 지정값으로 덮는다.
+    # base.make_loader 가 profile.num_workers / profile.pin_memory 를 직접 읽으므로
+    # 여기서 0으로 낮추면 모든 DataLoader가 공유 메모리를 쓰지 않는다.
+    if args.num_workers != profile.num_workers:
+        profile = dataclasses.replace(
+            profile,
+            num_workers=max(0, int(args.num_workers)),
+            pin_memory=profile.pin_memory and int(args.num_workers) > 0,
+        )
+        slot_details["num_workers_override"] = int(args.num_workers)
+        slot_details["pin_memory"] = profile.pin_memory
     base.apply_resource_profile(profile)
     environment = base.log_environment(profile)
     print("[environment]", json.dumps(environment, ensure_ascii=False, indent=2))
