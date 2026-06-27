@@ -41,4 +41,11 @@ materials/research_overview.docx
 # 에이전트 설정 및 로컬 스킬 제외
 .agents/
 
+# AI 에이전트 작업 문서 (로컬 전용)
+AGENTS.md
+CLAUDE.md
+conversation_l2_cache.md
+history.md
+process.md
+
 
