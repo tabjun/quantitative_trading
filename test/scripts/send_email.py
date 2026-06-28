@@ -825,6 +825,55 @@ text, cross-market, macro, on-chain, derivatives 같은 변수는 실제 컬럼 
     return subject, body, attachments
 
 
+def feature_algorithm_resource_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    full_report_path = "test/results/13_feature_algorithm_resource_full_captured_results_20260628.md"
+    status_report_path = "test/results/13_feature_algorithm_resource_status_report_20260627.md"
+    recovery_report_path = "test/results/13_feature_algorithm_resource_output_recovery_20260627.md"
+    body = f"""교수님 안녕하세요.
+
+13번 feature-algorithm-resource 실험의 중간 결과와 현재 상태를 공유드립니다.
+
+이번 13번은 단순 feature group 비교가 아니라, 12번에서 1순위로 올라온 multi-timeframe 변수셋을 기준으로
+feature 후보군 + 알고리즘 + 전처리 + risk gate + seed 안정성을 함께 넓게 본 공동 최적화 실험이었습니다.
+
+수행한 축은 다음과 같습니다.
+- 1단계: multi-timeframe 내부 분해
+- 2단계: feature group 확장
+- 3단계: 알고리즘 확장
+- 4단계: 전처리와 risk gate 민감도 확인
+
+확인된 핵심 결과는 다음과 같습니다.
+- 1순위 feature family는 `coin_multitimeframe_structure`였습니다.
+- 대표 top case는 `seasonal_diff16 + Linear + seed42`였고, fusion return `+1.7899%`, fusion MDD `-0.8542%`였습니다.
+- 다만 calibration collapse, gradient norm spike, shared memory/shm 에러가 함께 관찰되어 최종 leaderboard와 summary는 저장 전에 끊겼습니다.
+
+즉, 방향성은 맞았지만 아직 완주하지 못한 상태입니다.
+실행이 3~4일 걸린 뒤 서버 세션이 아웃되어 결과가 디스크에 온전히 남지 않았고,
+현재는 복원 가능한 캡처 결과와 상태 보고서를 기반으로만 정리할 수 있습니다.
+
+그래서 다음 단계는 서버에 Claude/Codex 분석 환경을 다시 붙여서,
+`num_workers`를 더 낮추고, batch/output volume을 줄이고, gradient clipping을 추가한 뒤
+13번을 재실행하는 것입니다.
+
+정리 문서:
+- full captured results: {github_blob(full_report_path)}
+- status report: {github_blob(status_report_path)}
+- output recovery note: {github_blob(recovery_report_path)}
+
+이번 메일은 13번이 어떤 실험이었는지, 결과가 어디까지 나왔는지, 그리고 왜 재실행이 필요한지를
+짧게 공유드리는 용도입니다.
+
+감사합니다.
+"""
+    subject = "[시계열 연구] 13번 feature-algorithm-resource 중간 결과 및 재실행 계획"
+    attachments = [
+        ROOT / full_report_path,
+        ROOT / status_report_path,
+        ROOT / recovery_report_path,
+    ]
+    return subject, body, attachments
+
+
 PRESETS = {
     "simulation": simulation_email,
     "text_context": text_context_email,
@@ -838,6 +887,7 @@ PRESETS = {
     "preprocessing_matrix_results": preprocessing_matrix_results_email,
     "feature_guardrail_transition": feature_guardrail_transition_email,
     "feature_guardrail_results": feature_guardrail_results_email,
+    "feature_algorithm_resource": feature_algorithm_resource_email,
 }
 
 
