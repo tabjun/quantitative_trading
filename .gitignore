@@ -41,11 +41,12 @@ materials/research_overview.docx
 # 에이전트 설정 및 로컬 스킬 제외
 .agents/
 
-# AI 에이전트 작업 문서 (로컬 전용)
-AGENTS.md
-CLAUDE.md
-conversation_l2_cache.md
-history.md
-process.md
+# AI 에이전트 작업 문서: 서버 ↔ 로컬 클로드/코덱스가 동일 지침/이력을 공유하도록 추적한다.
+# (실제 시크릿/키 값은 포함하지 않음. .env/*.key/*.ini 등은 위에서 차단됨)
+# AGENTS.md
+# CLAUDE.md
+# conversation_l2_cache.md
+# history.md
+# process.md
 
 
