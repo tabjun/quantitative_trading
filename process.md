@@ -355,3 +355,10 @@
 - [x] 캡처에 없는 전체 1440 leaderboard·feature/model 평균·final summary·full traceback은 영구 소실로 명시하고, 추정으로 채우지 않았다.
 - [x] 지침에 따라 진단 그래프 12종을 `데이터·모델 -> 축 -> 진단 목적 -> 관찰 -> 좋음/나쁨 -> 다음 반영` 형식으로 해석했다.
 - [ ] 다음 작업은 13번을 `num_workers`↓, batch↓, output량↓, suite 분리, gradient clipping 적용으로 학교 서버에서 재실행해 leaderboard·평균표·final summary를 새 결과 원본으로 복원하는 것이다. (이 표들은 재실행 외 복원 경로가 없다.)
+
+## 2026-06-28 stock / local Claude session merge
+
+- [x] `stock` 브랜치를 `origin/stock`과 병합했고, 로컬 Claude 세션에서 추가된 `/.claude/skills`, `skills-lock.json`, `send_email.py` preset을 유지하는 방향으로 정리했다.
+- [x] `history.md`와 `conversation_l2_cache.md`에는 로컬 설치 항목을 별도 로그로 남기고, 서버/로컬 구분이 보이도록 복원했다.
+- [ ] 남은 작업은 `.githooks/*` 실행 비트, 13번 notebook 메타데이터, 루트 `skills-lock.json`, `/.agents/skills/*`의 커밋 포함 여부를 결정하고 한 번에 정리하는 것이다.
+
