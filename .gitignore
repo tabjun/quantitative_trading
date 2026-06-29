@@ -1,5 +1,8 @@
 # .gitignore (루트용)
 
+# 서버 사용 시 생성될 수 있는 임시 대화 로그/작업 흔적 제외
+_chat_log.md
+
 # 가상환경 폴더 무시
 .venv/
 venv/
@@ -50,4 +53,3 @@ materials/research_overview.docx
 # conversation_l2_cache.md
 # history.md
 # process.md
-
