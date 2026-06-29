@@ -13,6 +13,7 @@ env/
 
 # 파이썬 캐시 무시
 __pycache__/
+.ipynb_checkpoints/
 *.pyc
 build/
 dist/
@@ -49,5 +50,4 @@ materials/research_overview.docx
 # conversation_l2_cache.md
 # history.md
 # process.md
-
 
