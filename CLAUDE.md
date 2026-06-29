@@ -137,6 +137,8 @@
 - 사용자가 별도 지시하지 않으면 작업 브랜치에서만 커밋/푸시한다.
 - `main` 또는 `develop` 병합은 사용자가 명시적으로 요청한 경우에만 수행한다.
 - 보고서/메일 링크는 현재 작업 브랜치 기준 링크를 사용한다.
+- 이 저장소에서 커밋/푸시가 필요하면 GitHub SSH 원격(`git@github.com:tabjun/personal_ai_project.git`)을 기본 경로로 사용한다.
+- 학교 서버나 로컬 세션에서 SSH 키 패스프레이즈가 뜨면, 현재 세션의 `ssh-agent`와 `~/.ssh/config` 설정을 우선 재사용해 반복 입력을 줄인다.
 - 메일 본문에는 rendered Markdown 보고서 링크만 넣고, commit history 링크는 넣지 않는다.
 
 ### 2.8 새 파일을 만들기 전 먼저 검색하고 재사용한다
@@ -245,6 +247,8 @@ uv run pipelines/simulate_and_send.py
 
 - 보고서나 결과물이 생성되면 자동 발송 스크립트는
   `git add`, `git commit`, `git push origin <branch>`를 수행할 수 있어야 한다.
+- 이 저장소에서 `origin`이 HTTPS로 잡혀 있으면, push 전에 GitHub SSH 원격으로 맞춘다.
+- Claude Code와 Codex CLI 모두 같은 SSH 원격과 세션 `ssh-agent`를 쓰는 것을 기준으로 문서를 읽고 동작한다.
 - 푸시 후에는 해당 Markdown 보고서를 GitHub에서 렌더링한 URL만
   메일 본문 상단에 넣는다. 커밋 히스토리 링크는 넣지 않는다.
 - 메일 본문에는 핵심 개선점과 보고서 접근 링크를 함께 넣는다.

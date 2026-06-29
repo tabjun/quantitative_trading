@@ -7,6 +7,7 @@
 
 | 날짜 | 단계 | 수행 내용 | 산출물 | 다음 목표 |
 | :--- | :--- | :--- | :--- | :--- |
+| 2026-06-29 | Git push 환경 정리 | 학교 서버/로컬 환경에서 GitHub SSH 원격을 사용해 `git commit`과 `git push`가 가능하도록 정리했다. | `origin`을 `git@github.com:tabjun/personal_ai_project.git`로 맞추고, 세션 `ssh-agent`/`~/.ssh/config`를 통해 반복 패스프레이즈 입력을 줄였다. | 다음 커밋부터는 SSH 기준으로 푸시한다. |
 | 2026-05-16 | Phase 0 | 프로젝트 기획안 분석 및 다변량 분석 구조 설계, 아키텍처 다이어그램 업데이트 | `README.md`, `process.md`, `skills.md`, `history.md` 재구성 완료 | Phase 1 (Data Mart 구축) 진입 대기 |
 | 2026-05-18 | Phase 2 / Test | 시계열 예측 모델 성능 비교 분석 수행 및 보고서 작성 | `test/1_time_series_test.ipynb`, `test/analysis_report.md`, `README.md` 업데이트 | Phase 2 (다변량 분석 엔진) 고도화 및 감성 데이터 결합 |
 | 2026-05-19 | Phase 2 / Advance | 고도화된 단변량 분석 (DuckDB 연동, TCN, XGBoost, 가중 앙상블) | `test/2_time_series_advance_test.ipynb`, `upbit_data.db` | 다변량 분석 및 뉴스 데이터 결합 |

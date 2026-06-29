@@ -360,5 +360,5 @@
 
 - [x] `stock` 브랜치를 `origin/stock`과 병합했고, 로컬 Claude 세션에서 추가된 `/.claude/skills`, `skills-lock.json`, `send_email.py` preset을 유지하는 방향으로 정리했다.
 - [x] `history.md`와 `conversation_l2_cache.md`에는 로컬 설치 항목을 별도 로그로 남기고, 서버/로컬 구분이 보이도록 복원했다.
+- [x] 학교 서버/로컬 환경에서 GitHub SSH 원격을 사용해 `git commit`과 `git push`가 가능하도록 정리했다.
 - [ ] 남은 작업은 `.githooks/*` 실행 비트, 13번 notebook 메타데이터, 루트 `skills-lock.json`, `/.agents/skills/*`의 커밋 포함 여부를 결정하고 한 번에 정리하는 것이다.
-
