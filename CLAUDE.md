@@ -217,6 +217,40 @@
 
 ---
 
+### 2.11 코드 작성 루프 규율을 따른다 (Loop Engineering Field Notes)
+
+> 출처: Karpathy, "Field Notes on Getting a Language Model to Write Code You Will Not Rewrite"
+> (https://agentskillsdev.com/courses/claude-md-field-notes). 영어 원문은 repo 최상단
+> `personal_ai_project/CLAUDE.original.md`에 보관. 코드를 쓰는 매 루프(read → think → code →
+> verify)에서 적용한다. 핵심: 모델은 "그럴듯한 코드"를 빠르게 만들지만 "그럴듯함 ≠ 정확함"을
+> 늦게 깨닫는다. 그래서 규율은 코드가 아니라 프로세스에서 나와야 한다.
+
+1. **Read Before You Write** — 손댈 파일을 훑지 말고 정독한다. 기존 패턴과 import를
+   복사해 따르고(`fetch`만 쓰는데 `axios`를 끌어오지 않는다), 패턴을 못 찾으면 추측 말고 묻는다.
+2. **Think Before You Code** — 타이핑 전에 가정과 트레이드오프를 명시한다("인증 추가"는 다섯 가지를
+   뜻하므로 고른 하나를 명명). 진짜 헷갈리면 그럴듯한 코드로 메우지 말고 멈춰서 묻는다.
+3. **Simplicity** — 지금 눈앞 문제를 푸는 최소 코드만 쓴다. 성급한 추상화·일어날 수 없는 에러 처리를
+   피하고, 진짜 이유가 생기기 전엔 하드코딩한다. "혹시 필요할까 봐"가 유일한 이유면 과설계다.
+4. **Surgical Changes** — diff는 작업이 허용하는 만큼만 작게. 안 시킨 곳은 건드리지 말고, 스타일을
+   맞추고, 리포맷하지 않는다(중요한 3줄이 무관한 300줄에 묻힌다). 모든 변경 줄을 작업으로 정당화하라.
+5. **Verification** — "도는 코드"와 "돈다고 믿는 코드" 사이를 메우는 게 테스트다. 버그 수정은
+   **실패하는 테스트를 먼저 써서 실패를 본 뒤** 고친다(원인 vs 증상 구별의 유일한 증거). 테스트가
+   어렵다는 건 설계에 대한 정보이지 건너뛰어도 된다는 허가가 아니다.
+6. **Goal-Driven Execution** — 코드 전에 성공 기준을 정한다. "검증 추가"는 "누락/형식오류 이메일을
+   400과 명확한 메시지로 거부하고 두 케이스 모두 테스트"가 된다. 다단계 작업은 계획을 먼저 말한다.
+7. **Debugging** — 깨지면 추측 말고 조사한다. 에러·스택트레이스를 끝까지 읽고, 바꾸기 전에 재현하고,
+   한 번에 하나만 바꾼다. 예상 못한 null을 null 체크로 덮지 말고 왜 null인지 찾는다(아니면 버그가
+   더 조용한 곳으로 옮겨갈 뿐).
+8. **Dependencies** — 모든 의존성은 내가 통제 못 하는 영구 코드다. 추가 전에 표준 라이브러리/기존
+   프로젝트로 되는지 본다(uuid 패키지보다 `crypto.randomUUID()`). 추가할 땐 이유를 밝힌다.
+9. **Communication** — 코드 덩어리만 던지지 말고 무엇을 왜 했는지 말한다. 시킨 대로 했어도 우려는
+   플래그하고, 불확실성은 정확히("이 라이브러리가 streaming 지원하는지 모르겠다"가 "될 것 같다"보다 낫다).
+10. **Common Failure Modes** — 반복되는 함정: *Kitchen Sink*(하는 김에 절반을 재구조화),
+    *Wrong Abstraction*(두 번 복붙 전에 추상화), *Optimistic Path*(happy path만 처리, 500 무시),
+    *Runaway Refactor*(파일을 넘나드는 연쇄 수정). 빠졌다 싶으면 밀어붙이지 말고 멈춘다.
+
+---
+
 ## 3. 실행 주체 분리
 
 ### 저장소에 남길 것
