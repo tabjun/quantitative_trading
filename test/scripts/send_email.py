@@ -874,8 +874,33 @@ feature 후보군 + 알고리즘 + 전처리 + risk gate + seed 안정성을 함
     return subject, body, attachments
 
 
+def fusion_alignment_rerun_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    report = "test/results/14_fusion_alignment_rerun_report_20260630.md"
+    variables = "test/results/12_feature_guardrail_fusion_report_20260624.md"
+    body = f"""교수님 안녕하세요. 오늘 진행 상황 간단히 보고드립니다.
+
+1. 기존 분석 코드에서 문제 3가지를 발견해 고쳤습니다.
+ - 시점 밀림(window 정렬) 오류: 가격 예측 신호와 위험 신호가 한 칸씩 어긋난 시점끼리 비교되고 있었습니다.
+ - 텍스트 데이터가 없는데도 "텍스트를 쓴 변수"처럼 잡혀 집계되던 오류.
+ - 거의 매매를 안 한 경우를 "손실을 잘 막았다"로 착각해 1등으로 뽑던 오류.
+
+2. 고친 뒤 다시 분석한 결과, 여러 변수 묶음 중 multi-timeframe(여러 시간대의 수익률·변동성·추세) 변수셋이 가장 좋았고, 기존에 1순위로 잡아둔 방향과 같았습니다.
+ - 변수셋 변수명·구성 설명: {github_blob(variables)}
+
+3. 다음 단계는 이 변수셋에 '위험 게이트'를 붙여 검증하는 것입니다.
+ - 위험 게이트: 앞으로 큰 하락·급변이 예상되면 새로 사지 않고 쉬는 안전장치입니다(가격을 맞히는 게 아니라 위험할 때 빠지는 역할).
+ - 확인 방법: 게이트를 켰을 때 최대낙폭(MDD, 고점 대비 최대 하락폭)이 줄어드는지로 봅니다. 오늘 결과에선 모든 변수셋에서 게이트가 낙폭을 줄였습니다.
+
+오늘 정리 보고서: {github_blob(report)}
+
+감사합니다."""
+    subject = "[퀀트 연구] 오늘 진행 상황 간단 보고"
+    return subject, body, []
+
+
 PRESETS = {
     "simulation": simulation_email,
+    "fusion_alignment_rerun": fusion_alignment_rerun_email,
     "text_context": text_context_email,
     "independent_variables": independent_variables_email,
     "historical_flow_mart": historical_flow_email,
