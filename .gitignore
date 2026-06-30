@@ -27,6 +27,9 @@ wheels/
 
 # VS Code 설정 무시
 .vscode/
+!.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
 resume.pdf
 
 #  [주요내용 보호] 
