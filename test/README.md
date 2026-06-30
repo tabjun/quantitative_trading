@@ -65,6 +65,19 @@
 
 ## 6. 서버 환경 구성
 
+### 기본 운영: 기존 uv venv를 재사용한다 (새로 만들지 않는다)
+
+평소 연구 실행은 새 env를 만들지 않고 서버에 이미 있는 uv venv 두 개를 그대로 재사용한다.
+
+- `quantitative_trading/.venvs/quant_uv_py312_20260614_045930` -> Python 3.12 (**기본 정합성 기준**, 단일 실험은 이것으로 통일)
+- `quantitative_trading/.venvs/quant_uv_py313_20260614_040356` -> Python 3.13
+- 두 env는 동명 Jupyter 커널로 등록되어 있어 노트북에서 바로 선택할 수 있다.
+- `11_` vs `12_`처럼 상반되는 두 실험을 **동시에 비교 실행**할 때만 3.12 + 3.13을 병렬로 쓴다(한쪽 312, 한쪽 313).
+- 평소에는 아래 bootstrap 스크립트를 돌리지 않는다. 기존 env를 `source .venvs/<env>/bin/activate`로 활성화해 쓰면 된다.
+- bootstrap은 **env가 깨졌을 때 재구축하는 용도로만** 사용한다(아래 절은 그 재구축 절차다).
+
+아래는 환경이 깨져 재구축이 필요할 때의 절차다.
+
 이 저장소는 반복되는 서버 환경 구축을 스크립트로 고정한다.
 
 - `test/scripts/bootstrap_uv_313.sh`: `uv`로 Python 3.13 환경을 새로 만들고, `uv sync`, CUDA 체크, PyTorch wheel 설치, Jupyter kernel 등록까지 한 번에 수행한다.
@@ -116,6 +129,10 @@ ENV_NAME=my_quant_313 KERNEL_NAME=my_quant_313 bash test/scripts/bootstrap_uv_31
 - smoke test가 실패하면 그 환경은 바로 쓰지 말고, 실패한 import 이름이나 CUDA 체크 메시지를 기준으로 다시 점검한다.
 
 ### 로컬 VSCode에서 학교 Jupyter 서버 커널 연결
+
+> 상태 (2026-06-30~): 이 연결 절차는 **잠시 소강**이다. 현재는 세션이 서버에서 직접 돌고 있어
+> 로컬 VSCode를 학교 Jupyter 서버에 붙일 필요가 없다. 절차는 삭제하지 않고 그대로 남겨 둔다
+> (로컬 노트북으로 다시 마이그레이션하면 재사용한다).
 
 로컬 VSCode에서는 서버의 `.venv` 경로를 직접 넣지 않고, 실행 중인 Jupyter 서버 URL로 접속한 뒤 등록된 Jupyter 커널을 선택한다.
 

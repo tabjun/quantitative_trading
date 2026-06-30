@@ -362,3 +362,11 @@
 - [x] `history.md`와 `conversation_l2_cache.md`에는 로컬 설치 항목을 별도 로그로 남기고, 서버/로컬 구분이 보이도록 복원했다.
 - [x] 학교 서버/로컬 환경에서 GitHub SSH 원격을 사용해 `git commit`과 `git push`가 가능하도록 정리했다.
 - [ ] 남은 작업은 `.githooks/*` 실행 비트, 13번 notebook 메타데이터, 루트 `skills-lock.json`, `/.agents/skills/*`의 커밋 포함 여부를 결정하고 한 번에 정리하는 것이다.
+
+## 2026-06-30 환경/실행 규칙 갱신 및 작업 방향 적대 검증
+
+- [x] codex5.5 적대 검증을 5~13번 구현 + 전략 문서 표적으로 실행하고, needs-attention 3건(12번 risk gate timestamp 미정렬, 13번 text fallback 오염, no_trade MDD 둔갑)을 확보했다. 코드 수정은 하지 않았다(review-only).
+- [x] 현재 세션이 학교 서버(GPU)에서 직접 도는 상황을 거버넌스 문서에 반영했다: `CLAUDE.md` 2.1 현재 환경 단서, 2.5 라벨 판단 단서, 2.10 가상환경 재사용 신설.
+- [x] `AGENTS.md` 1번 단서 + 8번 가상환경 재사용 신설, `test/README.md` 6장 "기존 uv venv 재사용" 블록과 VSCode 연결 소강 주석을 추가했다.
+- [x] 규칙 확정: 기본 정합성 Python 3.12, 상반 실험 동시 비교 시에만 3.12+3.13 병렬, bootstrap은 재구축 전용(스크립트 코드 미수정), 현재 시스템에서 문법·import 경량 체크 허용.
+- [ ] 다음 체크포인트: 사용자의 나머지 규칙을 마저 반영하거나, codex 지적 3건을 12번 655-959 / 13번 305-332 라인에서 직접 사실 확인한 뒤 재실행 설계로 진입한다.
