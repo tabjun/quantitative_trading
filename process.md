@@ -370,3 +370,14 @@
 - [x] `AGENTS.md` 1번 단서 + 8번 가상환경 재사용 신설, `test/README.md` 6장 "기존 uv venv 재사용" 블록과 VSCode 연결 소강 주석을 추가했다.
 - [x] 규칙 확정: 기본 정합성 Python 3.12, 상반 실험 동시 비교 시에만 3.12+3.13 병렬, bootstrap은 재구축 전용(스크립트 코드 미수정), 현재 시스템에서 문법·import 경량 체크 허용.
 - [ ] 다음 체크포인트: 사용자의 나머지 규칙을 마저 반영하거나, codex 지적 3건을 12번 655-959 / 13번 305-332 라인에서 직접 사실 확인한 뒤 재실행 설계로 진입한다.
+
+## 2026-06-30 engine/ 공용 모듈 분리 + fusion 결함 수정 (codex 3라운드)
+
+- [x] 12/13의 `load_module` 체인(13→12→{10,11}, base는 8) 코드 의존성을 끊기 위해 `quantitative_trading/engine/` 공용 패키지를 신설했다(=`test`와 같은 깊이). 8~12의 재사용 함수를 verbatim 추출(data/preprocessing/windows/models/resources/point/risk/fusion/features/display). 원본 8~13 노트북은 미수정(read-only 유지).
+- [x] codex 적대 검증으로 확인된 fusion 결함 3개를 engine에서 수정: ① decision_timestamp 정렬(point 진입봉=end→timestamp[end], risk 진입봉=end-1→timestamp[end-1])로 evaluate가 inner-join, ② 텍스트 컬럼 없으면 coin_text_context 등록 제외, ③ 활동하한(active_share≥0.05, trade_count≥5) 랭킹.
+- [x] codex 재리뷰 잔여 수정: align_point_risk 공통 헬퍼로 evaluate와 show_fusion_diagnostics가 동일 정렬 사용(그래프 꼬리절단 제거), 중복 timestamp 유니크 가드, 상대 import 전환, `__init__.py` import 계약(quantitative_trading을 sys.path 루트로 top-level import engine), risk_split 필수화.
+- [x] 검증: FULL engine import OK, toy 정렬 테스트 통과(point end=T ↔ risk end=T+1, 중복/겹침0 거부), repo root에서 cwd 독립 import 확인. (heavy run 아님, 경량 검증)
+- [x] engine 기반 교정 fusion 드라이버 `test/models/14_fusion_alignment_rerun_test.{py,ipynb}` 작성, 서버에서 스모크(3케이스)+스케일업(24케이스) 재실행.
+- [x] A: 교정 정렬·활동하한 후에도 coin_multitimeframe_structure가 fusion MDD 1위로 재확인(12 결론 유효).
+- [x] B: 점예측 폭주는 모델 특정(Linear variance_ratio 수천 폭주, PatchTSTLike ~10배 안정). 두 모델 다 persistence 미달 — 점예측 한계 확인, Defense-First 축에 무게.
+- [ ] 다음: 13을 multi-timeframe 변수셋 내부 분해/확장 + point branch PatchTST계열 채택 + risk gate 중심으로 재설계. seed 다양화·full feature group 확정 재실행. engine/14 커밋 여부 결정(현재 미커밋).
