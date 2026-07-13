@@ -25,6 +25,10 @@ detect_torch_index_url() {
     exit 1
   fi
 
+  local cuda_major cuda_minor
+  cuda_major="${cuda_version%%.*}"
+  cuda_minor="${cuda_version#*.}"
+
   case "$cuda_version" in
     12.6)
       TORCH_INDEX_URL="https://download.pytorch.org/whl/cu126"
@@ -36,10 +40,15 @@ detect_torch_index_url() {
       TORCH_INDEX_URL="https://download.pytorch.org/whl/cu121"
       ;;
     *)
-      echo "[bootstrap] Unsupported CUDA version: $cuda_version"
-      echo "[bootstrap] nvidia-smi output:"
-      nvidia-smi
-      exit 1
+      if [[ "$cuda_major" -gt 12 ]] || { [[ "$cuda_major" -eq 12 ]] && [[ "$cuda_minor" -gt 6 ]]; }; then
+        echo "[bootstrap] Driver CUDA $cuda_version has no matching PyTorch wheel yet; falling back to cu126 (driver is backward compatible)."
+        TORCH_INDEX_URL="https://download.pytorch.org/whl/cu126"
+      else
+        echo "[bootstrap] Unsupported CUDA version: $cuda_version"
+        echo "[bootstrap] nvidia-smi output:"
+        nvidia-smi
+        exit 1
+      fi
       ;;
   esac
 
