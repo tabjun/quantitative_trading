@@ -14,6 +14,25 @@ ensure_gpu_server() {
   fi
 }
 
+ensure_uv_installed() {
+  if command -v uv >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "[bootstrap] uv not found. Installing uv via https://astral.sh/uv/install.sh ..."
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+
+  # uv's installer places the binary under ~/.local/bin (or ~/.cargo/bin on older versions).
+  export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "[bootstrap] uv installation failed. Install manually and re-run this script."
+    exit 1
+  fi
+
+  echo "[bootstrap] uv installed: $(command -v uv) ($(uv --version))"
+}
+
 detect_torch_index_url() {
   local cuda_version
 

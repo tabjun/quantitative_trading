@@ -12,6 +12,7 @@ TORCHVISION_VERSION="0.25.0"
 TORCHAUDIO_VERSION="2.10.0"
 
 ensure_gpu_server
+ensure_uv_installed
 detect_torch_index_url
 print_existing_envs
 prepare_env_identity "quant_uv" "py312"
