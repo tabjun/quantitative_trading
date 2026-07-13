@@ -65,6 +65,61 @@
 
 ## 6. 서버 환경 구성
 
+### 서버 홈 디렉터리가 통째로 초기화된 경우 (최초 구성 포함)
+
+서버 재설치·컨테이너 재발급 등으로 홈 디렉터리(`~/`)가 완전히 비어 있으면(`.ssh/`만 있고
+git 저장소도 uv venv도 없는 상태), 아래 순서를 처음부터 끝까지 수행한다. 이 순서는
+새 서버를 처음 구성할 때도 동일하게 적용한다.
+
+1. **SSH 키 생성** (기존 개인키가 다른 곳에 백업되어 있지 않다면 새로 만든다)
+
+   ```bash
+   ssh-keygen -t ed25519 -C "std_jun99120-<server-name>" -f ~/.ssh/id_ed25519 -N ""
+   cat ~/.ssh/id_ed25519.pub
+   ```
+
+2. **GitHub 계정에 공개키 등록** — `https://github.com/settings/keys` → New SSH key →
+   위 `cat` 출력값 전체 붙여넣기. (리포지토리 Settings의 "Deploy keys"가 아니라
+   반드시 개인 계정 설정이다. 저장소 Settings에는 이 메뉴가 없다.)
+
+3. **ssh-agent 등록 및 인증 확인**
+
+   ```bash
+   eval "$(ssh-agent -s)"
+   ssh-add ~/.ssh/id_ed25519
+   ssh -T git@github.com
+   # "Hi <username>! You've successfully authenticated..." 확인
+   ```
+
+4. **저장소 clone**
+
+   ```bash
+   cd ~
+   git clone git@github.com:tabjun/personal_ai_project.git
+   cd personal_ai_project
+   git checkout stock
+   ```
+
+5. **uv venv 재구축** — 이 상황(env 자체가 없음)은 "env가 깨진 경우"에 해당하므로
+   bootstrap 스크립트를 그대로 사용한다(아래 "환경이 깨져 재구축이 필요할 때" 절 참고).
+
+   ```bash
+   cd ~/personal_ai_project/quantitative_trading
+   bash test/scripts/bootstrap_uv_312.sh
+   ```
+
+6. **웹 VS Code(code-server) 기동** — Claude Code 확장을 포함해 자동 설치된다.
+
+   ```bash
+   bash ~/personal_ai_project/tools/vscode/start-vscode.sh start ~/personal_ai_project/quantitative_trading
+   bash ~/personal_ai_project/tools/vscode/start-vscode.sh status
+   ```
+
+   접속 주소는 `tools/vscode/README.md`에 고정되어 있다(`https://stat5.kmu.ac.kr:9500/user/<user>/proxy/9999/`).
+7. **세션 복원** — code-server에서 Claude Code(또는 Codex)를 열고
+   `CLAUDE.md`(Codex는 `AGENTS.md`) → `process.md` → `history.md` → `conversation_l2_cache.md`
+   순서로 읽어 이전 작업 상태를 복원한 뒤 이어서 진행한다.
+
 ### 기본 운영: 기존 uv venv를 재사용한다 (새로 만들지 않는다)
 
 평소 연구 실행은 새 env를 만들지 않고 서버에 이미 있는 uv venv 두 개를 그대로 재사용한다.
