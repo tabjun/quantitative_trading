@@ -46,6 +46,8 @@
 - 이미 세션이 떠 있으면 `start`는 자동 재시작하지 않고 실패한다.
 - 상태 파일은 홈 루트가 아니라 `~/.local/state/code-server-web/status.env` 에 저장한다.
 - 확장/사용자 데이터는 `~/.local/share/code-server-web/` 아래에 저장해 `/tmp` 초기화 영향을 줄인다.
+- `~/.local/bin/code-server` 실행 파일이 없으면(서버 홈 초기화 등으로 사라진 경우) `start`가
+  공식 설치 스크립트(`code-server.dev/install.sh`, `--prefix=$HOME/.local`)로 자동 설치를 시도한 뒤 이어서 기동한다.
 
 ## 기본 복구 확장
 

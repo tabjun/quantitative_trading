@@ -106,9 +106,17 @@ start_server() {
     mkdir -p "$DATA_DIR" "$EXT_DIR" "$LOG_DIR" "$STATE_DIR"
 
     if [ ! -x "$CS_BIN" ]; then
-        write_status "missing_binary" "" "" "$requested_workdir"
         echo "code-server 실행 파일이 없습니다: $CS_BIN"
-        exit 1
+        echo "공식 설치 스크립트로 설치를 시도합니다 (prefix=\$HOME/.local)..."
+        curl -fsSL https://code-server.dev/install.sh | sh -s -- --method=standalone --prefix="$HOME/.local"
+
+        if [ ! -x "$CS_BIN" ]; then
+            write_status "missing_binary" "" "" "$requested_workdir"
+            echo "code-server 자동 설치에 실패했습니다. 수동으로 설치한 뒤 다시 실행하세요:"
+            echo "  curl -fsSL https://code-server.dev/install.sh | sh -s -- --method=standalone --prefix=\$HOME/.local"
+            exit 1
+        fi
+        echo "code-server 설치 완료: $("$CS_BIN" --version | head -n 1)"
     fi
 
     if [ ! -d "$requested_workdir" ]; then
