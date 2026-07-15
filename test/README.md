@@ -35,7 +35,9 @@
 - `10_objective_ensemble_confirmation_test.ipynb`: 9번 전처리 후보를 고정하고 방향·분산·상관·tail·regime objective와 validation-only ensemble이 persistence 미달과 collapse를 줄이는지 확인하는 본실험이다.
 - `11_distributional_capacity_diagnostics_test.ipynb`: 10번 점예측과 병렬 비교할 향후 4시간 급변·하방 위험 확률, Gaussian·Student-t·quantile 분포 예측, 보조 Double Descent를 진단한다.
 - `12_feature_guardrail_fusion_test.ipynb`: 10번 `balanced_composite` 점예측을 기본 토대로 두고, 11번 `absolute_move` 위험 확률을 guardrail로 붙인 뒤 OHLCV proxy, liquidity, volatility, order-flow proxy, multi-timeframe, shock/event, attention, text, cross-market, optional macro/on-chain/derivatives/social-dev 독립변수 조합별로 collapse 완화와 MDD 방어 가능성을 확인한다.
-- `13_feature_algorithm_resource_test.ipynb`: 12번 1순위 multi-timeframe 변수셋을 내부 분해하고, 변수 후보군·알고리즘·전처리·risk gate·seed 안정성을 서버 독점 자원 기준으로 함께 넓게 비교한다.
+- `13_feature_algorithm_resource_test.ipynb`: 12번 1순위 multi-timeframe 변수셋을 내부 분해하고, 변수 후보군·알고리즘·전처리·risk gate·seed 안정성을 서버 독점 자원 기준으로 함께 넓게 비교한다. shared memory/notebook backup 실패로 완주 전 중단됐고, 확보 가능한 결과는 `test/results/13_feature_algorithm_resource_full_captured_results_20260628.md`에 전량 옮겼다.
+- `14_fusion_alignment_rerun_test.ipynb`: 12번 fusion 코드의 결함 3건(시점 미정렬, 텍스트 둔갑, 비활동 둔갑)을 공용 엔진 `engine/`에서 교정하고 재실행한다. multi-timeframe 1위 재확인, 점예측 폭주가 Linear 모델 고유 문제임을 확인했다.
+- `15_trend_capture_defense_test.ipynb`(`.py` 드라이버 기준 헤드리스 실행): "다음 15분 수익률" 점예측이 8~14번 내내 persistence를 못 이긴 문제를 재정의해, target을 h-step 누적수익률(추세)로 바꿔 변동을 살린 예측이 가능한지 본다. objective/정규화·전처리/multi-timeframe 변수 분해/risk gate 융합을 T1~T5 단계로 비교한다. **13번 이후 실행 방식이 노트북 셀에서 헤드리스 `.py` 드라이버로 전환**됐다(서버 원격 세션 + notebook 저장 실패 교훈). 결과는 `test/results/15_trend_capture_defense_20260716/`(raw md + csv)와 `test/images/15_trend_capture_defense_20260716/`(suite별 그림)에 전량 저장된다.
 
 ## 4. 4번부터 8번까지의 연구 흐름
 
@@ -48,7 +50,9 @@
 - `10번`은 전처리만으로 해결되지 않은 학습 붕괴를 objective 구성과 seed/model ensemble 관점에서 다시 확인한다. test 결과는 모델 선택에 사용하지 않고 validation 결과만으로 ensemble 구성원을 고른다.
 - `11번`은 10번 결과를 기다리지 않고 별도 venv/kernel에서 병렬 실행할 경쟁 가설이다. 기본 연구 질문은 향후 4시간 급변·하방 위험 확률이며, Gaussian·Student-t·quantile 분포와 Double Descent는 후속·보조 suite로 둔다.
 - `12번`은 10번을 점예측 최적화 토대로 유지하고 11번을 위험 guardrail로 결합한다. 새 알고리즘 확장보다 OHLCV, 유동성, 변동성 레짐, momentum/reversal, order-flow proxy, multi-timeframe, shock/event, attention, 시간대, 선택적 텍스트·cross-market·macro·on-chain·derivatives·social-dev feature group을 넓게 비교해 어떤 독립변수군을 데이터마트로 승격할지 고른다.
-- `13번`은 12번 결과를 바탕으로 multi-timeframe 변수셋이 특정 모델·seed 우연인지 검증한다. 변수셋 내부 분해, 변수 확장, Linear/PatchTSTLike/TCN/Transformer/DLinear/NLinear/Autoformer/iTransformer/ModernTCN/Mamba 계열, 전처리, risk gate 민감도, 대형 batch resource 설정을 함께 비교한다.
+- `13번`은 12번 결과를 바탕으로 multi-timeframe 변수셋이 특정 모델·seed 우연인지 검증한다. 변수셋 내부 분해, 변수 확장, Linear/PatchTSTLike/TCN/Transformer/DLinear/NLinear/Autoformer/iTransformer/ModernTCN/Mamba 계열, 전처리, risk gate 민감도, 대형 batch resource 설정을 함께 비교한다. shared memory/notebook backup 문제로 완주 전 중단됐다.
+- `14번`은 13번을 직접 고치지 않고(완료 노트북 read-only), 12번 fusion 코드에서 발견된 결함(시점 미정렬·텍스트 둔갑·비활동 둔갑)을 공용 엔진 `engine/`에서 교정한 뒤 재실행한 검증 실험이다.
+- `15번`은 14번까지 반복된 "다음 15분 수익률 점예측이 persistence를 못 이긴다"는 한계를 하방 방어 로직으로 우회하지 않고, target을 h-step 추세로 재설계해 정면으로 다룬다. multi-timeframe 변수 분해로 신호원(추세·위치 블록)을 특정하고, risk gate는 방어층으로 유지한 채 함께 평가한다.
 - 문헌 기반 논문화 방향과 후속 알고리즘 후보는 `test/research_materials/forecasting_methodology_literature_review_20260613.md`를 본다.
 - 세부 해석은 각 노트북의 결과 셀과 `test/results/*.md` 보고서를 우선 본다.
 - 설계 메모와 참고문헌은 `test/experiment_specs/`에 둔다.

@@ -380,4 +380,30 @@
 - [x] engine 기반 교정 fusion 드라이버 `test/models/14_fusion_alignment_rerun_test.{py,ipynb}` 작성, 서버에서 스모크(3케이스)+스케일업(24케이스) 재실행.
 - [x] A: 교정 정렬·활동하한 후에도 coin_multitimeframe_structure가 fusion MDD 1위로 재확인(12 결론 유효).
 - [x] B: 점예측 폭주는 모델 특정(Linear variance_ratio 수천 폭주, PatchTSTLike ~10배 안정). 두 모델 다 persistence 미달 — 점예측 한계 확인, Defense-First 축에 무게.
-- [ ] 다음: 13을 multi-timeframe 변수셋 내부 분해/확장 + point branch PatchTST계열 채택 + risk gate 중심으로 재설계. seed 다양화·full feature group 확정 재실행. engine/14 커밋 여부 결정(현재 미커밋).
+- [x] 13을 multi-timeframe 변수셋 내부 분해/확장 + point branch PatchTST계열 채택 + risk gate 중심으로 재설계하는 대신, 사용자 방향 재정의(2026-07-16)에 따라 15번을 "추세 포착 최적화 + 방어 gate 융합"으로 재설계했다(아래 절 참고).
+
+## 2026-07-16 15번: 서버 재구축 + target 재설계(추세 포착) + T1~T5 실행 + 보고서
+
+- [x] 서버 홈 초기화로 소실된 `data/upbit_data.db`를 `pipelines/rebuild_price_mart.py`(신규, 재사용
+      가능 pipeline)로 Upbit API에서 재수집했다(KRW-BTC 15분봉 3년, 104,865행, 2023-07~2026-07).
+- [x] 사용자가 "하방 방어에만 몰두해 13번 예측 그래프가 변동 없이 평탄하다"는 문제를 지적하고,
+      방어(risk gate)는 유지하되 변동성 큰 추세 자체를 잘 예측하는 최적화·변수 구성을 다시
+      설계하라고 요청했다. 실행 방식도 원격 세션 전환에 맞춰 `.ipynb` 대신 헤드리스 `.py`
+      드라이버로 바꾸고, 전 결과를 raw md/csv/png로 저장하도록 요청했다.
+- [x] `test/experiment_specs/15_trend_capture_defense_plan_20260716.md`(기존 06-30 계획서를
+      대체하는 개정판)와 `test/models/15_trend_capture_defense_test.{py,ipynb}`를 작성했다.
+      target을 "다음 15분 수익률"에서 h-step 누적수익률(추세)로 바꾸고, T1 horizon screen →
+      T2 objective → T3 정규화/전처리 → T4 mtf 변수 분해 → T5 risk gate 융합 5단계로 설계했다.
+- [x] 서버에서 T1~T5 전 suite를 순차 실행했다(실패 케이스 0). h=16(4시간)이 오차·방향·변동
+      보존의 균형점으로 확정됐고, ITransformerLike+huber+seasonal_diff16+window_standard
+      조합에서 처음으로 "평탄화도 폭주도 아닌" 예측(variance_ratio 0.36, trend_corr 0.07)을
+      확보했다. T4에서 mtf 우위의 원천이 `mtf_trend`(추세·위치) 블록임을 특정했다. T5에서
+      risk gate가 추세 정책 위에서도 MDD를 47% 줄였으나(36/36 활동하한 통과), 어떤 조합도
+      절대수익은 아직 음수(신호가 거래비용을 못 이김)라는 한계를 정직하게 확인했다.
+- [x] `test/results/15_trend_capture_defense_20260716/`(suite별 raw md + leaderboard csv)와
+      `test/images/15_trend_capture_defense_20260716/`(suite별 그림)에 전 결과를 저장했다.
+      matplotlib 한글 폰트(Noto Sans CJK KR) 미설정으로 첫 T5 그림이 깨져 재실행으로 교정했다.
+- [x] `test/results/15_trend_capture_defense_report_20260716.md` 독립 보고서를 작성했다.
+- [ ] 다음 체크포인트: `test/README.md`/`history.md`/`conversation_l2_cache.md` 갱신 마무리,
+      `test/scripts/send_email.py`에 15번 preset 추가, 커밋/푸시. 이후 신호 강화(전체 3년
+      stride 1, tail 가중 강화, quantile 예측, seed ensemble)와 다자산 검증을 16번 후보로 검토.

@@ -11,6 +11,7 @@ Usage examples:
     python test/scripts/send_email.py --preset breadth_expansion_interpretation
     python test/scripts/send_email.py --preset preprocessing_matrix_results
     python test/scripts/send_email.py --preset feature_guardrail_transition
+    python test/scripts/send_email.py --preset trend_capture_defense
 """
 
 from __future__ import annotations
@@ -898,9 +899,49 @@ def fusion_alignment_rerun_email(commit_hash: str) -> tuple[str, str, list[Path]
     return subject, body, []
 
 
+def trend_capture_defense_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    report_path = "test/results/15_trend_capture_defense_report_20260716.md"
+    body = f"""교수님 안녕하세요. 15번 실험 결과 간단히 보고드립니다.
+
+1. 왜 다시 설계했는지
+ - 13번까지는 "다음 15분" 가격을 맞히려 했는데, 15분 뒤는 사실상 랜덤워크에 가까워 어떤 모델도
+   "그냥 직전 값을 그대로 쓴다"는 가장 단순한 기준선을 못 이겼습니다. 그 결과 예측이 방향성 없이
+   평평해지거나(방어에는 유리해 보이지만 예측으로선 의미 없음), 반대로 분산이 실제보다 수천 배
+   요동치는 식으로 붕괴했습니다.
+ - 그래서 이번에는 "다음 15분"이 아니라 "앞으로 4시간 동안의 누적 변화(추세)"를 맞히도록 목표
+   자체를 바꿨습니다. 위험을 피하는 안전장치(risk gate)는 그대로 유지한 채, 추세를 잘 잡는
+   모델·손실함수·변수 구성을 다시 찾는 데 집중했습니다.
+
+2. 확인된 핵심 결과
+ - 목표를 4시간 추세로 바꾸자, 처음으로 "예측이 죽지도(평평해지지도) 폭주하지도 않는" 상태를
+   확보했습니다. 큰 변동이 있었던 구간만 따로 보면 방향을 맞춘 비율이 51~52%로, 단순히
+   "오르던 추세가 계속된다"고 가정하는 것(46~47%)보다 조금 더 나았습니다.
+ - 어떤 변수가 이 신호를 만드는지도 특정했습니다. 여러 시간대(1시간~16시간)의 추세 위치를
+   보여주는 변수 묶음이 핵심이었고, 단순 수익률이나 거래량 변수만으로는 신호가 없었습니다.
+ - 위험 회피 안전장치(risk gate)는 이번에도 확실히 작동했습니다. 급락 구간에서 매수를 미리
+   차단해 최대 낙폭을 평균 33%에서 18%로, 절반 가까이 줄였습니다.
+ - 다만 아직 한계도 있습니다. 신호가 약해서 거래 비용을 이기지 못해 절대 수익은 여전히
+   마이너스입니다. 낙폭을 줄이는 방어 효과는 확실하지만, 수익으로 전환하는 것은 다음 과제입니다.
+
+3. 다음 단계
+ - 학습 데이터를 더 넓게 쓰고, 큰 변동 구간에 가중치를 더 주는 손실함수, 여러 시드 앙상블로
+   신호 자체를 강화하는 것이 다음 목표입니다. 다른 코인으로도 같은 변수 조합이 통하는지
+   확인할 계획입니다.
+
+전체 결과 보고서: {github_blob(report_path)}
+
+이번 실험부터는 노트북 대신 파이썬 스크립트로 직접 실행하고, 모든 수치·그래프를 결과 폴더에
+자동 저장하는 방식으로 바꿔 재현과 추적이 더 쉬워졌습니다.
+
+감사합니다."""
+    subject = "[퀀트 연구] 15번: 방어 중심에서 추세 포착 + 방어 융합으로 방향 전환 결과"
+    return subject, body, [ROOT / report_path]
+
+
 PRESETS = {
     "simulation": simulation_email,
     "fusion_alignment_rerun": fusion_alignment_rerun_email,
+    "trend_capture_defense": trend_capture_defense_email,
     "text_context": text_context_email,
     "independent_variables": independent_variables_email,
     "historical_flow_mart": historical_flow_email,
