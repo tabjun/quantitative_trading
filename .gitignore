@@ -32,7 +32,7 @@ wheels/
 !.vscode/extensions.json
 resume.pdf
 
-#  [주요내용 보호] 
+#  [주요내용 보호]
 !materials/
 !materials/quant_architecture.png
 materials/research_overview.docx
@@ -44,6 +44,7 @@ materials/research_overview.docx
 *.xls*
 *.jpeg
 *.docx
+*.pptx
 
 # 에이전트 설정 및 로컬 스킬 제외
 .agents/
