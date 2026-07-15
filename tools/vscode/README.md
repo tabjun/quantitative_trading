@@ -66,3 +66,44 @@
 - `quantitative_trading/.vscode/extensions.json`
 
 프로젝트별 VS Code 기본값은 위 두 파일이 담당하고, 이 디렉터리의 스크립트는 웹 VS Code 서버 수명주기를 담당한다.
+
+## 외부 접속 경로 (2026-07-16 갱신)
+
+`start-vscode.sh`가 code-server를 `127.0.0.1:9999`에 띄워도, 외부에서 그걸 어떻게 열지는 별도 문제다. 이 서버(stat5)는 방화벽이 **22번(SSH) 인바운드를 완전히 막아둔다** (`Connection timed out` 확인됨) — 로컬 PC에서 `ssh -L 9999:...`로 붙는 SSH 터널 방식은 이 환경에서 쓸 수 없다.
+
+### 방법 A: JupyterHub proxy URL (브라우저만 사용)
+
+`https://stat5.kmu.ac.kr:9500/user/<user>/proxy/9999/` 로 접속하는 방식. 이건 JupyterHub의 `jupyter_server_proxy` extension이 있어야 동작하는데, 공유 환경(`/opt/jupyterhub`, root:root, 쓰기 불가)에는 기본으로 안 깔려 있다. **admin 권한 없이** 홈 디렉터리에만 설치해서 우회한다:
+
+```bash
+pip install --target="$HOME/.local/lib/jupyter-ext-libs" jupyter-server-proxy
+```
+
+`~/.jupyter/jupyter_server_config.py`:
+```python
+import os, sys
+_EXTRA_LIB = os.path.expanduser("~/.local/lib/jupyter-ext-libs")
+if _EXTRA_LIB not in sys.path:
+    sys.path.append(_EXTRA_LIB)  # append, not insert(0) — 기존 시스템 패키지를 항상 우선시켜서 버전 충돌을 피한다
+c.ServerApp.jpserver_extensions = {"jupyter_server_proxy": True}
+```
+
+이 설정은 JupyterHub singleuser 서버가 **다시 시작될 때만** 반영된다. 이미 떠 있는 세션이면 브라우저에서 `File > Hub Control Panel` (또는 `https://stat5.kmu.ac.kr:9500/hub/home`) → **Stop My Server → Start My Server**로 재시작해야 한다. 이 파일들은 `~/` 안에만 있어서 서버 홈이 다시 초기화되면 같이 사라진다 — 그때는 이 절을 그대로 다시 수행하면 된다.
+
+### 방법 B: VS Code Remote Tunnels (로컬 VS Code Desktop 직결, SSH 불필요)
+
+Microsoft 공식 VS Code CLI의 터널 기능. 서버가 아웃바운드로 Microsoft 릴레이에 연결하기 때문에 인바운드 22번이 막혀 있어도 동작한다. `code-server`(Coder 배포판)와는 별개의 바이너리다.
+
+```bash
+mkdir -p ~/.local/lib/vscode-cli && cd ~/.local/lib/vscode-cli
+curl -L "https://update.code.visualstudio.com/latest/cli-linux-x64/stable" -o vscode-cli.tar.gz
+tar -xzf vscode-cli.tar.gz
+ln -sf ~/.local/lib/vscode-cli/code ~/.local/bin/code
+
+nohup ~/.local/bin/code tunnel --accept-server-license-terms --name stat5-quant \
+  > ~/.local/share/code-server-web/logs/vscode-tunnel.log 2>&1 &
+```
+
+로그(`tail -f ~/.local/share/code-server-web/logs/vscode-tunnel.log`)에 `https://github.com/login/device`와 1회용 코드가 나오면, 그 URL에 로그인해서 코드를 입력하고 승인한다. 로그인이 끝나면 `code tunnel status`가 `"tunnel":"Connected"`를 보여준다. 로컬 VS Code Desktop에 **"Remote - Tunnels"** 확장을 설치하고 같은 GitHub 계정으로 로그인하면 터널 목록에서 `stat5-quant`를 선택해 바로 붙을 수 있다.
+
+지속적으로 띄워두려면 `code tunnel service install`로 서비스 등록도 가능하다(아직 이 저장소 스크립트로 자동화하지 않음).
