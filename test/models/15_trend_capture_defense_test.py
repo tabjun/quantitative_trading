@@ -94,7 +94,92 @@ EXPERIMENT_TAG = "15_trend_capture_defense_20260716"
 RESULTS_DIR = ROOT / "test" / "results" / EXPERIMENT_TAG
 IMAGES_DIR = ROOT / "test" / "images" / EXPERIMENT_TAG
 
-# 14번 결론: Linear는 분산 폭주가 모델 고유 결함 -> 배제.
+# ---------------------------------------------------------------------------
+# 판독 가이드: 각 suite가 "무엇을 왜 비교하는가"와 각 지표의 의미.
+# raw md 상단에 자동으로 찍혀서, 결과 숫자만 보고도 무슨 실험인지 알 수 있게 한다.
+# (사용자 요청 2026-07-16: horizon/objective/nonstationarity 등 축이 뭔지 프롬프트·
+#  결과 단에서 설명이 있어야 한다.)
+# ---------------------------------------------------------------------------
+
+SUITE_INTENT: dict[str, dict[str, str]] = {
+    "t1_horizon": {
+        "name": "예측 지평(horizon) 스크린",
+        "fix": "변수셋·전처리·정규화·objective를 고정한다.",
+        "vary": "예측 대상 기간 h(1·4·16·64봉 = 15분·1시간·4시간·16시간)와 모델을 바꾼다.",
+        "question": "몇 봉 앞을 맞히려 할 때 신호가 가장 잘 잡히는가? (짧을수록 랜덤워크에 가까움)",
+        "read": "mae_zero_ratio가 1에 가까워질수록, mase_momentum이 작을수록 그 h가 예측 가능.",
+    },
+    "t2_objective": {
+        "name": "손실함수(objective) 스크린",
+        "fix": "h=16, 변수셋·전처리·정규화를 고정한다.",
+        "vary": "손실함수 종류(huber·방향강조·분산강조·상관강조·tail강조·regime·anti_collapse)를 바꾼다.",
+        "question": "어떤 벌점 기준으로 학습해야 추세를 살리면서 평탄화·폭주를 피하는가?",
+        "read": "trend_corr가 높고 variance_ratio가 건강(0.05~20) 구간이면 좋은 objective.",
+    },
+    "t3_nonstationarity": {
+        "name": "비정상성(nonstationarity) 처리 스크린",
+        "fix": "h=16, 변수셋·objective·모델을 고정한다.",
+        "vary": "정규화(window_standard/robust/asinh_revin) × 전처리(seasonal_diff16/winsor_025/none)를 바꾼다.",
+        "question": "비정상 시계열을 어떤 안정화 조합으로 넣어야 추세 신호가 안 죽는가?",
+        "read": "trend_corr 보존 + variance_ratio 건강이 동시에 되는 조합이 우수.",
+    },
+    "t4_feature": {
+        "name": "multi-timeframe 변수 분해",
+        "fix": "h=16, 우승 모델·objective·전처리를 고정한다.",
+        "vary": "mtf 변수셋을 하위 블록(returns/volatility/trend/volume_range)과 확장(+momentum 등)으로 쪼갠다.",
+        "question": "12·14번에서 확인된 mtf 우위가 실제로 어느 하위 블록에서 나오는가?",
+        "read": "특정 블록만으로도 trend_corr·large_move_da가 유지되면 그 블록이 신호원.",
+    },
+    "t5_gate_fusion": {
+        "name": "risk gate 방어 융합",
+        "fix": "추세 예측(우승 구성)을 고정한다.",
+        "vary": "risk gate 공격성(none/0.45/0.55/0.65)을 얹어 급변 구간 매수를 차단한다.",
+        "question": "방어층(risk gate)이 추세 정책 위에서도 MDD를 실제로 줄이는가? 노출 대비 트레이드오프는?",
+        "read": "gate를 켤수록 MDD가 0에 가까워지면 방어 작동. 단 active_share/trade_count 하한 통과분만 비교.",
+    },
+    "t6_signal_boost": {
+        "name": "신호 강화 — seed ensemble + 데이터 규모",
+        "fix": "우승 h·objective·전처리·정규화·변수셋을 고정한다.",
+        "vary": "seed(여러 개) 평균 앙상블 여부와 학습 데이터 규모(max_windows/stride)를 바꾼다.",
+        "question": "seed 평균과 더 많은 데이터로 trend_corr/large_move_da가 실제로 오르는가?",
+        "read": "ensemble_* 행의 trend_corr가 단일 seed 평균보다 높으면 신호 강화 성공. 안 오르면 예측축 한계.",
+    },
+    "t7_amplitude": {
+        "name": "진폭 교정 — tail 가중 + 분산 보존",
+        "fix": "우승 h·정규화·변수셋을 고정한다.",
+        "vary": "tail 가중 손실과 분산 보존 objective, 전처리를 바꿔 진폭 과소예측을 교정한다.",
+        "question": "variance_ratio를 0.36에서 1 근처로 끌어올리면서 trend_corr를 유지할 수 있는가?",
+        "read": "variance_ratio가 1에 가까워지고 large_move_da가 오르면 큰 변동 포착 개선.",
+    },
+    "t8_multiasset": {
+        "name": "다자산 일반화",
+        "fix": "우승 구성(모델·objective·전처리·h)을 고정한다.",
+        "vary": "대상 종목(KRW-BTC/ETH/XRP/SOL)을 바꾼다.",
+        "question": "같은 구성의 신호가 BTC 전용인가, 다른 코인에도 일반화되는가?",
+        "read": "여러 종목에서 trend_corr가 함께 양수면 신호가 구조적. 한 종목만이면 우연·과적합 의심.",
+    },
+}
+
+METRIC_GLOSSARY: list[tuple[str, str]] = [
+    ("mae_return", "예측 h-step 누적수익률의 평균절대오차. 낮을수록 좋지만 절대값만으로는 판단 불가(아래 비율로 봄)."),
+    ("mae_zero_ratio", "예측 오차 ÷ '항상 0(random-walk)으로 예측' 오차. <1이면 랜덤워크 기준선을 이긴 것, ≥1이면 못 이긴 것."),
+    ("mase_momentum", "예측 오차 ÷ '직전 h봉 추세가 지속된다고 가정' 오차. <1이면 단순 추세지속 기준선을 이긴 것."),
+    ("trend_corr", "예측 vs 실제 h-step 수익률의 Pearson 상관. 0=무상관, 높을수록 추세 방향·크기 동조. 금융 시계열에선 0.1도 유의미."),
+    ("r2", "결정계수(설명력). 0 이상이어야 평균 예측보다 나음. 음수면 '그냥 평균/0을 찍는 것보다 못하다'는 뜻."),
+    ("direction_accuracy", "전체 구간 방향(부호) 정확도. 0.5=동전던지기."),
+    ("large_move_da", "|실제 수익률| 상위 25%(큰 변동) 구간의 방향 정확도. 사용자가 중시하는 '큰 변동 포착력'. 0.5 초과면 우위."),
+    ("variance_ratio", "예측분산 ÷ 실제분산. ≪0.1=평탄화(변동 죽음), ≫20=폭주, 0.05~20을 healthy로 판정. 1 근처가 이상적."),
+    ("copy_risk_krw", "KRW 스케일 MAE ÷ persistence(직전값) MAE. <1이면 직전값 복사보다 우수."),
+    ("healthy_variance", "variance_ratio가 0.05~20 안에 있으면 True. 평탄화/폭주 둘 다 아님."),
+    ("qualified", "(T5) active_share≥하한 && trade_count≥하한. '거의 거래 안 해서 MDD가 좋아 보이는' 케이스를 우승에서 제외."),
+    ("mdd", "(T5) 최대낙폭. 자산곡선이 고점 대비 가장 많이 빠진 비율. 0에 가까울수록 방어 우수."),
+]
+
+# 14번은 Linear 분산 폭주를 "모델 고유 결함"으로 배제했으나, 사후 감사
+# (test/results/15_direction_audit_10_to_14_20260716.md)에서 그 폭주가 12번 대비 1/20 규모
+# (12k행/2048윈도우) 재실행의 아티팩트일 가능성이 확인됐다. 12번 40k행에서는 같은 Linear가
+# copy_risk≈1.06으로 정상이었다. 따라서 기본 스크린에는 Linear를 넣지 않되(폭주 위험 회피),
+# T6/T7 신호 강화에서는 CLI로 Linear를 복권해 규모를 맞춘 재검증을 허용한다.
 DEFAULT_MODELS = "PatchTSTLike,DLinearLike,NLinearLike,TCN,ModernTCNLike,ITransformerLike"
 DEFAULT_OBJECTIVES = (
     "huber,balanced_composite,directional_huber,variance_huber,"
@@ -126,7 +211,8 @@ MTF_EXPANSIONS = {
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="15번 추세 포착 + 방어 융합 실험")
     parser.add_argument("--suite", required=False, default="t1_horizon",
-                        choices=["t1_horizon", "t2_objective", "t3_nonstationarity", "t4_feature", "t5_gate_fusion"])
+                        choices=["t1_horizon", "t2_objective", "t3_nonstationarity", "t4_feature", "t5_gate_fusion",
+                                 "t6_signal_boost", "t7_amplitude", "t8_multiasset"])
     parser.add_argument("--db", default=None)
     parser.add_argument("--table", default="btc_15m_advance")
     parser.add_argument("--ticker", default=None)
@@ -170,6 +256,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--train-ratio", type=float, default=0.70)
     parser.add_argument("--val-ratio", type=float, default=0.15)
     parser.add_argument("--cross-tickers", default="")
+    # 신호 강화 (T6~T8)
+    parser.add_argument("--ensemble-seeds", default="42,7,123,2026",
+                        help="T6 seed ensemble에 쓸 seed들. 이 seed들의 예측을 평균해 신호를 강화한다.")
+    parser.add_argument("--tickers", default="KRW-BTC,KRW-ETH,KRW-XRP,KRW-SOL",
+                        help="T8 다자산 일반화 대상. 각 종목에 우승 구성을 그대로 적용한다.")
+    parser.add_argument("--ticker-tables", default="",
+                        help="T8용 'KRW-ETH:eth_15m_advance,...' 매핑. 종목별 테이블이 다를 때 지정. "
+                             "미지정 종목은 --table을 그대로 쓴다. (다종목 수집: pipelines/rebuild_price_mart.py)")
     # 정책/gate 평가 (T5)
     parser.add_argument("--cost-bps", type=float, default=14.0)
     parser.add_argument("--policy-entry-bps", type=float, default=20.0)
@@ -543,20 +637,36 @@ def save_raw_report(
         json.dumps(statistics, ensure_ascii=False, indent=2, default=str),
         "```",
         "",
-        "## 지표 읽는 법 (요약)",
-        "",
-        "- `mae_zero_ratio` < 1 이면 \"0 예측(random-walk)\" 기준선을 이긴 것.",
-        "- `mase_momentum` < 1 이면 \"직전 h봉 추세 지속\" 기준선을 이긴 것.",
-        "- `trend_corr`: 예측 vs 실제 h-step 수익률 Pearson 상관 (높을수록 추세 포착).",
-        "- `large_move_da`: |실제 수익률| 상위 25% 구간의 방향 정확도 (변동 큰 구간 포착력).",
-        "- `variance_ratio`: 예측분산/실제분산. ≪0.1 평탄화, ≫10 폭주, 0.05~20만 건강 판정.",
-        "- `copy_risk_krw`: KRW 스케일 MAE / persistence MAE. 1 미만이면 persistence보다 우수.",
-        "",
-        "## 전체 leaderboard",
-        "",
-        frame_to_markdown(leaderboard),
-        "",
     ]
+    intent = SUITE_INTENT.get(suite)
+    if intent:
+        lines.extend(
+            [
+                f"## 이 suite가 보는 것 — {intent['name']}",
+                "",
+                f"- **고정**: {intent['fix']}",
+                f"- **변화**: {intent['vary']}",
+                f"- **질문**: {intent['question']}",
+                f"- **읽는 법**: {intent['read']}",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "## 지표 사전 (각 컬럼이 무엇인가)",
+            "",
+        ]
+    )
+    lines.extend([f"- `{name}`: {desc}" for name, desc in METRIC_GLOSSARY])
+    lines.extend(
+        [
+            "",
+            "## 전체 leaderboard",
+            "",
+            frame_to_markdown(leaderboard),
+            "",
+        ]
+    )
     for title, body in extra_sections:
         lines.extend([f"## {title}", "", body, ""])
     if failures:
@@ -836,6 +946,226 @@ def run_gate_fusion_suite(args, features, cache, profile, environment, statistic
 
 
 # ---------------------------------------------------------------------------
+# 신호 강화 suite (T6~T8): 예측 신호 자체를 끌어올린다.
+#   - 사용자 방향 경고(2026-07-16): 예측 튜닝을 무한 반복하지 말 것. 이 세 suite로
+#     "예측축을 더 밀면 신호가 오르는가"를 확인하고, 안 오르면 LLM 융합 축으로 넘어간다.
+#     (전환 조건은 계획서 15_trend_capture_defense_plan_20260716.md에 명시.)
+# ---------------------------------------------------------------------------
+
+def _base_case(args: argparse.Namespace, **override) -> dict[str, object]:
+    case = {
+        "suite": args.suite,
+        "feature_set": split_list(args.feature_sets)[0],
+        "model": split_list(args.models)[0],
+        "objective": args.objective,
+        "preprocessing": args.preprocessing,
+        "normalization": args.normalization,
+        "horizon": args.horizon,
+        "seed": int(split_list(args.seeds)[0]),
+    }
+    case.update(override)
+    return case
+
+
+def run_signal_boost_suite(args, features, cache, profile, environment, statistics) -> pd.DataFrame:
+    """T6: 같은 우승 구성을 여러 seed로 학습해, 단일 seed 대비 seed 평균 앙상블이 신호를 올리는지 본다.
+
+    각 (model) 별로: seed별 단일 결과 + 그 seed 예측을 평균한 ensemble 결과를 나란히 남긴다.
+    데이터 규모 효과는 --max-windows/--stride를 CLI로 바꿔 회차를 나눠 비교한다(silent 확장 금지).
+    """
+    ensemble_seeds = [int(s) for s in split_list(args.ensemble_seeds)]
+    models = split_list(args.models)
+    print(f"[plan] suite=t6_signal_boost models={models} ensemble_seeds={ensemble_seeds}")
+    if args.dry_run:
+        return pd.DataFrame()
+
+    rows: list[dict[str, object]] = []
+    failures: list[dict[str, object]] = []
+    overlay_saved = False
+    for model in models:
+        seed_preds: list[np.ndarray] = []
+        test_split_ref: dict[str, np.ndarray] | None = None
+        single_metrics: list[dict[str, float]] = []
+        for seed in ensemble_seeds:
+            case = _base_case(args, model=model, seed=seed)
+            print(f"\n[t6 single] {model} seed={seed}")
+            try:
+                result, artifacts = run_trend_case(case, cache, profile, args)
+                rows.append({**result, "member": f"seed{seed}", "is_ensemble": False})
+                single_metrics.append(result)
+                seed_preds.append(np.asarray(artifacts["test_pred"], dtype=np.float64))
+                test_split_ref = artifacts["splits"]["test"]
+            except Exception as exc:  # noqa: BLE001
+                if not args.continue_on_failure:
+                    raise
+                failures.append({"model": model, "seed": seed, "error": str(exc)})
+                print(f"[t6 failed] {exc}")
+            finally:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                gc.collect()
+
+        if len(seed_preds) >= 2 and test_split_ref is not None:
+            ensemble_pred = np.mean(np.stack(seed_preds), axis=0)
+            ens = trend_metrics(test_split_ref, ensemble_pred)
+            single_corr = float(np.mean([m["trend_corr"] for m in single_metrics]))
+            single_lda = float(np.mean([m["large_move_da"] for m in single_metrics]))
+            row = {
+                **_base_case(args, model=model, seed=-1),
+                **ens,
+                "member": f"ensemble({len(seed_preds)})",
+                "is_ensemble": True,
+                "single_mean_trend_corr": single_corr,
+                "single_mean_large_move_da": single_lda,
+                "ensemble_corr_gain": ens["trend_corr"] - single_corr,
+                "ensemble_lda_gain": ens["large_move_da"] - single_lda,
+            }
+            rows.append(row)
+            print(f"[t6 ensemble] {model} corr {single_corr:.4f}->{ens['trend_corr']:.4f} "
+                  f"lda {single_lda:.4f}->{ens['large_move_da']:.4f}")
+            if not overlay_saved:
+                save_overlay_figure(
+                    args.suite, f"ensemble_{model}",
+                    {"test_pred": ensemble_pred, "test_actual": test_split_ref["y"],
+                     "test_past": test_split_ref["past_return"], "test_ts": test_split_ref["decision_timestamp"]},
+                    _base_case(args, model=model, seed=-1),
+                )
+                overlay_saved = True
+
+    if not rows:
+        print("[warn] 성공한 t6 구성이 없다.")
+        return pd.DataFrame()
+    leaderboard = pd.DataFrame(rows)
+    save_metric_bars(args.suite, leaderboard, "member", ["trend_corr", "large_move_da", "variance_ratio"])
+    ens_only = leaderboard[leaderboard["is_ensemble"]]
+    extra = []
+    if not ens_only.empty:
+        extra.append(("seed ensemble 이득 (음수면 강화 실패)",
+                      frame_to_markdown(ens_only[["model", "single_mean_trend_corr", "trend_corr",
+                                                  "ensemble_corr_gain", "ensemble_lda_gain"]].round(4))))
+    save_raw_report(args.suite, args, environment, statistics, leaderboard.round(6), failures, extra)
+    return leaderboard
+
+
+def run_amplitude_suite(args, features, cache, profile, environment, statistics) -> pd.DataFrame:
+    """T7: tail 가중·분산 보존 objective와 전처리를 바꿔 진폭 과소예측(variance_ratio≈0.36)을 교정한다.
+
+    핵심 지표는 variance_ratio(1에 가까워지는가)와 large_move_da(큰 변동 방향을 더 맞히는가)다.
+    trend_corr가 함께 유지돼야 '분산만 키운 잡음'이 아니다.
+    """
+    objectives = split_list(args.objectives)
+    preprocessings = split_list(args.preprocessings)
+    models = split_list(args.models)
+    cases = [
+        _base_case(args, model=m, objective=o, preprocessing=p)
+        for m in models for o in objectives for p in preprocessings
+    ]
+    print(f"[plan] suite=t7_amplitude cases={len(cases)}")
+    print(pd.DataFrame(cases).to_string(index=False))
+    if args.dry_run:
+        return pd.DataFrame()
+
+    rows, failures = [], []
+    kept: dict[int, tuple[dict[str, object], dict[str, object]]] = {}
+    for index, case in enumerate(cases, start=1):
+        print(f"\n[t7 {index}/{len(cases)}] {case['model']} obj={case['objective']} prep={case['preprocessing']}")
+        try:
+            result, artifacts = run_trend_case(case, cache, profile, args)
+            rows.append(result)
+            kept[len(rows) - 1] = (case, {k: artifacts[k] for k in ("test_pred", "test_actual", "test_past", "test_ts")})
+        except Exception as exc:  # noqa: BLE001
+            if not args.continue_on_failure:
+                raise
+            failures.append({"case": case, "error": str(exc)})
+            print(f"[t7 failed] {exc}")
+        finally:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+
+    if not rows:
+        print("[warn] 성공한 t7 구성이 없다.")
+        return pd.DataFrame()
+    frame = pd.DataFrame(rows)
+    # 진폭 목표: variance_ratio가 1에 가장 가까우면서 trend_corr>0 인 케이스 우선.
+    frame["amp_gap"] = (frame["variance_ratio"] - 1.0).abs()
+    ranked = frame.sort_values(["amp_gap", "trend_corr"], ascending=[True, False]).reset_index(drop=True)
+    save_metric_bars(args.suite, ranked, "objective", ["variance_ratio", "large_move_da", "trend_corr"])
+    save_metric_bars(args.suite, ranked, "preprocessing", ["variance_ratio", "large_move_da"])
+    for tag, pos in (("best_amp", 0), ("worst_amp", len(ranked) - 1)):
+        target = ranked.iloc[pos]
+        original = frame[(frame["model"] == target["model"]) & (frame["objective"] == target["objective"])
+                         & (frame["preprocessing"] == target["preprocessing"])]
+        if not original.empty:
+            case, art = kept[int(original.index[0])]
+            save_overlay_figure(args.suite, tag, art, case)
+    extra = [("진폭 교정 순위 (variance_ratio가 1에 가까울수록 상단)",
+              frame_to_markdown(ranked[["model", "objective", "preprocessing", "variance_ratio",
+                                        "trend_corr", "large_move_da", "amp_gap"]].head(12).round(4)))]
+    save_raw_report(args.suite, args, environment, statistics, ranked.round(6), failures, extra)
+    return ranked
+
+
+def run_multiasset_suite(args, features, cache, profile, environment, statistics) -> pd.DataFrame:
+    """T8: 우승 구성을 종목마다 그대로 적용해 신호가 BTC 전용인지 일반적인지 본다.
+
+    각 종목은 독립적으로 데이터 로드→feature→윈도우를 다시 만든다(캐시는 종목별로 분리).
+    features/cache 인자는 첫 종목(호출부에서 로드된 것)용이며, 여기서 종목별로 재로딩한다.
+    """
+    tickers = split_list(args.tickers)
+    model = split_list(args.models)[0]
+    table_map: dict[str, str] = {}
+    for pair in split_list(args.ticker_tables):
+        if ":" in pair:
+            tkr, tbl = pair.split(":", 1)
+            table_map[tkr.strip()] = tbl.strip()
+    print(f"[plan] suite=t8_multiasset tickers={tickers} model={model} table_map={table_map}")
+    if args.dry_run:
+        return pd.DataFrame()
+
+    rows, failures = [], []
+    for ticker in tickers:
+        table = table_map.get(ticker, args.table)
+        print(f"\n[t8 ticker] {ticker} (table={table})")
+        try:
+            ticker_args = argparse.Namespace(**vars(args))
+            ticker_args.ticker = ticker
+            ticker_args.table = table
+            tfeatures, tgroups, _ = engfeat.load_feature_frame(ticker_args)
+            register_custom_feature_sets(tfeatures, tgroups)
+            tcache = WindowCache(tfeatures, ticker_args)
+            case = _base_case(args, model=model)
+            result, artifacts = run_trend_case(case, tcache, profile, ticker_args)
+            rows.append({**result, "ticker": ticker, "rows": int(len(tfeatures))})
+            save_overlay_figure(
+                args.suite, f"{ticker.replace('-', '_')}",
+                {k: artifacts[k] for k in ("test_pred", "test_actual", "test_past", "test_ts")}, case,
+            )
+            print(f"[t8] {ticker}: trend_corr={result['trend_corr']:.4f} large_move_da={result['large_move_da']:.4f}")
+        except Exception as exc:  # noqa: BLE001
+            if not args.continue_on_failure:
+                raise
+            failures.append({"ticker": ticker, "error": str(exc)})
+            print(f"[t8 failed] {ticker}: {exc}")
+        finally:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+
+    if not rows:
+        print("[warn] 성공한 t8 종목이 없다.")
+        return pd.DataFrame()
+    leaderboard = pd.DataFrame(rows)
+    save_metric_bars(args.suite, leaderboard, "ticker", ["trend_corr", "large_move_da", "variance_ratio", "mase_momentum"])
+    positive = int((leaderboard["trend_corr"] > 0).sum())
+    extra = [("종목별 일반화 요약",
+              f"{len(leaderboard)}종목 중 trend_corr>0 인 종목: {positive}. "
+              f"과반이면 신호가 구조적, BTC만이면 종목 특정·과적합 의심.")]
+    save_raw_report(args.suite, args, environment, statistics, leaderboard.round(6), failures, extra)
+    return leaderboard
+
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 
@@ -855,10 +1185,14 @@ def main(argv: list[str] | None = None) -> None:
     print(f"[feature-sets] engine groups={sorted(feature_groups)} custom={sorted(registered)}")
 
     cache = WindowCache(features, args)
-    if args.suite == "t5_gate_fusion":
-        run_gate_fusion_suite(args, features, cache, profile, environment, statistics)
-    else:
-        run_screen_suite(args, features, cache, profile, environment, statistics)
+    dispatch = {
+        "t5_gate_fusion": run_gate_fusion_suite,
+        "t6_signal_boost": run_signal_boost_suite,
+        "t7_amplitude": run_amplitude_suite,
+        "t8_multiasset": run_multiasset_suite,
+    }
+    runner = dispatch.get(args.suite, run_screen_suite)
+    runner(args, features, cache, profile, environment, statistics)
     print(f"[done] suite={args.suite}")
 
 
