@@ -404,6 +404,25 @@
       `test/images/15_trend_capture_defense_20260716/`(suite별 그림)에 전 결과를 저장했다.
       matplotlib 한글 폰트(Noto Sans CJK KR) 미설정으로 첫 T5 그림이 깨져 재실행으로 교정했다.
 - [x] `test/results/15_trend_capture_defense_report_20260716.md` 독립 보고서를 작성했다.
-- [ ] 다음 체크포인트: `test/README.md`/`history.md`/`conversation_l2_cache.md` 갱신 마무리,
-      `test/scripts/send_email.py`에 15번 preset 추가, 커밋/푸시. 이후 신호 강화(전체 3년
-      stride 1, tail 가중 강화, quantile 예측, seed ensemble)와 다자산 검증을 16번 후보로 검토.
+- [x] `test/README.md`/`history.md`/`conversation_l2_cache.md` 갱신, 15번 메일 preset 추가, 커밋/푸시 완료.
+
+## 2026-07-16 15번 사후 감사 + 판독 가이드 + 신호 강화(T6/T7) + 예측축 매듭
+
+- [x] 사용자 지적("과거 기록 전수 점검 없이 재설계부터 했다")을 반영해 10~14번 전수 감사
+      (`test/results/15_direction_audit_10_to_14_20260716.md`)를 수행했다. 기억 속 "변동 추종
+      예측"이 12번 case 41(Pearson 0.129)임을 확정하고, 평탄화 원인이 랭킹 기준 교체
+      (anti-collapse→fusion MDD)라는 점, 14번 "Linear 폭주 확정"이 규모 1/20 재실행 아티팩트
+      의혹이라는 점을 발견했다.
+- [x] 사용자 지적 2건 반영: (1) 각 suite/지표가 뭔지 결과 단에 설명 — 드라이버에 `SUITE_INTENT`,
+      `METRIC_GLOSSARY` 상수를 박아 raw md 상단에 자동 출력. (2) 예측 튜닝 무한반복 경고 —
+      계획서에 LLM 융합 전환 조건을 명시.
+- [x] 예측 강화 suite T6(seed ensemble)·T7(amplitude)·T8(multiasset)을 드라이버에 추가하고
+      Linear를 복권했다. T6/T7을 서버에서 실행(24k윈도우/stride2, 12번급 규모).
+- [x] T6/T7 결과: seed 앙상블은 trend_corr를 0.02→0.04로 소폭만 올리고 진폭은 더 죽였다.
+      variance_huber는 진폭을 0.36→0.55로 살렸으나 trend_corr는 0.07로 불변. **Linear 폭주는
+      규모 아티팩트였음이 실증**(24k윈도우에서 정상, 14번 결론을 소규모 한정으로 정정).
+      전환 조건(trend_corr<0.15)에 걸려 **예측축 매듭, 다음은 LLM 융합**으로 판정.
+      보고서: `test/results/15_signal_boost_amplitude_report_20260716.md`.
+- [ ] 다음 체크포인트: T8 다자산은 ETH/XRP/SOL 종목별 테이블 수집(pipelines/rebuild_price_mart.py
+      --ticker/--table) 후 선택 실행. 이후 16/17번은 예측 튜닝이 아니라 LLM 융합 파이프라인
+      (예측·risk gate·DTW 유사국면·텍스트 → LLM 상황판단)으로 착수한다.
