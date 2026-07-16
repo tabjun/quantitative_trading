@@ -158,6 +158,20 @@ SUITE_INTENT: dict[str, dict[str, str]] = {
         "question": "같은 구성의 신호가 BTC 전용인가, 다른 코인에도 일반화되는가?",
         "read": "여러 종목에서 trend_corr가 함께 양수면 신호가 구조적. 한 종목만이면 우연·과적합 의심.",
     },
+    "t9_bridge": {
+        "name": "12번 챔피언 브리지 재현 — 진동 폭 축소 원인 분리",
+        "fix": "12번 case 41과 완전히 동일한 설정: 1-step(다음 15분) target, Linear(+비교군), "
+               "balanced_composite, seasonal_diff16, window_standard, seq_len 64, max_windows 4096, "
+               "stride 1, epochs 12, patience 5, batch 48(=school_4090_15gb profile).",
+        "vary": "데이터 구간만 바꾼다 — early(DB 앞 40k행 ≈ 12번과 같은 2023~2024 구간) vs "
+                "recent(DB 뒤 40k행 ≈ 2025~2026 최근 구간).",
+        "question": "예전(12번)에 보이던 '변동을 유지하며 추세를 따라가는 예측'이 같은 설정으로 "
+                    "재현되는가? 지금의 낮은 진동 폭이 설정 탓인가, 시장 구간 탓인가, h-step 전환 탓인가?",
+        "read": "early에서 variance_ratio·Pearson이 12번 기록(var≈0.1~0.15, Pearson≈0.13)에 근접하면 "
+                "설정 재현 성공. recent에서만 죽으면 구간(레짐) 문제. 둘 다 죽으면 데이터/엔진 차이를 "
+                "더 파야 한다. 그림은 12번 case 41 진단(return prediction/next-candle/scatter)과 같은 "
+                "구성으로 저장하니 직접 나란히 비교한다.",
+    },
 }
 
 METRIC_GLOSSARY: list[tuple[str, str]] = [
@@ -212,7 +226,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="15번 추세 포착 + 방어 융합 실험")
     parser.add_argument("--suite", required=False, default="t1_horizon",
                         choices=["t1_horizon", "t2_objective", "t3_nonstationarity", "t4_feature", "t5_gate_fusion",
-                                 "t6_signal_boost", "t7_amplitude", "t8_multiasset"])
+                                 "t6_signal_boost", "t7_amplitude", "t8_multiasset", "t9_bridge"])
     parser.add_argument("--db", default=None)
     parser.add_argument("--table", default="btc_15m_advance")
     parser.add_argument("--ticker", default=None)
@@ -264,6 +278,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--ticker-tables", default="",
                         help="T8용 'KRW-ETH:eth_15m_advance,...' 매핑. 종목별 테이블이 다를 때 지정. "
                              "미지정 종목은 --table을 그대로 쓴다. (다종목 수집: pipelines/rebuild_price_mart.py)")
+    # 브리지 (T9): 12번 case 41 동일 조건 재현용
+    parser.add_argument("--bridge-rows", type=int, default=40000,
+                        help="T9 브리지에서 각 구간(early/recent)에 쓸 행 수. 12번 max_rows=40000과 동일.")
+    parser.add_argument("--bridge-periods", default="early,recent",
+                        help="T9 구간: early=DB 앞 N행(12번과 같은 2023~2024), recent=DB 뒤 N행(최근).")
     # 정책/gate 평가 (T5)
     parser.add_argument("--cost-bps", type=float, default=14.0)
     parser.add_argument("--policy-entry-bps", type=float, default=20.0)
@@ -1166,6 +1185,168 @@ def run_multiasset_suite(args, features, cache, profile, environment, statistics
 
 
 # ---------------------------------------------------------------------------
+# 브리지 suite (T9): 12번 case 41 동일 조건 재현 — 진동 폭 축소 원인 분리
+# ---------------------------------------------------------------------------
+
+def bridge_metrics(split: dict[str, np.ndarray], pred: np.ndarray) -> dict[str, float]:
+    """1-step(다음 15분) 예측용 지표. 10/12/14 보고서와 같은 정의로 계산해 직접 비교 가능하게 한다."""
+
+    actual = split["y"].astype(np.float64)
+    predicted = pred.astype(np.float64)
+    prev_close = split["prev_close"].astype(np.float64)
+    target_close = split["target_close"].astype(np.float64)
+
+    pred_close = prev_close * np.exp(predicted)
+    mae_krw = float(np.mean(np.abs(pred_close - target_close)))
+    persistence_mae_krw = float(np.mean(np.abs(prev_close - target_close)))
+    actual_std = float(np.std(actual))
+    pred_std = float(np.std(predicted))
+    return {
+        "mae_krw": mae_krw,
+        "persistence_mae_krw": persistence_mae_krw,
+        "copy_risk_krw": mae_krw / max(persistence_mae_krw, 1e-9),
+        "direction_accuracy": float(np.mean((predicted > 0) == (actual > 0))),
+        "variance_ratio": float((pred_std**2) / (actual_std**2 + 1e-18)),
+        "pred_return_std": pred_std,
+        "actual_return_std": actual_std,
+        "pearson": pearson(predicted, actual),
+        "near_zero_share": float(np.mean(np.abs(predicted) < 0.1 * max(actual_std, 1e-9))),
+    }
+
+
+def save_bridge_figure(tag: str, split: dict[str, np.ndarray], pred: np.ndarray, title: str) -> None:
+    """12번 case 41 진단의 아래 3칸(return prediction / next-candle / calibration scatter)과
+    같은 구성으로 저장해, 과거 그림과 직접 나란히 비교할 수 있게 한다."""
+
+    actual = split["y"].astype(np.float64)
+    predicted = pred.astype(np.float64)
+    prev_close = split["prev_close"].astype(np.float64)
+    target_close = split["target_close"].astype(np.float64)
+    pred_close = prev_close * np.exp(predicted)
+
+    fig, axes = plt.subplots(1, 3, figsize=(19, 5))
+    n = min(200, len(actual))
+    axes[0].plot(actual[-n:], label="actual return", color="#1f77b4", linewidth=0.9)
+    axes[0].plot(predicted[-n:], label="predicted return", color="#ff7f0e", linewidth=0.9)
+    axes[0].axhline(0.0, color="black", linewidth=0.5)
+    axes[0].set_title("Return prediction (마지막 200)")
+    axes[0].set_xlabel("test time index")
+    axes[0].legend(fontsize=8)
+
+    m = min(60, len(actual))
+    axes[1].plot(target_close[-m:], label="actual close", color="#2ca02c", linewidth=1.1)
+    axes[1].plot(pred_close[-m:], label="predicted close", color="#ff7f0e", linewidth=1.1)
+    axes[1].plot(prev_close[-m:], label="persistence close", color="#555555", linewidth=0.8, linestyle="--")
+    axes[1].set_title("Next-candle comparison (마지막 60, KRW)")
+    axes[1].set_xlabel("candle index")
+    axes[1].legend(fontsize=8)
+
+    corr = pearson(predicted, actual)
+    axes[2].scatter(actual, predicted, s=6, alpha=0.4)
+    lim = float(np.nanmax(np.abs(np.concatenate([actual, predicted])))) or 1e-4
+    axes[2].plot([-lim, lim], [-lim, lim], color="black", linewidth=0.6)
+    axes[2].set_title(f"Calibration scatter / Pearson={corr:.3f}")
+    axes[2].set_xlabel("actual return")
+    axes[2].set_ylabel("predicted return")
+
+    fig.suptitle(title, fontsize=11)
+    fig.tight_layout()
+    out = image_dir("t9_bridge") / f"fig_{tag}.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"[saved] {out}")
+
+
+def run_bridge_suite(args, features, cache, profile, environment, statistics) -> pd.DataFrame:
+    """T9: 12번 case 41(1-step Linear+balanced_composite) 동일 조건을 early/recent 구간에 재현.
+
+    - early: DB 앞 N행을 12번과 같은 경로(load_price_data(max_rows)→make_features)로 로드.
+    - recent: main이 로드한 전체 features의 뒤 N행 슬라이스(rolling feature는 인과적이라 값 동일).
+    비교 기준(12번 기록): case 41 Pearson 0.129, 10번 동계열 copy_risk 1.06~1.13, var_ratio 0.10~0.17.
+    """
+
+    periods = split_list(args.bridge_periods)
+    models = split_list(args.models)
+    seeds = [int(s) for s in split_list(args.seeds)]
+    feature_set = split_list(args.feature_sets)[0]
+    print(f"[plan] suite=t9_bridge periods={periods} models={models} seeds={seeds} "
+          f"rows={args.bridge_rows} max_windows={args.max_windows} stride={args.stride} "
+          f"epochs={args.epochs} batch={args.batch_size}")
+    if args.dry_run:
+        return pd.DataFrame()
+
+    frames: dict[str, pd.DataFrame] = {}
+    if "early" in periods:
+        db_path = engdata.resolve_db_path(args.db)
+        raw_early = engdata.load_price_data(db_path, args.table, args.ticker, args.bridge_rows)
+        feats_early = engfeat.add_coin_specific_features(engdata.make_features(raw_early))
+        frames["early"] = feats_early
+    if "recent" in periods:
+        frames["recent"] = features.iloc[-args.bridge_rows:].reset_index(drop=True)
+
+    rows, failures = [], []
+    columns = engres.FEATURE_SETS[feature_set]
+    for period, feats in frames.items():
+        span = f"{feats['timestamp'].min()} ~ {feats['timestamp'].max()}"
+        print(f"\n[t9 period={period}] rows={len(feats)} span={span}")
+        windows_data = engwin.build_windows(
+            feats, columns, args.seq_len, args.preprocessing, args.normalization,
+            args.max_windows, args.stride,
+        )
+        splits = engwin.time_split(windows_data, args.train_ratio, args.val_ratio)
+        n_features = windows_data["x"].shape[-1]
+        for model_name in models:
+            for seed in seeds:
+                case_tag = f"{period}_{model_name}_seed{seed}"
+                print(f"\n[t9 case] {case_tag}")
+                try:
+                    engmodels.set_seed(seed)
+                    batch = int(args.batch_size)
+                    model = engmodels.make_model(model_name, args.seq_len, n_features, args.hidden)
+                    model, curves = engpoint.train_model(model, splits, profile, args, args.objective, batch)
+                    test_pred = engres.predict(model, splits["test"], profile, batch)
+                    metrics = bridge_metrics(splits["test"], test_pred)
+                    rows.append({
+                        "suite": args.suite, "period": period, "period_span": span,
+                        "model": model_name, "objective": args.objective,
+                        "preprocessing": args.preprocessing, "normalization": args.normalization,
+                        "seed": seed, "target": "1-step(다음 15분)",
+                        **metrics,
+                        "epochs_run": int(curves["epoch"].max()) if len(curves) else 0,
+                    })
+                    print(json.dumps({k: round(v, 4) for k, v in metrics.items()}, ensure_ascii=False))
+                    save_bridge_figure(
+                        case_tag, splits["test"], test_pred,
+                        f"t9_bridge {period}({span}) {model_name} 1-step {args.objective} "
+                        f"prep={args.preprocessing} seed={seed} — 12번 case41 조건 재현",
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    if not args.continue_on_failure:
+                        raise
+                    failures.append({"case": case_tag, "error": str(exc)})
+                    print(f"[t9 failed] {case_tag}: {exc}")
+                finally:
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    gc.collect()
+
+    if not rows:
+        print("[warn] 성공한 t9 케이스가 없다.")
+        return pd.DataFrame()
+    leaderboard = pd.DataFrame(rows)
+    save_metric_bars(args.suite, leaderboard, "period", ["variance_ratio", "pearson", "copy_risk_krw", "direction_accuracy"])
+    reference = (
+        "12번 case 41 기록(2026-06-24, 40k행/4096윈도우/epochs12): Pearson 0.129, fusion return +1.79% "
+        "(96케이스 중 유일 양수). 10번 동계열(Linear+balanced_composite): copy_risk 1.06~1.13, "
+        "variance_ratio 0.10~0.17, DA 51~53%. 14번(12k행/2048윈도우): 같은 구성이 copy_risk 67.6, "
+        "variance_ratio 3679로 폭주 — 규모 아티팩트 의혹. 이번 T9가 그 세 기록 사이 어디에 앉는지가 판정 기준."
+    )
+    extra = [("비교 기준 (과거 기록)", reference)]
+    save_raw_report(args.suite, args, environment, statistics, leaderboard.round(6), failures, extra)
+    return leaderboard
+
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 
@@ -1190,6 +1371,7 @@ def main(argv: list[str] | None = None) -> None:
         "t6_signal_boost": run_signal_boost_suite,
         "t7_amplitude": run_amplitude_suite,
         "t8_multiasset": run_multiasset_suite,
+        "t9_bridge": run_bridge_suite,
     }
     runner = dispatch.get(args.suite, run_screen_suite)
     runner(args, features, cache, profile, environment, statistics)
