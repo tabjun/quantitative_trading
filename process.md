@@ -423,6 +423,21 @@
       규모 아티팩트였음이 실증**(24k윈도우에서 정상, 14번 결론을 소규모 한정으로 정정).
       전환 조건(trend_corr<0.15)에 걸려 **예측축 매듭, 다음은 LLM 융합**으로 판정.
       보고서: `test/results/15_signal_boost_amplitude_report_20260716.md`.
-- [ ] 다음 체크포인트: T8 다자산은 ETH/XRP/SOL 종목별 테이블 수집(pipelines/rebuild_price_mart.py
-      --ticker/--table) 후 선택 실행. 이후 16/17번은 예측 튜닝이 아니라 LLM 융합 파이프라인
-      (예측·risk gate·DTW 유사국면·텍스트 → LLM 상황판단)으로 착수한다.
+- [x] T9 브리지(12번 동일조건 재현)와 T8 다자산까지 완료해 LLM 전환 전 남은 분석을 마쳤다.
+
+## 2026-07-16 (저녁) T9 브리지 + T8 다자산 — 진동폭 원인 규명 + LLM 전환 근거 확정
+
+- [x] 사용자 지적 2건 반영: (1) LLM 전환 전 브리지·다자산 검증 완료, (2) 진동폭 축소 원인 규명.
+- [x] T9 브리지: 12번 case41 완전 동일 설정(1-step, Linear+balanced_composite, 40k행/4096윈도우)을
+      early/recent 구간에 재현. **진동폭 축소는 설정 탓(h-step target + seed 앙상블 평균) 확정** —
+      1-step은 어느 구간이든 variance_ratio 0.75~1.65로 진폭 살아있음, h-step 0.36·앙상블 0.04로 죽음.
+      구간(시장 레짐)은 원인 아님. 단 1-step도 Pearson ~0.03으로 방향은 여전히 persistence 미달.
+- [x] T8 다자산: h-step 우승 구성을 BTC/ETH/XRP/SOL에 적용. trend_corr BTC +0.041, 나머지 0/음수
+      → 신호는 BTC 우연, 비일반화. large_move_da 4종목 다 0.5 미만.
+- [x] 종합 보고서 `test/results/15_bridge_multiasset_verdict_20260716.md` 작성(진동폭 시대별 비교표).
+      판정: 진동폭은 1-step 복원 가능하나 방향 신호는 없음 → 예측 정확도 짜내기 근거 소진,
+      LLM 융합 전환 근거 확정. 유효 재료 4종(1-step Linear 진폭재현·risk gate·mtf_trend·momentum naive).
+- [ ] 다음 체크포인트: 16/17번 LLM 융합 파이프라인 착수. 예측(변동 재현은 1-step Linear로)·risk gate·
+      DTW 과거 유사국면(marts/historical_flow.py)·텍스트 컨텍스트(contexts/text_context.py)를 한
+      시점 스냅샷 프롬프트로 묶어 LLM이 상황 판단(관망/방어/진입 + 근거)을 생성하게 하고, 그
+      판단을 규칙 기반 gate 단독과 백테스트로 비교한다.
