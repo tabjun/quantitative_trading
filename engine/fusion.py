@@ -442,10 +442,19 @@ def show_feature_summary(
         "point_only_cumulative_return",
         "point_plus_risk_gate_cumulative_return",
     ]
+    # 2026-07-19 governance: 아래 정렬은 MDD 1차 기준(12번 시대 프레임)이다. 연구 궤적 감사
+    # (test/results/15_research_trajectory_audit_20260718.md)에 따라 MDD 단독 정렬로 챔피언을
+    # 선정하는 것은 금지됐다 — 평탄한 예측 위에서 측정된 MDD 개선은 성과가 아니다.
+    # 이 표는 과거 실험(12·14) 재현·비교 표시용으로만 유지하며, 새 실험의 챔피언 선정에는
+    # variance_ratio(변동 재현)·추세 추종·활동 하한을 병기한 별도 랭킹을 써야 한다.
     print(
         f"\n[12번 feature guardrail leaderboard] "
         f"활동 하한 active_share>={min_active_share}, trade_count>={min_trade_count} 통과 "
         f"{len(qualified)}/{len(summary)}건만 우승 후보."
+    )
+    print(
+        "[경고] 이 표의 정렬은 MDD 1차 기준(구 프레임)으로 표시용이다 — 챔피언 선정에는 "
+        "변동 재현(variance_ratio)·추세 추종 지표를 병기한 랭킹을 사용하라 (2026-07-19 governance)."
     )
     if qualified.empty:
         print("  (경고) 활동 하한을 통과한 케이스가 없다 — gate가 사실상 거래를 막고 있다. 우승자를 뽑지 않는다.")
