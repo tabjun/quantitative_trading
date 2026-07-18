@@ -437,7 +437,20 @@
 - [x] 종합 보고서 `test/results/15_bridge_multiasset_verdict_20260716.md` 작성(진동폭 시대별 비교표).
       판정: 진동폭은 1-step 복원 가능하나 방향 신호는 없음 → 예측 정확도 짜내기 근거 소진,
       LLM 융합 전환 근거 확정. 유효 재료 4종(1-step Linear 진폭재현·risk gate·mtf_trend·momentum naive).
-- [ ] 다음 체크포인트: 16/17번 LLM 융합 파이프라인 착수. 예측(변동 재현은 1-step Linear로)·risk gate·
-      DTW 과거 유사국면(marts/historical_flow.py)·텍스트 컨텍스트(contexts/text_context.py)를 한
-      시점 스냅샷 프롬프트로 묶어 LLM이 상황 판단(관망/방어/진입 + 근거)을 생성하게 하고, 그
-      판단을 규칙 기반 gate 단독과 백테스트로 비교한다.
+- [x] (2026-07-18 정정) 위 판정에 데이터 축 한정을 추가한다: T9/T8의 "예측 신호 없음"은
+      **BTC 단일 시계열 축에서 없음**이며, 지침(2026-06-08 "KRW 마켓 전체 ticker 축, BTC 단일
+      금지")의 전체 KRW 횡단면 축은 검증된 적 없다.
+
+## 2026-07-18 데이터 축 교정 — KRW 전 종목 마트 수집
+
+- [x] 사용자 지적으로 데이터 축 지침 위반을 감사: 4~5번부터 btc_15m_advance가 편의 기본값으로
+      굳어졌고, T8의 4종목은 12/14 cross_tickers 기본값의 무비판 계승이었다. 지침대로 설계된
+      `marts/historical_flow.py`(SOURCE_TABLE=upbit_krw_candle)는 마트 미구축으로 방치돼 있었다.
+- [x] `pipelines/rebuild_price_mart.py`에 전체 KRW 마켓 모드 추가(--tickers all, ticker 컬럼 포함
+      upbit_krw_candle 적재, 종목 단위 upsert+--resume, 상장 이전 무한루프 방지 커서 가드).
+- [ ] 진행 중: 269종목 × 3년 15분봉 백그라운드 수집(logs/rebuild_krw_all.log, ~4-5시간).
+      완료 확인: `grep "\[all-collected\]" logs/rebuild_krw_all.log`, 실패 종목 목록도 로그 끝에 남음.
+- [ ] 다음 체크포인트(수집 완료 후): ① `pipelines/build_historical_flow_mart.py`로 과거 유사국면
+      full mart build(원래 Phase 2.1~2.3), ② 전체 KRW 축에서 일반화·횡단면 검증(단일 종목
+      시계열로는 볼 수 없던 종목 간 상대 신호 포함), ③ 16/17번 LLM 융합(예측·risk gate·DTW
+      유사국면·텍스트→상황판단)을 전체 KRW 축 위에서 설계한다.
