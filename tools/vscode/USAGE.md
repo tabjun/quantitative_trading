@@ -66,6 +66,33 @@ nohup ~/.local/bin/code tunnel --accept-server-license-terms --name stat5-quant 
 - 로그: `~/.local/share/code-server-web/logs/vscode-tunnel.log`
 - 실제 VS Code 서버 본체(확장/설정 저장 위치): `~/.vscode-server/`
 
+### 문제 해결: "원격 확장 호스트 서버에 연결하지 못했습니다 (WebSocket close 1006)"
+
+로컬에서 연결 시도할 때 이 에러(또는 "원격 환경을 페치할 수 없습니다")가 뜨면, 대부분 **tunnel이 자체 자동 업데이트 도중 멈춘 상태**다. 서버는 계속 살아있으니 로컬/노트북 접속 여부와는 무관하다 (아래 "왜 멈추나" 참고).
+
+진단:
+```bash
+ls -la ~/.vscode/cli/servers/
+```
+가장 최근 생성된 `Stable-<hash>/` 안에 `server/` 디렉터리는 있는데 `log.txt`, `pid.txt`가 없다면 그게 원인 — 다운로드/압축해제만 되고 실제 기동은 안 된 상태.
+
+해결 (`code tunnel kill`이 안 먹힐 때가 있으므로 프로세스를 직접 확인):
+```bash
+pgrep -af "code tunnel"                 # PID 확인
+kill <PID들>                             # 안 죽으면 kill -9
+pgrep -af "code tunnel"                 # 다 사라졌는지 재확인
+
+~/.local/bin/code tunnel prune          # 기동 안 된 깨진 버전 정리
+
+nohup ~/.local/bin/code tunnel --accept-server-license-terms --name stat5-quant \
+  > ~/.local/share/code-server-web/logs/vscode-tunnel.log 2>&1 &
+disown
+
+~/.local/bin/code tunnel status         # started_at/last_connected_at이 방금 시각인지 확인
+```
+
+**왜 멈추나 (+ 노트북 껐다 켠 것과는 상관없음)**: tunnel은 로컬 노트북이 아니라 서버 자체에서 독립적으로 도는 백그라운드 프로세스라, 클라이언트 접속 여부와 무관하게 서버가 알아서 주기적으로 자체 업데이트를 체크한다. 이번 것도 노트북을 껐다 켠 것과는 무관하고, 서버 쪽에서 자동 업데이트가 진행되다가 중간에 (네트워크 순간 끊김 등으로 추정) 멈춘 것으로 보인다. 재현되면 위 절차 그대로 반복하면 된다.
+
 ### 로컬 PC에서 연결
 
 1. VS Code Desktop에 확장 설치: **Remote - Tunnels** (extension id: `ms-vscode.remote-server`)
