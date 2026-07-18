@@ -448,9 +448,15 @@
       `marts/historical_flow.py`(SOURCE_TABLE=upbit_krw_candle)는 마트 미구축으로 방치돼 있었다.
 - [x] `pipelines/rebuild_price_mart.py`에 전체 KRW 마켓 모드 추가(--tickers all, ticker 컬럼 포함
       upbit_krw_candle 적재, 종목 단위 upsert+--resume, 상장 이전 무한루프 방지 커서 가드).
-- [ ] 진행 중: 269종목 × 3년 15분봉 백그라운드 수집(logs/rebuild_krw_all.log, ~4-5시간).
-      완료 확인: `grep "\[all-collected\]" logs/rebuild_krw_all.log`, 실패 종목 목록도 로그 끝에 남음.
-- [ ] 다음 체크포인트(수집 완료 후): ① `pipelines/build_historical_flow_mart.py`로 과거 유사국면
-      full mart build(원래 Phase 2.1~2.3), ② 전체 KRW 축에서 일반화·횡단면 검증(단일 종목
-      시계열로는 볼 수 없던 종목 간 상대 신호 포함), ③ 16/17번 LLM 융합(예측·risk gate·DTW
-      유사국면·텍스트→상황판단)을 전체 KRW 축 위에서 설계한다.
+- [x] 수집 완료(2026-07-19): `upbit_krw_candle` 269종목 / 16,081,696행 / 2023-07~2026-07 / 실패 0.
+
+## 2026-07-19 (2차) 다음 단계 순서 확정 (사용자 지시: LLM 융합은 아직)
+
+- [ ] 다음 체크포인트 — 순서 고정:
+      ① **현재 연구를 전 종목 축에서 먼저 완료**한다: KRW 전 종목 15분봉(원설계, 3번 명세서
+      "KRW 마켓 전수 조사" + historical_flow 리서치) 위에서, 확장된 연구 목적(학습 건전성 +
+      전체 변동 폭 추세 예측, MDD는 생존 제약 병기) 기준으로 16번 실험을 설계·실행한다.
+      ② **과거 유사국면 데이터 마트 구축**: `pipelines/build_historical_flow_mart.py`로
+      upbit_krw_candle 기반 full mart build(원래 Phase 2.1~2.3).
+      ③ LLM 융합은 위 ①②가 끝난 뒤에만 착수한다 (2026-07-19 사용자: "LLM 융합은 아직이야.
+      지금 연구 먼저 끝나고 과거 데이터 마트 구축도 수행해야 해").
