@@ -3,456 +3,219 @@
 ## 목적
 
 이 문서는 이 저장소에서 Claude Code가 매 세션 반드시 따라야 하는 강제 규칙을 정의한다.
-`AGENTS.md`(Codex용)와 동일한 규칙을 공유하므로, Claude와 Codex 중 어느 도구를 써도
-흐름이 끊기지 않고 작업을 이어받을 수 있다.
+`AGENTS.md`(Codex용)와 같은 규칙을 공유한다. 두 파일은 섹션 구조까지 동일하게 유지한다 —
+한쪽만 고치면 드리프트가 생기므로, 이 문서를 고치면 반드시 `AGENTS.md`도 같이 고친다.
 
-도구별 사설 memory는 보조 정보일 뿐이다. 현재 상태의 source of truth는 저장소의
-`CLAUDE.md`, `AGENTS.md`, `process.md`, `history.md`, `conversation_l2_cache.md`,
-`test/README.md`, 그리고 관련 결과/보고서 파일이다.
+도구별 사설 memory는 보조 정보일 뿐이다. source of truth는 저장소 문서다:
+`CLAUDE.md`/`AGENTS.md`(영구 규칙) → `process.md`(현재 단계) → `history.md`(이력) →
+`conversation_l2_cache.md`(최근 요청 원문) → `test/known_pitfalls.md`(실행 직전 체크) →
+`test/README.md`(연구 공간 안내).
+
+이 문서는 **압축 유지가 원칙**이다. 새 사건이 생겨도 문단을 계속 붙이지 않는다 — 기계적으로
+판정 가능한 규칙은 `test/known_pitfalls.md`(코드 게이트)로, 한 시점 상태는 `process.md`로,
+사건 이력은 `history.md`로, 배경 설명이 긴 것은 `test/results/*.md` 참조 문서로 보낸다.
+여기 남기는 건 "항상 적용되는 짧은 규칙"뿐이다. append 전에 기존 항목과 중복인지 먼저 확인하고,
+중복이면 새로 쓰지 않고 기존 항목의 날짜만 갱신한다.
 
 ---
 
 ## 0. 항상 먼저 읽을 문서
 
-새 세션이 시작되면 아래 순서로 읽는다.
-
-1. `CLAUDE.md` (이 파일)
-2. `process.md` — 현재 단계와 다음 할 일
-3. `history.md` — 누적 작업 이력 (최근 섹션만 먼저 확인)
-4. `conversation_l2_cache.md` — 최근 사용자 의도 캐시 (최근 항목만)
-5. `test/README.md` — 연구 실험 공간 안내
-6. `docs/harness/research-workflow/team-spec.md` — 반복 연구/보고서 흐름 지침
-7. 직전 작업자가 Codex였던 정황이 있으면 `AGENTS.md`도 확인한다.
-
-> **이유**: 세션이 바뀌거나 Claude ↔ Codex를 전환해도 이 5개 파일을 읽으면
-> 프로젝트 현황과 다음 작업을 즉시 복원할 수 있다.
+새 세션이 시작되면: `CLAUDE.md`(이 파일) → `process.md` → `history.md` 최근 섹션 →
+`conversation_l2_cache.md` 최근 항목 → `test/known_pitfalls.md` → `test/README.md`.
+직전 작업자가 Codex였던 정황이 있으면 `AGENTS.md`도 확인한다.
 
 ---
 
-## 1. Claude ↔ Codex 병행 사용 규칙
+## 1. Claude ↔ Codex 병행 사용
 
-이 프로젝트는 **Claude Code**와 **Codex**를 함께 사용한다.
-어느 도구로 작업하든 흐름이 끊기지 않도록 다음을 지킨다.
-
-### 세션 종료 전 반드시 할 것
-
-어느 도구를 쓰든 세션을 마치기 전에:
-
-- `history.md` 하단 표에 수행 내용, 산출물, 다음 목표를 한 행 추가한다.
-- `process.md`의 현재 단계와 체크리스트를 최신화한다.
-- 의미 있는 방향 전환이 있었다면 `conversation_l2_cache.md`에 한 행 추가한다.
-- 작업이 중단되었거나 복구 중이면, 완료처럼 쓰지 말고 `어디까지 확보했는지`,
-  `아직 못 한 것`, `다음 도구가 이어서 할 일`을 명시한다.
-
-### 세션 시작 시 복원 순서
-
-1. `process.md`에서 현재 Phase/Step과 미완료 체크리스트를 확인한다.
-2. `history.md` 최근 섹션에서 마지막으로 완료된 작업을 확인한다.
-3. `conversation_l2_cache.md` 최근 항목에서 사용자 선호와 제약을 확인한다.
-4. 이전 세션이 Codex였든 Claude였든 동일한 방식으로 이어간다.
-
-### 두 도구의 차이점 (Claude Code 기준)
-
-| 항목 | Codex | Claude Code |
-|---|---|---|
-| 설정 파일 | `AGENTS.md` | `CLAUDE.md` (이 파일) |
-| MCP 설정 | `.codex/config.toml` | `.mcp.json` |
-| 기본 명령어 | `codex` CLI | `claude` CLI / VSCode 확장 |
-| 기억 복원 | `AGENTS.md` 읽기 | `CLAUDE.md` 읽기 |
-
-두 설정은 같은 규칙을 공유하므로, 어느 도구를 먼저 써도 다른 도구로 이어받을 수 있다.
+- 설정 파일: Codex=`AGENTS.md`, Claude Code=`CLAUDE.md`(이 파일). MCP 설정: Codex=
+  `.codex/config.toml`, Claude Code=`.mcp.json`. 두 문서는 동일 규칙을 공유하므로 어느 도구로
+  시작해도 이어받을 수 있다.
+- **세션 종료 전**: `history.md`에 수행 내용·산출물·다음 목표 한 행 추가, `process.md` 현재
+  단계 갱신, 방향 전환이 있었으면 `conversation_l2_cache.md`에 원문 그대로 한 행 추가. 중단/
+  복구 중이면 완료처럼 쓰지 말고 확보한 것·못한 것·다음 도구가 할 일을 명시한다.
+- **세션 시작 시**: `process.md` 미완료 체크리스트 → `history.md` 최근 완료 작업 →
+  `conversation_l2_cache.md` 최근 선호·제약 순으로 복원한다.
 
 ---
 
 ## 2. 영구 규칙
 
-다음 규칙은 캐시가 아니라 항상 적용되는 저장소 규칙이다.
-
 ### 2.1 로컬 heavy run 금지, 경량 검증 허용
 
-- 저장소에는 재현 가능한 자동화 코드와 실행 명령을 남긴다.
-- Claude Code는 사용자의 개인 연구 세션에서 로컬 터미널 또는 `.venv`로
-  장시간 분석, 학습, 백테스트, 노트북 결과 산출을 실행하지 않는다.
-- **허용되는 로컬 검증**: 문법 검사, import 확인, 작은 synthetic 테스트,
-  정적 리뷰, diff 리뷰, 짧은 컴파일 점검.
-- 실제 연구 실행은 학교 서버 커널, CI, 스케줄러, 또는
-  사용자가 명시적으로 승인한 원격 환경에서 수행한다.
-- **현재 환경 단서 (2026-06-30~)**: 2026-06-28까지 "로컬"은 GPU 없는 사용자 노트북을
-  뜻했고, 그래서 코드 실행을 막고 문법 검증만 허용했다. 지금은 Claude/Codex 세션 자체가
-  학교 서버(GPU, RTX 4090 24GB) 위에서 돈다. 이 규칙의 핵심은 "환경 이름"이 아니라
-  "GPU heavy run은 커널/명시 승인으로만, 세션은 경량 검증까지만"이라는 정신이다.
-  - 따라서 현재 서버/시스템 세션에서도 Claude/Codex는 **문법·import·짧은 컴파일 같은 경량
-    체크는 수행할 수 있다** (코드가 맞는지 한 번은 확인해야 하므로).
-  - 장시간 학습/백테스트/노트북 결과 산출 같은 heavy run은 여전히 노트북 커널 또는 사용자가
-    명시 승인한 실행으로만 한다.
-  - 언제든 서버 -> 로컬(노트북)로 다시 마이그레이션할 수 있으므로 이 규칙은 환경이 바뀌어도
-    계속 유지한다. `로컬/서버` 라벨은 그대로 쓰되 이 단서를 함께 적용한다.
+- Claude Code는 개인 연구 세션에서 로컬 터미널/`.venv`로 장시간 분석·학습·백테스트·노트북
+  결과 산출을 실행하지 않는다. 허용: 문법 검사, import 확인, 작은 synthetic 테스트, 정적/diff
+  리뷰, 짧은 컴파일 점검. 실제 연구 실행은 학교 서버 커널, CI, 스케줄러, 또는 사용자가 명시
+  승인한 원격 환경에서 한다.
+- **현재 환경 단서**: 세션 자체가 학교 서버(GPU RTX 4090 24GB) 위에서 도는 경우가 있다. 핵심은
+  "환경 이름"이 아니라 "GPU heavy run은 커널/명시 승인으로만, 세션은 경량 검증까지만"이다.
+  서버 세션에서도 경량 체크는 허용되고, heavy run은 여전히 노트북 커널/명시 승인으로만 한다.
+- `history.md`/`conversation_l2_cache.md`의 수행환경 컬럼: `로컬`(코드·문서·경량검증·커밋·메일)
+  / `서버`(GPU heavy 실행) / 섞이면 `로컬+서버`.
 
 ### 2.2 `/test`와 실사용 프레임워크를 분리한다
 
-- 루트 `quantitative_trading/`는 실사용 프레임워크 코드와 운영 문서를 둔다.
-- `test/`는 연구 실험, 노트북, 리서치 문서, 결과물 전용이다.
-- `/test` 관련 요청은 먼저 연구 목적과 artifact 경계를 평가하고,
-  목적에서 벗어나면 그대로 수행하지 말고 연구 질문에 맞게 비판적으로 재구성한다.
-- 운영 진입점은 `pipelines/`에 둔다.
-- 새 워크플로우 플러밍은 `.githooks/` 같은 인프라 폴더에 둔다.
+- 루트 `quantitative_trading/`는 실사용 프레임워크·운영 문서. `test/`는 연구 실험·노트북·
+  리서치 문서·결과물 전용. `/test` 요청은 먼저 연구 목적·artifact 경계를 평가하고, 목적에서
+  벗어나면 그대로 수행하지 말고 비판적으로 재구성한다. 운영 진입점은 `pipelines/`, 새 워크플로우
+  플러밍은 `.githooks/` 같은 인프라 폴더에 둔다.
 
-### 2.3 연구 분석은 노트북 원본 + `.py` 미러를 유지한다
+### 2.3 연구 분석은 `.py` 헤드리스 드라이버를 기본으로 한다 (2026-07-16 갱신)
 
-- 새 연구 실험은 `test/models/` 아래 `.ipynb` 원본을 먼저 만든다.
-- 같은 이름의 `.py` 미러를 반드시 함께 유지한다.
-- `.py` 미러는 Git diff 추적과 원격 실행용이며 노트북 대체물이 아니다.
-- 기존 번호 실험의 의미가 달라지는 후속 연구는 같은 파일을 재목적화하지 않고
-  새 번호(`5 -> 6 -> 7`) 실험으로 분리한다.
-- `.githooks/pre-commit`은 스테이징된 노트북을 자동 동기화하고,
-  동명 `.ipynb`가 없는 `test/models/*.py`를 차단한다.
-- 노트북 안에서 `argparse`를 쓸 때는 `ipykernel`이 붙이는 `-f kernel.json` 같은
-  인자를 흡수하도록 `parse_known_args()` 또는 동등한 Jupyter-safe 분기 처리를 넣는다.
-- 노트북 결과는 원칙적으로 `plt.show()`와 셀 출력으로 본다.
-  `savefig()` 또는 결과 CSV/Markdown 저장은 사용자가 명시적으로 파일 산출을
-  요청한 경우에만 허용한다.
-- 분석이 완료된 모든 연구 `.ipynb`는 read-only source of truth로 다룬다.
-  보고서용 이미지는 노트북 파일을 변경하지 않는 후처리 도구로만 추출한다.
-- 완료된 노트북은 보고서 작성, 메일 작성, 이미지 추출, 결과 재정리 단계에서
-  수정, 재저장, strip, output 초기화, 코드 셀 재작성 대상으로 삼지 않는다.
-- 완료 결과의 재정리는 `test/results/*.md`, `test/images/*`, 메일 preset 같은
-  후속 산출물에서만 수행한다.
-- 완료된 기존 번호 실험을 다시 분석하거나 의미를 바꿔야 하면 기존 파일을
-  재목적화하지 않고 새 번호 실험으로 분리한다.
-- 예외는 사용자가 해당 노트북 파일 수정을 명시 승인한 경우뿐이다.
+- 세션이 원격 서버(GPU)에서 직접 도는 현재 환경에서는 `.ipynb` 커널 실행 대신 **헤드리스 `.py`
+  드라이버**를 기본으로 한다(`#%%` 셀 구분 + 파일 내 마크다운 주석). 실행과 결과 저장(raw md +
+  csv + png, 실험 태그 디렉터리)을 `.py`가 전담한다.
+- `.ipynb`는 **커밋 정책용 미러만** 유지한다(동명 파일 필수, 노트북 자체를 실행하지 않음). 새
+  실험마다 ipynb를 별도로 만들어 토큰을 쓰지 않는다 — `.py`에서 마크다운 셀(`# %% [markdown]`)로
+  같은 설명을 담고, pre-commit 훅 규칙(동명 `.ipynb` 없는 `test/models/*.py` 차단)만 만족시킨다.
+- 기존 번호 실험의 의미가 달라지는 후속 연구는 같은 파일을 재목적화하지 않고 새 번호로 분리한다
+  (실험 번호는 불변 식별자 — `test/known_pitfalls.md` P6).
+- 완료된 실험(코드+결과)은 read-only source of truth로 다룬다. 재정리는 `test/results/*.md`,
+  `test/images/*`, 메일 preset 같은 후속 산출물에서만 한다. 예외는 사용자의 명시 승인뿐이다.
+- (2026-05 이전 순수 노트북 시절 유산) `.ipynb` 원본 + `.py` 미러를 직접 실행하던 실험들은
+  그 구조 그대로 read-only로 남긴다 — 소급 전환하지 않는다.
 
 ### 2.4 메일은 UTF-8 기준으로 다룬다
 
-- 한국어 메일 본문은 UTF-8 또는 MIME-safe 방식으로 보낸다.
-- 재사용 가능한 메일 발송 도구만 `test/scripts/`에 둔다.
-- 연구 메일과 보고서에서 전문 용어를 처음 사용할 때는 용어 이름만 나열하지 않는다.
-  `쉬운 정의 -> 숫자 또는 상황 예시 -> 이번 실험에서 어떻게 계산/작용했는지 ->
-  좋은 신호인지 나쁜 신호인지와 예외` 순서로 설명한다.
-- `persistence`, `collapse`, `variance ratio`, `direction accuracy`, `MASE`,
-  `conformal interval`처럼 결과 해석을 좌우하는 용어는 독자가 이전 문서를
-  읽었다고 가정하지 않고 매 문서와 메일에서 다시 풀어 쓴다.
-- 새 방법론이나 실험 축을 추가하라는 요청이 오면 먼저 그것이 현재 연구 질문을
-  실제로 강화하는지, 기존 축과 중복되거나 목적을 흐리는지 적대적으로 검토한 뒤에만 반영한다.
+- 한국어 메일 본문은 UTF-8/MIME-safe로 보낸다. 재사용 가능한 메일 도구만 `test/scripts/`에 둔다.
+- 결과 해석을 좌우하는 용어(persistence, collapse, variance_ratio, direction accuracy, MASE,
+  trend_corr 등)는 독자가 이전 문서를 안 읽었다고 가정하고 매 문서·메일에서 `쉬운 정의 → 예시 →
+  이번 실험에서의 작용 → 좋은/나쁜 신호와 예외` 순으로 다시 푼다.
+- 새 방법론·실험 축 추가 요청은 현재 연구 질문을 실제로 강화하는지 적대적으로 검토한 뒤에만 반영한다.
 
-### 2.5 수행환경을 history/캐시에 명시한다
+### 2.5 수행환경 표기 (2.1 참조)
 
-- `history.md`와 `conversation_l2_cache.md`의 모든 이력 행 마지막 컬럼 `수행환경`에 반드시 값을 기입한다.
-- `로컬`: Claude/Codex 세션에서 수행한 작업 (코드 작성, 문서, 설정, 정적 리뷰, 커밋, 메일 발송 등).
-- `서버`: 학교 서버 커널에서 직접 실행한 작업 (노트북 모델 학습, 대규모 실험, GPU 실행 등).
-- 로컬과 서버 작업이 같은 세션에서 섞이면 행을 분리하거나 `로컬+서버`로 명시한다.
-- 2026-06-28 이전 기록은 구분 이력이 없어 일괄 `로컬`로 표기했다.
-- `로컬/서버` 라벨은 유지한다(언제든 서버 -> 노트북 마이그레이션 가능). 다만 2026-06-30부터
-  세션이 서버에서 도는 경우가 있으므로, 라벨 의미는 2.1의 "현재 환경 단서"를 함께 적용해
-  판단한다: 세션의 코드 작성/문서/경량 검증은 `로컬` 성격, GPU 커널 heavy 실행은 `서버` 성격.
+`history.md`/`conversation_l2_cache.md` 이력 행 끝 `수행환경` 컬럼은 항상 채운다(로컬/서버/
+로컬+서버). 2026-06-28 이전 기록은 이력 없어 일괄 `로컬`.
 
-### 2.6 커밋 메시지 규칙을 지킨다
+### 2.6 커밋 메시지 규칙
 
-- 형식은 아래를 따른다.
-  - `<type>(<scope>): <제목>`
-  - 빈 줄
-  - `무엇을 왜`를 설명하는 본문
-  - 빈 줄
-  - `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
-- header는 필수다. `scope`는 생략 가능하지만 가능하면 붙인다.
-- 제목은 한글 가능, 명령형 또는 짧은 요약형으로 쓴다.
-- 본문은 `어떻게`보다 `무엇을 왜`를 적는다.
-- type은 한 커밋에 혼재시키지 않는다. `feat` 커밋에 `docs`, `chore`, `build` 성격을 섞지 않는다.
-  한 작업에서 여러 성격이 나오면 (예: feat+build+docs) 커밋을 성격별로 분리한다.
-- 현재 저장소에서 주로 쓰는 scope는 `serving`, `router`, `scheduler`, `io`, `collect`, `prototype`, `docs`, `research`, `vscode`, `infra`다.
-- 예시:
-  - `fix(serving): PG 적재 실패를 작업 실패로 전파`
-  - `feat(router): 수동 preprocess 엔드포인트 추가`
-  - `build(prototype): answer 학습 경로 자동화 + collect interval 분할`
+- 형식: `<type>(<scope>): <제목>` + 빈 줄 + `무엇을 왜` 본문 + 빈 줄 +
+  `Co-Authored-By: <현재 모델명> <noreply@anthropic.com>`.
+- header 필수, scope는 가능하면 붙인다(`serving`/`router`/`scheduler`/`io`/`collect`/
+  `prototype`/`docs`/`research`/`vscode`/`infra`). 본문은 `어떻게`보다 `무엇을 왜`.
+- 한 커밋에 성격(`feat`/`build`/`refactor`/`fix`/`chore`/`docs`/`test`/`style`/`perf`/`ci`)을
+  섞지 않는다 — 여러 성격이면 커밋을 분리한다.
 
-#### type 기준
+### 2.7 branch·Git 전달 규칙
 
-| type | 용도 |
-|---|---|
-| `feat` | 새 기능 구현 코드만 |
-| `build` | 제품화·모듈화 빌드 구조, 동작 바뀌는 파이프라인 재구성 |
-| `refactor` | 동작 변경 없는 순수 코드 정리 |
-| `fix` | 버그 수정 |
-| `chore` | `param.json`, config, 쿼리, `.gitignore` 등 설정 |
-| `docs` | README, 가이드, `.md` 문서 |
-| `test` | 실험, 평가 코드 |
-| `style` | 포맷, 세미콜론 등 동작·의미 무관 변경 |
-| `perf` | 성능 개선 |
-| `ci` | CI 설정 |
+- 사용자 지시 없으면 작업 브랜치에서만 커밋/푸시. `main`/`develop` 병합은 명시 요청 시만.
+- GitHub SSH 원격(`git@github.com:tabjun/personal_ai_project.git`) 기본. HTTPS면 push 전 SSH로 교정.
+- 보고서/메일 링크는 GitHub 렌더링 Markdown URL만(commit history 링크 금지). 메일 본문엔
+  핵심 개선점 + 보고서 링크.
 
-### 2.7 branch 정책을 지킨다
+### 2.8 새 파일보다 기존 파일을 우선한다
 
-- 사용자가 별도 지시하지 않으면 작업 브랜치에서만 커밋/푸시한다.
-- `main` 또는 `develop` 병합은 사용자가 명시적으로 요청한 경우에만 수행한다.
-- 보고서/메일 링크는 현재 작업 브랜치 기준 링크를 사용한다.
-- 이 저장소에서 커밋/푸시가 필요하면 GitHub SSH 원격(`git@github.com:tabjun/personal_ai_project.git`)을 기본 경로로 사용한다.
-- 학교 서버나 로컬 세션에서 SSH 키 패스프레이즈가 뜨면, 현재 세션의 `ssh-agent`와 `~/.ssh/config` 설정을 우선 재사용해 반복 입력을 줄인다.
-- 메일 본문에는 rendered Markdown 보고서 링크만 넣고, commit history 링크는 넣지 않는다.
+`CLAUDE.md`, `process.md`, `history.md`, `conversation_l2_cache.md`, `test/known_pitfalls.md`,
+`test/README.md`, `pipelines/`, `test/scripts/`, 기존 `test/models/*`를 먼저 확인하고, 새 파일보다
+기존 파일 수정·확장을 우선한다.
 
-### 2.8 새 파일을 만들기 전 먼저 검색하고 재사용한다
+### 2.9 `test/scripts/`에는 재사용 도구만
 
-- `CLAUDE.md`, `process.md`, `history.md`, `conversation_l2_cache.md`,
-  `test/README.md`, `pipelines/`, `test/scripts/`, 기존 `test/models/*.ipynb/*.py`를
-  먼저 확인한다.
-- 새 파일보다 기존 파일 수정 또는 확장을 우선한다.
+허용: 노트북 빌더, 보고서 변환기, 이미지 추출기, 환경 복구기, 메일/리포트 전달기.
+금지: 이번 한 번만 쓰는 ad-hoc 스크립트.
 
-### 2.9 `test/scripts/`에는 일회성 Python 파일을 만들지 않는다
+### 2.10 가상환경은 재사용한다
 
-- 허용: 노트북 빌더, 보고서 변환기, 이미지 추출기, 환경 복구기,
-  메일/리포트 전달기 같은 재사용 도구
-- 금지: 이번 한 번만 쓰는 ad-hoc 스크립트
+서버의 기존 uv venv 두 개를 재사용한다(매번 새로 만들지 않음):
+`.venvs/quant_uv_py312_...`(Python 3.12, 기본 정합성) / `.venvs/quant_uv_py313_...`(3.13).
+단일 실험은 3.12로 통일. `11_` vs `12_`처럼 상반 실험을 **동시 비교**할 때만 3.12+3.13 병렬.
+`bootstrap_*.sh`는 env가 깨졌을 때 재구축 용도로만(평소엔 `source .venvs/<env>/bin/activate`).
 
-### 2.10 가상환경은 새로 만들지 말고 기존 uv venv를 재사용한다
+### 2.11 코드 작성 루프 규율 (Loop Engineering Field Notes)
 
-- 서버에는 이미 만들어진 uv venv 두 개를 **재사용**한다. 매 작업마다 새 env를 만들지 않는다.
-  - `quantitative_trading/.venvs/quant_uv_py312_20260614_045930` -> Python 3.12 (**기본 정합성 기준**)
-  - `quantitative_trading/.venvs/quant_uv_py313_20260614_040356` -> Python 3.13
-  - 두 env는 동명 Jupyter 커널로도 등록되어 있다.
-- **기본 정합성은 Python 3.12로 고정한다.** 단일 실험은 3.12 커널로 통일해 재현성을 맞춘다.
-- `11_` vs `12_`처럼 **상반되는 두 실험을 동시에 비교 실행**할 때만 3.12 + 3.13을 병렬로 쓴다
-  (한쪽 312, 한쪽 313 커널). 단일 실험에서 313을 임의로 섞지 않는다.
-- `test/scripts/bootstrap_*.sh`는 **env가 깨졌을 때 재구축하는 용도로만** 쓴다. 평소에는
-  bootstrap을 돌리지 말고 기존 env를 `source .venvs/<env>/bin/activate`로 활성화해 쓴다.
-  bootstrap의 timestamp 신규 env 자동 생성·`--clear` 동작은 정상 운영의 기본 흐름이 아니다.
-  (bootstrap 스크립트 자체는 수정하지 않고, 운영 기본값만 이 문서 규칙으로 고정한다.)
+> 출처: Karpathy, "Field Notes on Getting a Language Model to Write Code You Will Not
+> Rewrite". 원문은 `personal_ai_project/CLAUDE.original.md`.
 
----
+Read Before You Write(정독, 패턴 모르면 질문) · Think Before You Code(가정·트레이드오프 명시,
+헷갈리면 멈춰서 질문) · Simplicity(눈앞 문제만, 성급한 추상화 금지) · Surgical Changes(diff
+최소, 안 시킨 곳 금지) · Verification(버그는 실패 테스트로 재현 후 수정) · Goal-Driven
+Execution(코드 전 성공기준) · Debugging(추측 금지, 재현 후 한 번에 하나씩) · Dependencies(표준
+라이브러리 우선, 추가 시 이유 명시) · Communication(우려·불확실성 구체적으로) · Common Failure
+Modes(Kitchen Sink/Wrong Abstraction/Optimistic Path/Runaway Refactor 경계).
 
-### 2.11 코드 작성 루프 규율을 따른다 (Loop Engineering Field Notes)
+### 2.12 연구 방향 최상위 원칙과 세션 운영 (2026-07-18~19 확정)
 
-> 출처: Karpathy, "Field Notes on Getting a Language Model to Write Code You Will Not Rewrite"
-> (https://agentskillsdev.com/courses/claude-md-field-notes). 영어 원문은 repo 최상단
-> `personal_ai_project/CLAUDE.original.md`에 보관. 코드를 쓰는 매 루프(read → think → code →
-> verify)에서 적용한다. 핵심: 모델은 "그럴듯한 코드"를 빠르게 만들지만 "그럴듯함 ≠ 정확함"을
-> 늦게 깨닫는다. 그래서 규율은 코드가 아니라 프로세스에서 나와야 한다.
+> **실행 코드 작성 직전엔 `test/known_pitfalls.md`(코드 게이트 20줄)만 대조.** 여기 아래는
+> 코드로 못 박을 수 없는 원칙만 남긴다. 배경·근거가 긴 것은 참조 문서로 보낸다(각 항목 끝 링크).
 
-1. **Read Before You Write** — 손댈 파일을 훑지 말고 정독한다. 기존 패턴과 import를
-   복사해 따르고(`fetch`만 쓰는데 `axios`를 끌어오지 않는다), 패턴을 못 찾으면 추측 말고 묻는다.
-2. **Think Before You Code** — 타이핑 전에 가정과 트레이드오프를 명시한다("인증 추가"는 다섯 가지를
-   뜻하므로 고른 하나를 명명). 진짜 헷갈리면 그럴듯한 코드로 메우지 말고 멈춰서 묻는다.
-3. **Simplicity** — 지금 눈앞 문제를 푸는 최소 코드만 쓴다. 성급한 추상화·일어날 수 없는 에러 처리를
-   피하고, 진짜 이유가 생기기 전엔 하드코딩한다. "혹시 필요할까 봐"가 유일한 이유면 과설계다.
-4. **Surgical Changes** — diff는 작업이 허용하는 만큼만 작게. 안 시킨 곳은 건드리지 말고, 스타일을
-   맞추고, 리포맷하지 않는다(중요한 3줄이 무관한 300줄에 묻힌다). 모든 변경 줄을 작업으로 정당화하라.
-5. **Verification** — "도는 코드"와 "돈다고 믿는 코드" 사이를 메우는 게 테스트다. 버그 수정은
-   **실패하는 테스트를 먼저 써서 실패를 본 뒤** 고친다(원인 vs 증상 구별의 유일한 증거). 테스트가
-   어렵다는 건 설계에 대한 정보이지 건너뛰어도 된다는 허가가 아니다.
-6. **Goal-Driven Execution** — 코드 전에 성공 기준을 정한다. "검증 추가"는 "누락/형식오류 이메일을
-   400과 명확한 메시지로 거부하고 두 케이스 모두 테스트"가 된다. 다단계 작업은 계획을 먼저 말한다.
-7. **Debugging** — 깨지면 추측 말고 조사한다. 에러·스택트레이스를 끝까지 읽고, 바꾸기 전에 재현하고,
-   한 번에 하나만 바꾼다. 예상 못한 null을 null 체크로 덮지 말고 왜 null인지 찾는다(아니면 버그가
-   더 조용한 곳으로 옮겨갈 뿐).
-8. **Dependencies** — 모든 의존성은 내가 통제 못 하는 영구 코드다. 추가 전에 표준 라이브러리/기존
-   프로젝트로 되는지 본다(uuid 패키지보다 `crypto.randomUUID()`). 추가할 땐 이유를 밝힌다.
-9. **Communication** — 코드 덩어리만 던지지 말고 무엇을 왜 했는지 말한다. 시킨 대로 했어도 우려는
-   플래그하고, 불확실성은 정확히("이 라이브러리가 streaming 지원하는지 모르겠다"가 "될 것 같다"보다 낫다).
-10. **Common Failure Modes** — 반복되는 함정: *Kitchen Sink*(하는 김에 절반을 재구조화),
-    *Wrong Abstraction*(두 번 복붙 전에 추상화), *Optimistic Path*(happy path만 처리, 500 무시),
-    *Runaway Refactor*(파일을 넘나드는 연쇄 수정). 빠졌다 싶으면 밀어붙이지 말고 멈춘다.
-
-### 2.12 연구 방향 가드레일과 세션 보고 방식 (2026-07-18~19 사용자 지시)
-
-> **실행 코드(실험 스크립트·드라이버) 작성 직전에는 `test/known_pitfalls.md`(20줄)만 대조하면
-> 된다.** 반복 함정(huber 진폭압축·MDD 단독랭킹·BTC 단일축·국소회귀·보고방식·번호규칙)을 코드
-> 게이트로 정리한 얇은 활성 규칙 파일이다. 지침이 서술로만 쌓여 안 지켜지던 문제(원인·해소:
-> `test/results/governance_drift_rootcause_20260719.md`)를 막기 위한 것이다. 아래 문단은 그
-> 배경·상세이며, 매 실행에서 다 읽을 필요는 없다.
-
-- **[최상위] 연구 목적이 모든 개별 지시보다 우선한다 (2026-07-19 명시·확장)**:
-  이 연구의 목적은 단일 지표가 아니라 다음의 결합이다.
-  1. **학습 건전성**: 신경망 계열이면 최적화·손실함수가 쉬운 해('0' 수렴, 복사)로 붕괴하지
-     않고, 학습/검증 곡선의 과적합이 관리되며, 비정상 시계열이면 그에 맞는 가정·가설
-     (정상화 변환, 검정, 전처리 선택 근거)을 충족하도록 모델이 만들어질 것.
-  2. **전체 변동 폭의 추세 예측**: 그 위에서 예측 추세를 작은 폭만이 아니라 **큰 변동 폭까지
-     전부** 잘 잡을 것. 작은 폭으로만 예측해 작은 폭만 맞추는 것은 정확한 것이 아니다 —
-     정확도 단독이 아니라 정밀도·재현율을 따지듯, 큰 변동 구간의 포착률을 반드시 함께 평가한다.
-  3. **생존 제약으로서의 MDD**: 추세 변동을 잘 따라가도 하방선이 무너지면 전체가 무너지므로
-     MDD는 항상 함께 지키되, 그것이 목적 자체를 대체하지 않는다.
-  - **국소 회귀 금지**: 사용자가 무언가 하나를 짚으면(예: "변동이 죽었다", "MDD", "종목 수")
-    그것'만'을 새 최우선으로 갈아끼우지 않는다. 모든 지적은 위 연구 목적의 수단이다.
-  - **매 요청마다 방향 일치성 판단**: 요청을 수행하기 전에 "이 작업이 큰 방향(연구 목적)과
-    일치하는가"를 먼저 판단하고, 어긋나면 그대로 수행하지 말고 재구성하거나 확인한다
-    (2.2의 비판적 재구성 규칙과 동일 정신). 판단 근거를 보고에 남긴다.
-- **완료 후 일괄 보고 + 중간은 진척만 (2026-07-19 지침 확정, 모든 상황 적용)**:
-  - **중간 메시지**: 오직 진척 상태만 짧게. 형식은 "~~ 단계 완료 → 다음 실행" 수준.
-    무엇을 어떻게 왜 고쳤는지 같은 상세 내용은 중간에 쓰지 않는다.
-  - **최종 메시지(요청 단위 종료 시 1회)**: 각 단계에서 무슨 일이 있었는지, 발견한 버그·이슈,
-    어떻게 왜 무엇을 변경했는지, 그 결과 수치까지 **모든 상세를 한 번에** 정리해 보고한다.
-  - **중간 이슈의 보고서 raw 기록**: 실행 중 발견한 버그·설계 결함·수정·재실행 사유를 결과
-    보고서(또는 raw md)에 **전부 raw로 남긴다**. 나중에 논문/보고서로 옮길 때 무엇을 넣고
-    뺄지는 사용자가 고른다 — 에이전트가 미리 생략하지 않는다. 대화창에만 쓰고 파일에 안 남기면
-    소실되므로 금지.
-- **suite 간 승계·챔피언 선정도 연구 목적 기준으로 (국소 회귀 금지의 실행판)**:
-  단계별 우승을 tail_f1·MDD 같은 단일 지표 최고로만 뽑지 않는다. "큰 변동 포착(tail_f1·
-  large_move_da) + 진폭 건전성(variance_ratio가 1에 근접, healthy_variance)"을 함께 본다.
-  특히 평균형 손실(huber)이 진폭을 죽이면(variance_ratio≪1) 자동 탈락시킨다 — 그렇지 않으면
-  "큰 변동을 못 잡는 손실"이 다음 단계로 승계돼 방향이 이탈한다(2026-07-19 T2 승계 오류 사례).
-- **요청 원문 보존**: `conversation_l2_cache.md`에는 요약과 함께 사용자 요청 **원문 텍스트를
-  가능하면 그대로** 저장한다. 요약 과정에서 의도가 왜곡되는 것을 막기 위함이다.
-- **데이터 축 기본값 = KRW 전 종목 15분봉**: 원설계(3번 실험, historical_flow 마트 설계,
-  "BTC 단일 종목 금지")를 따른다. 진단 목적으로 단일 종목을 쓸 수는 있으나, 그 결과는
-  "단일 축 한정"으로만 해석하고 전체 축 복귀를 명시적 체크포인트로 남긴다.
-- **MDD 단독 랭킹 금지**: 실험 챔피언 선정에서 MDD(또는 수익률) 단독 정렬을 쓰지 않는다.
-  variance_ratio(변동 재현)·추세 추종(상관/large-move DA)·활동 하한을 반드시 병기한다.
-  평탄한 예측 위에서 측정된 방어 수치는 성과가 아니다(2026-06-24 이탈의 재발 방지 —
-  근거: test/results/15_research_trajectory_audit_20260718.md).
-- **랭킹/판단 기준을 바꿀 때**: 이전 기준을 보조 컬럼으로 유지하고, 무엇이 새 선택압이
-  되는지 보고서에 명시한 뒤 사용자 승인을 받는다.
+- **[최상위] 연구 목적이 모든 개별 지시보다 우선한다.** 목적은 3요소 결합: ① 학습 건전성
+  (최적화·손실이 쉬운 해로 붕괴 안 함, 과적합 관리, 비정상성 가정 충족) ② 전체 변동 폭 추세
+  예측(작은 폭뿐 아니라 큰 변동까지 — 정확도 단독이 아니라 정밀도·재현율 관점) ③ MDD는
+  생존 제약(하방선 무너지면 전체가 무너짐, 목적 자체를 대체하지 않음).
+- **국소 회귀 금지 + 매 요청 방향 일치성 판단**: 사용자가 하나를 짚어도 그것'만'을 새
+  최우선으로 갈아끼우지 않는다. 요청 수행 전 "연구 목적과 일치하는가"를 판단하고 근거를
+  보고에 남긴다(어긋나면 재구성/확인, 2.2와 동일 정신).
+- **보고 방식**: 중간엔 진척만("~단계 완료 → 다음"), 상세(무엇을·왜·어떻게·결과)는 요청 단위
+  종료 시 1회. 실행 중 발견한 버그·이슈·수정은 결과 raw md에 전량 남긴다(취사선택은 사용자 몫).
+- **suite 승계·챔피언 선정**: 단일 지표 최고로 뽑지 않는다. 진폭 건전성(variance_ratio)과 큰
+  변동 포착(tail_f1·large_move_da)을 함께 본다 — `known_pitfalls.md` P1/P4.
+- **요청 원문 보존**: `conversation_l2_cache.md`에 사용자 요청 원문을 가능하면 그대로 저장.
+- **데이터 축 기본값**: 업비트 KRW 전 종목 15분봉(원설계). 단일 종목은 진단 목적에 한해 쓰고
+  결과는 "단일 축 한정"으로만 해석한다 — P3.
+- 배경·전체 사례: `test/results/governance_drift_rootcause_20260719.md`(왜 지침이 실행에
+  안 붙는지의 근본원인·해소책), `test/results/15_research_trajectory_audit_20260718.md`
+  (MDD 단독 프레임 폐기 근거).
 
 ---
 
 ## 3. 실행 주체 분리
 
-### 저장소에 남길 것
+**저장소에 남길 것**: 다른 연구원/운영자가 실행할 자동화 스크립트, `uv run ...` 재현 명령,
+n8n/Cron/CI/Docker/Kubernetes 설계, 학교 서버 커널 실행 절차·파라미터.
 
-- 다른 연구원이나 운영자가 실행할 수 있는 자동화 스크립트
-- `uv run ...` 형식의 재현 실행 명령 예시
-- n8n, Cron, CI, Docker, Kubernetes 같은 운영 자동화 설계
-- 학교 서버 커널에서 실행할 절차와 파라미터
+**Claude Code가 이 세션에서 할 수 있는 것**: 코드 작성/수정, 정적·diff·설계 리뷰, 문법/import/
+작은 synthetic 테스트, 논문 조사, 연구용 `.py` 드라이버 작성과 `.ipynb` 미러 동기화.
 
-### Claude Code가 이 세션에서 할 수 있는 것
-
-- 코드 작성과 수정
-- 정적 코드 리뷰, diff 리뷰, 설계 리뷰
-- 문법 검사, import 확인, 작은 synthetic 테스트
-- 논문 조사와 설계 근거 정리
-- 연구용 `.ipynb` 작성과 `.py` 미러 동기화
-
-### Claude Code가 하지 않는 것
-
-- `uv run main.py` 같은 장시간 분석/학습/백테스트 파이프라인 로컬 실행
-- `.ipynb` 실행을 통한 연구 결과 산출
-- `.venv` 또는 로컬 Python으로 대용량 연구 수행 코드 실행
-- 결과 수치 생성을 목적으로 한 대규모 DB/시계열 분석 실행
+**하지 않는 것**: `uv run main.py` 류 장시간 로컬 실행, `.venv`/로컬 Python으로 대용량 연구
+수행, 결과 수치 생성을 목적으로 한 대규모 DB/시계열 분석 실행.
 
 ---
 
 ## 4. 분석 설계 원칙
 
-1. **2026-05 연구 설계를 유지한다**
-   - PreprocessingPipeline의 핵심은 정상성 진단, 변환 비교/선택,
-     Lag-1 shift 또는 copy-risk 기록이다.
-   - 모든 데이터를 하나의 정상 표현으로 강제하지 않는다.
-   - 원시 가격 수준만 그대로 학습시키지 않는다.
-   - 정상성 검정, 롤링 드리프트 점검, log return, diff, rolling z-score,
-     EMA 변형, KRW 역복원 지표를 함께 사용한다.
-
-2. **보고서 세부 기준은 `test/README.md`를 따른다**
-   - 실행 및 분석 환경, 기초 통계량, 방법론/지표/손실함수/진단 도구의 개념,
-     KRW 원본 스케일 기준 성능 지표, DA와 MASE, 시각화 해석을 포함한다.
-   - 포함한 그래프마다 `데이터/대상 모델 -> x/y축 -> 진단 목적 ->
-     실제 관찰 -> 좋은지 나쁜지 -> 다음 실험 반영 방향`을 설명한다.
-   - 새 보고서는 이전 보고서에 같은 설명이 있더라도 독립 문서로 작성한다.
-
-3. **모델 철학**
-   - 금융 시계열은 "Shallow but Wide" 원칙을 유지한다.
-   - 레이어는 1~2층, width는 대체로 64~128 범위를 우선 검토한다.
+1. **정상성 처리**: 원시 가격 수준만 그대로 학습시키지 않는다. 정상성 검정(ADF/KPSS), 롤링
+   드리프트 점검, log return/diff/rolling z-score/RevIN 계열, KRW 역복원 지표를 함께 쓴다.
+   모든 데이터를 하나의 정상 표현으로 강제하지 않는다.
+2. **보고서 기준**: 실행·분석 환경, 기초 통계량, 방법론/지표/손실함수/진단 도구 개념, KRW
+   원본 스케일 성능 지표, DA·MASE, 시각화 해석 포함. 그래프마다 `데이터/모델 → x/y축 → 진단
+   목적 → 관찰 → 좋음/나쁨 → 다음 반영`을 설명한다. 새 보고서는 이전 설명이 있어도 독립 문서.
+3. **모델 철학**: "Shallow but Wide" — 레이어 1~2층, width 64~128 우선 검토.
 
 ---
 
 ## 5. MCP 도구 설정
 
-`.mcp.json`에 arxiv MCP 서버가 등록되어 있다.
-Claude Code 세션에서 논문 검색이 필요하면 `mcp__arxiv__*` 도구를 사용한다.
+`.mcp.json`에 arxiv MCP 등록. 논문 검색은 `mcp__arxiv__*` 사용(세션에 노출 안 되면 웹검색 +
+arxiv.org 직접 대조로 대체하고 미확인 인용은 명시).
 
 ```json
-{
-  "mcpServers": {
-    "arxiv": {
-      "command": "arxiv-mcp-server",
-      "args": []
-    }
-  }
-}
+{"mcpServers": {"arxiv": {"command": "arxiv-mcp-server", "args": []}}}
 ```
 
-`arxiv-mcp-server`가 PATH에 없으면:
-```bash
-uv tool install --managed-python --python 3.12 git+https://github.com/blazickjp/arxiv-mcp-server.git
-```
+미설치 시: `uv tool install --managed-python --python 3.12 git+https://github.com/blazickjp/arxiv-mcp-server.git`
 
 ---
 
 ## 6. 재현 실행 명령
-
-아래 명령은 학교 서버, CI, 스케줄러, 운영자가 재현 실행할 수 있도록
-저장소에 남기는 기준 명령이다.
 
 ```bash
 uv run main.py
 uv run pipelines/ingest_text_context.py
 uv run pipelines/build_historical_flow_mart.py
 uv run pipelines/query_historical_flows.py
+uv run pipelines/rebuild_price_mart.py
 uv run pipelines/simulate_and_send.py
 ```
 
 ---
 
-## 7. Git 및 전달 규칙
+## 7. 도구 전환 체크리스트
 
-- 보고서나 결과물이 생성되면 자동 발송 스크립트는
-  `git add`, `git commit`, `git push origin <branch>`를 수행할 수 있어야 한다.
-- 이 저장소에서 `origin`이 HTTPS로 잡혀 있으면, push 전에 GitHub SSH 원격으로 맞춘다.
-- Claude Code와 Codex CLI 모두 같은 SSH 원격과 세션 `ssh-agent`를 쓰는 것을 기준으로 문서를 읽고 동작한다.
-- 푸시 후에는 해당 Markdown 보고서를 GitHub에서 렌더링한 URL만
-  메일 본문 상단에 넣는다. 커밋 히스토리 링크는 넣지 않는다.
-- 메일 본문에는 핵심 개선점과 보고서 접근 링크를 함께 넣는다.
+**Claude → Codex**: 변경 파일 커밋/메모 → `history.md` 기록 → `process.md` 다음 스텝 갱신 →
+Codex는 `AGENTS.md → process.md → history.md` 순으로 읽음. Claude memory에만 남긴 결정은
+반드시 저장소 파일에도 남긴다.
 
----
-
-## 8. 현재 연구 상태 요약
-
-> 세션 시작 시 이 섹션 대신 `process.md`와 `history.md`를 읽어 최신 상태를 확인한다.
-> 아래는 2026-06-28 기준 스냅샷이며, 최신 여부는 항상 `history.md`와
-> `conversation_l2_cache.md`로 재확인한다.
-
-- **현재 브랜치**: `stock`
-- **가장 최근 실험 상태**: 13번 (`13_feature_algorithm_resource_test`)은 서버/원격 커널에서
-  대규모 실행 후 VSCode 저장 실패와 PyTorch `DataLoader` shared memory 에러가 발생했다.
-- **확보된 산출물**:
-  - `test/results/13_feature_algorithm_resource_output_recovery_20260627.md`
-  - `test/results/13_feature_algorithm_resource_status_report_20260627.md`
-  - `test/results/13_feature_algorithm_resource_live_recovery_dump_20260627.md`
-  - `test/images/13_output_recovery_20260627/capture_*.png`
-- **당장 할 일**: 열려 있는 VSCode output이 아직 남아 있으면 leaderboard, feature group average,
-  model family average, final summary, 마지막 traceback을 추가 대피한다. 화면이 사라졌다면
-  이번 회차는 장애/복구 보고로 마감하고 `num_workers`, batch size, output volume을 줄인
-  후속 실행을 준비한다.
-- **핵심 기조 (2026-07-19 사용자 확정)**: 연구 목적 = **① 학습 건전성(최적화·손실이 쉬운 해로
-  붕괴하지 않고, 학습/검증 곡선 과적합이 관리되며, 비정상성 가정을 충족하는 모델) 위에서
-  ② 예측 추세를 전체 변동 폭(작은 폭뿐 아니라 큰 변동까지)으로 잘 잡는 것** — 이것이 모든
-  개별 지시·지표보다 항상 최우선이다. 작은 폭만 맞추는 것은 정확한 것이 아니다(정밀도·재현율
-  관점으로 큰 변동 포착률 병행 평가). MDD(잃지 않기)는 그 아래의 **생존 제약**: 추세를 잘
-  따라가도 하방선이 무너지면 전체가 무너지므로 항상 함께 지키되, 랭킹 지표나 목적 자체로
-  격상하지 않는다.
-  **변동 없는(평탄한) 예측 위에서 측정된 MDD 개선은 성과로 인정하지 않는다.**
-  무언가 하나를 짚었다고 그것'만' 최우선으로 갈아끼우는 국소 회귀를 금지한다(2.12 참조).
-  데이터 축 기본값은 **업비트 KRW 전 종목 15분봉**(원설계, 커밋 c8cee5c/20e3014)이며
-  BTC 단일 축 결과는 "단일 축 한정"으로만 해석한다. (기존 "MDD 최소화 우선, Defense First"
-  단독 프레임은 2026-06-24 이탈로 판정되어 폐기 —
-  근거: test/results/15_research_trajectory_audit_20260718.md)
-- **데이터 베이스**: `upbit_data.db` (DuckDB, `data/` 아래)
-- **활성 MCP 기준**: Claude Code는 `.mcp.json`의 `arxiv`를 우선 사용한다. Codex 쪽은
-  전역 설정 상태에 따라 `arxiv`, `node_repl` 등이 보일 수 있으나, GitHub/Notion/Data Analytics
-  플러그인은 2026-06-27 startup 안정화를 위해 비활성화된 이력이 있다.
-
----
-
-## 9. 도구 전환 시 체크리스트
-
-### Claude → Codex로 전환할 때
-
-1. 이번 세션에서 변경한 파일을 커밋하거나 메모한다.
-2. `history.md`에 수행 내용을 기록한다.
-3. `process.md`의 다음 스텝을 업데이트한다.
-4. Codex를 열면 `AGENTS.md -> process.md -> history.md` 순서로 읽는다.
-5. Claude memory에만 남긴 내용은 Codex가 못 볼 수 있으므로, 이어받아야 하는 결정은
-   반드시 저장소 파일에 남긴다.
-
-### Codex → Claude로 전환할 때
-
-1. Codex 세션에서 변경한 파일이 커밋되었는지 확인한다.
-2. Claude Code를 열면 이 파일(`CLAUDE.md`)을 먼저 읽는다.
-3. `process.md -> history.md -> conversation_l2_cache.md` 순서로 복원한다.
-4. 이전 Codex 작업 내용을 `history.md`에서 확인하고 이어서 진행한다.
-5. Codex 도구 상태나 MCP 복구 내용은 `history.md`, `process.md`, `.mcp.json`,
-   그리고 필요한 경우 `C:\Users\jun99\.codex\config.toml` 변경 이력을 기준으로 확인한다.
+**Codex → Claude**: Codex 세션 변경분 커밋 확인 → `CLAUDE.md → process.md → history.md →
+conversation_l2_cache.md` 순으로 복원.
