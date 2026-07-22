@@ -938,26 +938,36 @@ def trend_capture_defense_email(commit_hash: str) -> tuple[str, str, list[Path]]
     return subject, body, [ROOT / report_path]
 
 
-def professor_publication_brief_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+def professor_publication_brief_email(commit_hash: str) -> tuple[str, str, str, list[Path], list[tuple[str, Path]]]:
+    """5-tuple preset: HTML body with two inline figures + plain-text fallback.
+
+    본문에 핵심 그림 2장(방향 vs 크기 자기상관, GARCH 변동성)을 직접 임베드하고, 상세
+    전체(서론/관련연구/방법론/EDA/결과/결론·논의/향후연구/참고문헌 + 그림 전부)는 GitHub
+    렌더링 링크로 안내한다. 정직한 재검토(차분이 이미 적용돼 있었다는 뒤늦은 발견)도 본문에
+    자연스럽게 포함한다.
+    """
     report_path = "test/results/professor_brief_publication_case_20260722.md"
-    body = f"""교수님 안녕하세요. 지금까지의 시계열 연구를 정리해 논문화 가능성을 여쭙고자 메일드립니다.
+    acf_path = ROOT / "test/images/17_eda_direction_signal_20260722/s3_acf_pacf.png"
+    garch_path = ROOT / "test/images/17_eda_direction_signal_20260722/s7_garch_volatility.png"
+    report_url = github_blob(report_path)
+
+    plain_body = f"""교수님 안녕하세요. 지금까지의 시계열 연구를 정리해 논문화 가능성을 여쭙고자 메일드립니다.
+(이 메일은 텍스트만 지원하는 뷰어용입니다. 그림은 첨부파일 또는 아래 보고서 링크에서 보실 수 있습니다.)
 
 [요약]
-- 무엇을 했나: 업비트 원화(KRW) 마켓 암호화폐 15분봉으로 비정상 시계열의 추세를 딥러닝으로
-  예측하는 연구(실험 1~17번)입니다. 최종 목표는 예측 정확도 자체가 아니라, 과거 유사 국면·
-  시장 텍스트·예측/위험 신호를 LLM에 태워 상황을 설명·자문하는 시스템의 '예측 재료'를 만들고
-  그 한계를 정직히 규명하는 것입니다.
+- 최종 목표: 과거 유사 국면·시장 텍스트·예측/위험 신호를 LLM에 태워 트레이딩 상황을 자문하게
+  하는 시스템 구축입니다. 지금까지의 실험(1~17번)은 그 시스템에 들어갈 예측 재료를 만들고,
+  최적화·손실함수를 그 재료(추세·변동성·방향)를 최대한 잘 잡도록 개선해 온 과정입니다.
 - 핵심 발견(데이터로 확정): 15분봉에서 방향(다음이 오를지/내릴지)은 사실상 예측 불가입니다
   (자기상관 약 0.05, 방향 정확도 0.48~0.54로 동전 던지기 수준). 반면 변동의 '크기'(변동성)는
-  예측 가능합니다(자기상관 0.36, GARCH로 0.46). 이는 저희 모델의 결함이 아니라 효율시장 하
-  고빈도 수익률의 알려진 구조이며 문헌과 일치합니다.
-- 논문 각도: 성능이 아니라 기여로 성립한다고 봅니다. (1) 고빈도 암호화폐 방향 예측의 한계를
-  전종목·다모델·다손실로 체계적으로 실증한 negative result, (2) 두 붕괴 모드(예측이 0으로
-  눌리는 진폭 압축 / 분산 폭주)의 진단과 교정(RevIN·분위 손실), (3) 평가 지표의 자기기만
-  (변동 없는 예측이 방어 우수로 오인되는 최대낙폭 단독 지표) 문서화입니다.
-- 결정이 필요한 지점: 예측 대상(target)/차분 방식에 정답이 하나가 아니라 갈래가 여럿입니다
-  (A 방향 / B 변동성 / C 추세). 이론적 선험 답이 없어 실험과 최종 LLM 필요에 따라 골라야 하며,
-  신호가 실재하는 B(변동성)를 주 재료로 승격하는 방향을 제안드립니다.
+  예측 가능합니다(자기상관 0.36, GARCH로 0.46). 저희 모델의 결함이 아니라 효율시장 하 고빈도
+  수익률의 알려진 구조이며 문헌과 일치합니다.
+- 정직한 재검토: 연구를 처음부터 다시 훑으며, 차분(differencing)이 2026-05 설계 이후 모든
+  실험에 이미 적용돼 있었음을 뒤늦게 확인했습니다. 비정상 시계열 자체를 계속 다루고 있다고
+  생각했는데, 실제로는 1차 차분(로그수익률)이라는 특정 정상화 위에서 실험해 온 것이었습니다.
+- 논문 각도는 결정 지점에 종속됩니다: 예측 대상(A 방향 / B 변동성 / C 추세) 중 무엇을
+  주력으로 삼는지에 따라 논문의 프레이밍이 달라집니다. 신호가 실재하는 B(변동성)를 주
+  재료로 승격하는 방향을 제안드립니다.
 
 [여쭐 것]
 1. 위 negative-result와 진단/교정을 방법론 논문으로 정리하는 방향이 적절한지.
@@ -965,12 +975,60 @@ def professor_publication_brief_email(commit_hash: str) -> tuple[str, str, list[
 3. 확장(변동성 GARCH 베이스라인·외생정보 도입·cross-sectional·최종 LLM 결합)을 본 논문에
    포함할지, 후속 논문으로 분리할지.
 
-전체 상세 보고서(연구 목적·분석 과정·결과·방법론·데이터·baseline 참고문헌 포함):
-{github_blob(report_path)}
+자세한 내용(서론·관련연구·방법론·EDA·결과·결론및논의·향후연구·참고문헌, 그림 전부 포함)은
+아래 링크의 보고서를 참고해 주세요:
+{report_url}
 
 감사합니다."""
+
+    html_body = f"""<html><body style="font-family:sans-serif; line-height:1.6;">
+<p>교수님 안녕하세요. 지금까지의 시계열 연구를 정리해 논문화 가능성을 여쭙고자 메일드립니다.</p>
+
+<h3>[요약]</h3>
+<ul>
+<li><b>최종 목표</b>: 과거 유사 국면·시장 텍스트·예측/위험 신호를 <b>LLM에 태워 트레이딩
+상황을 자문</b>하게 하는 시스템 구축입니다. 지금까지의 실험(1~17번)은 그 시스템에 들어갈
+예측 재료를 만들고, 최적화·손실함수를 그 재료(추세·변동성·방향)를 최대한 잘 잡도록 개선해
+온 과정입니다.</li>
+<li><b>핵심 발견(데이터로 확정)</b>: 15분봉에서 <b>방향</b>(다음이 오를지/내릴지)은 사실상
+예측 불가입니다(자기상관 약 0.05, 방향 정확도 0.48~0.54 = 동전 던지기). 반면 변동의
+<b>'크기'(변동성)</b>는 예측 가능합니다(자기상관 0.36, GARCH로 0.46). 저희 모델의 결함이
+아니라 효율시장 하 고빈도 수익률의 알려진 구조이며 문헌과 일치합니다.</li>
+<li><b>정직한 재검토</b>: 연구를 처음부터 다시 훑으며, <b>차분(differencing)이 2026-05
+설계 이후 모든 실험에 이미 적용돼 있었음을 뒤늦게 확인</b>했습니다. 비정상 시계열 자체를
+계속 다루고 있다고 생각했는데, 실제로는 1차 차분(로그수익률)이라는 특정 정상화 위에서
+실험해 온 것이었습니다.</li>
+<li><b>논문 각도는 결정 지점에 종속</b>됩니다: 예측 대상(A 방향 / B 변동성 / C 추세) 중
+무엇을 주력으로 삼는지에 따라 논문의 프레이밍이 달라집니다. 신호가 실재하는 <b>B(변동성)를
+주 재료로 승격</b>하는 방향을 제안드립니다.</li>
+</ul>
+
+<p><b>[그림 1] 방향(위 2패널) vs 크기(아래 2패널) 자기상관</b> — 방향은 즉시 0으로 붕괴,
+크기는 느리게 감소(변동성 군집):</p>
+<img src="cid:fig_acf" style="max-width:640px; width:100%; border:1px solid #ddd;">
+
+<p><b>[그림 2] GARCH(1,1) 조건부 변동성</b>이 실제 변동 크기를 따라갑니다(상관 0.46):</p>
+<img src="cid:fig_garch" style="max-width:640px; width:100%; border:1px solid #ddd;">
+
+<h3>[여쭐 것]</h3>
+<ol>
+<li>위 negative-result와 진단/교정을 방법론 논문으로 정리하는 방향이 적절한지.</li>
+<li>예측 대상을 변동성(B) 중심으로 가는 방향에 대한 의견.</li>
+<li>확장(변동성 GARCH 베이스라인·외생정보 도입·cross-sectional·최종 LLM 결합)을 본
+논문에 포함할지, 후속 논문으로 분리할지.</li>
+</ol>
+
+<p>자세한 내용(서론·관련연구·방법론·EDA·결과·결론및논의·향후연구·참고문헌, 그림 전부
+포함)은 아래 링크의 보고서를 참고해 주세요:<br>
+<a href="{report_url}">{report_url}</a></p>
+
+<p>감사합니다.</p>
+</body></html>"""
+
     subject = "[퀀트 연구] 비정상 암호화폐 시계열 예측 연구 정리 및 논문화 논의 요청"
-    return subject, body, [ROOT / report_path]
+    attachments = [ROOT / report_path]
+    inline_images = [("fig_acf", acf_path), ("fig_garch", garch_path)]
+    return subject, plain_body, html_body, attachments, inline_images
 
 
 PRESETS = {
@@ -994,11 +1052,34 @@ PRESETS = {
 
 
 def build_message(preset: str, sender: str, receiver: str) -> tuple[EmailMessage, list[Path]]:
+    """Build the email. Preset functions normally return a 3-tuple
+    (subject, plain_body, attachments). Presets that need inline images in an
+    HTML body (e.g. embedded figures) return a 4-tuple adding
+    (plain_fallback_body, html_body, inline_images) where inline_images is a
+    list of (content_id, Path) pairs referenced in html_body as
+    `<img src="cid:CONTENT_ID">`.
+    """
     commit_hash = git_head_short()
-    subject, body, attachments = PRESETS[preset](commit_hash)
+    result = PRESETS[preset](commit_hash)
     msg = EmailMessage()
     msg["From"] = sender
     msg["To"] = receiver
+
+    if len(result) == 5:
+        subject, plain_body, html_body, attachments, inline_images = result
+        msg["Subject"] = subject
+        msg.set_content(plain_body, subtype="plain", charset="utf-8", cte="base64")
+        msg.add_alternative(html_body, subtype="html", charset="utf-8", cte="base64")
+        html_part = msg.get_payload()[1]
+        for cid, path in inline_images:
+            if not path.exists():
+                continue
+            html_part.add_related(
+                path.read_bytes(), maintype="image", subtype="png", cid=f"<{cid}>"
+            )
+        return msg, attachments
+
+    subject, body, attachments = result
     msg["Subject"] = subject
     msg.set_content(body, subtype="plain", charset="utf-8", cte="base64")
     return msg, attachments
