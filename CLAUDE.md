@@ -104,6 +104,10 @@
 - GitHub SSH 원격(`git@github.com:tabjun/personal_ai_project.git`) 기본. HTTPS면 push 전 SSH로 교정.
 - 보고서/메일 링크는 GitHub 렌더링 Markdown URL만(commit history 링크 금지). 메일 본문엔
   핵심 개선점 + 보고서 링크.
+- **메일에 `.md` 원본 파일을 첨부하지 않는다 (2026-07-23 재확인).** raw `.md`는 받는 쪽에서
+  텍스트로 열려 이미지·표가 안 보이고 가독성이 나쁘다(2026-05-28에 이미 겪고 고쳐 렌더링
+  링크 방식으로 정착시켰는데, 2026-07-22 preset에서 재발). 그림이 필요하면 본문에 inline
+  이미지(cid)로 임베드하거나 PNG만 첨부하고, `.md`는 항상 GitHub 렌더링 링크로만 전달한다.
 
 ### 2.8 새 파일보다 기존 파일을 우선한다
 

@@ -1026,7 +1026,10 @@ def professor_publication_brief_email(commit_hash: str) -> tuple[str, str, str, 
 </body></html>"""
 
     subject = "[퀀트 연구] 비정상 암호화폐 시계열 예측 연구 정리 및 논문화 논의 요청"
-    attachments = [ROOT / report_path]
+    # 규칙(CLAUDE.md/AGENTS.md 2.7): 보고서는 GitHub 렌더링 링크로만 전달한다. .md 파일을
+    # 그대로 첨부하면 받는 쪽에서 raw 텍스트로 열려 이미지·표가 안 보이고 가독성이 나빠진다
+    # (2026-05-28에 이미 겪고 고친 문제 — 재발 방지를 위해 여기서 attachments를 비워 둔다).
+    attachments: list[Path] = []
     inline_images = [("fig_acf", acf_path), ("fig_garch", garch_path)]
     return subject, plain_body, html_body, attachments, inline_images
 
