@@ -938,8 +938,44 @@ def trend_capture_defense_email(commit_hash: str) -> tuple[str, str, list[Path]]
     return subject, body, [ROOT / report_path]
 
 
+def professor_publication_brief_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    report_path = "test/results/professor_brief_publication_case_20260722.md"
+    body = f"""교수님 안녕하세요. 지금까지의 시계열 연구를 정리해 논문화 가능성을 여쭙고자 메일드립니다.
+
+[요약]
+- 무엇을 했나: 업비트 원화(KRW) 마켓 암호화폐 15분봉으로 비정상 시계열의 추세를 딥러닝으로
+  예측하는 연구(실험 1~17번)입니다. 최종 목표는 예측 정확도 자체가 아니라, 과거 유사 국면·
+  시장 텍스트·예측/위험 신호를 LLM에 태워 상황을 설명·자문하는 시스템의 '예측 재료'를 만들고
+  그 한계를 정직히 규명하는 것입니다.
+- 핵심 발견(데이터로 확정): 15분봉에서 방향(다음이 오를지/내릴지)은 사실상 예측 불가입니다
+  (자기상관 약 0.05, 방향 정확도 0.48~0.54로 동전 던지기 수준). 반면 변동의 '크기'(변동성)는
+  예측 가능합니다(자기상관 0.36, GARCH로 0.46). 이는 저희 모델의 결함이 아니라 효율시장 하
+  고빈도 수익률의 알려진 구조이며 문헌과 일치합니다.
+- 논문 각도: 성능이 아니라 기여로 성립한다고 봅니다. (1) 고빈도 암호화폐 방향 예측의 한계를
+  전종목·다모델·다손실로 체계적으로 실증한 negative result, (2) 두 붕괴 모드(예측이 0으로
+  눌리는 진폭 압축 / 분산 폭주)의 진단과 교정(RevIN·분위 손실), (3) 평가 지표의 자기기만
+  (변동 없는 예측이 방어 우수로 오인되는 최대낙폭 단독 지표) 문서화입니다.
+- 결정이 필요한 지점: 예측 대상(target)/차분 방식에 정답이 하나가 아니라 갈래가 여럿입니다
+  (A 방향 / B 변동성 / C 추세). 이론적 선험 답이 없어 실험과 최종 LLM 필요에 따라 골라야 하며,
+  신호가 실재하는 B(변동성)를 주 재료로 승격하는 방향을 제안드립니다.
+
+[여쭐 것]
+1. 위 negative-result와 진단/교정을 방법론 논문으로 정리하는 방향이 적절한지.
+2. 예측 대상을 변동성(B) 중심으로 가는 방향에 대한 의견.
+3. 확장(변동성 GARCH 베이스라인·외생정보 도입·cross-sectional·최종 LLM 결합)을 본 논문에
+   포함할지, 후속 논문으로 분리할지.
+
+전체 상세 보고서(연구 목적·분석 과정·결과·방법론·데이터·baseline 참고문헌 포함):
+{github_blob(report_path)}
+
+감사합니다."""
+    subject = "[퀀트 연구] 비정상 암호화폐 시계열 예측 연구 정리 및 논문화 논의 요청"
+    return subject, body, [ROOT / report_path]
+
+
 PRESETS = {
     "simulation": simulation_email,
+    "professor_publication_brief": professor_publication_brief_email,
     "fusion_alignment_rerun": fusion_alignment_rerun_email,
     "trend_capture_defense": trend_capture_defense_email,
     "text_context": text_context_email,
