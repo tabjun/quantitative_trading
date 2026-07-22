@@ -939,20 +939,25 @@ def trend_capture_defense_email(commit_hash: str) -> tuple[str, str, list[Path]]
 
 
 def professor_publication_brief_email(commit_hash: str) -> tuple[str, str, str, list[Path], list[tuple[str, Path]]]:
-    """5-tuple preset: HTML body with two inline figures + plain-text fallback.
+    """5-tuple preset: HTML body with three inline figures + plain-text fallback.
 
-    본문에 핵심 그림 2장(방향 vs 크기 자기상관, GARCH 변동성)을 직접 임베드하고, 상세
-    전체(서론/관련연구/방법론/EDA/결과/결론·논의/향후연구/참고문헌 + 그림 전부)는 GitHub
-    렌더링 링크로 안내한다. 정직한 재검토(차분이 이미 적용돼 있었다는 뒤늦은 발견)도 본문에
-    자연스럽게 포함한다.
+    2026-07-23 갱신: 결정 지점(A 방향/B 변동성/C 추세)을 좁히는 추가 확인 7종(horizon 스윕,
+    전종목 확인, GARCH 반감기, 허스트 지수, regime, 거래량 lead-lag, cross-asset 변동성
+    전이)을 이전 메일 내용에 첨삭했다. 제목에 "이전 메일 대신 이것을 참고해 달라"는 안내를
+    덧붙여 구버전과 구분한다. 본문에 핵심 그림 3장을 직접 임베드하고, 상세 전체(서론/관련연구/
+    방법론/EDA/결과/결론·논의/향후연구/참고문헌 + 그림 전부)는 GitHub 렌더링 링크로 안내한다
+    (규칙: .md 원본은 첨부하지 않는다, known_pitfalls.md P7).
     """
     report_path = "test/results/professor_brief_publication_case_20260722.md"
     acf_path = ROOT / "test/images/17_eda_direction_signal_20260722/s3_acf_pacf.png"
     garch_path = ROOT / "test/images/17_eda_direction_signal_20260722/s7_garch_volatility.png"
+    horizon_path = ROOT / "test/images/17_eda_direction_signal_20260722/s9_horizon_sweep.png"
     report_url = github_blob(report_path)
 
-    plain_body = f"""교수님 안녕하세요. 지금까지의 시계열 연구를 정리해 논문화 가능성을 여쭙고자 메일드립니다.
-(이 메일은 텍스트만 지원하는 뷰어용입니다. 그림은 첨부파일 또는 아래 보고서 링크에서 보실 수 있습니다.)
+    plain_body = f"""[이전 메일 말고 이것을 봐 주세요 — 결정 지점을 좁히는 추가 확인을 반영해 다시 정리했습니다]
+
+교수님 안녕하세요. 지금까지의 시계열 연구를 정리해 논문화 가능성을 여쭙고자 메일드립니다.
+(이 메일은 텍스트만 지원하는 뷰어용입니다. 그림은 아래 보고서 링크에서 보실 수 있습니다.)
 
 [요약]
 - 최종 목표: 과거 유사 국면·시장 텍스트·예측/위험 신호를 LLM에 태워 트레이딩 상황을 자문하게
@@ -966,8 +971,16 @@ def professor_publication_brief_email(commit_hash: str) -> tuple[str, str, str, 
   실험에 이미 적용돼 있었음을 뒤늦게 확인했습니다. 비정상 시계열 자체를 계속 다루고 있다고
   생각했는데, 실제로는 1차 차분(로그수익률)이라는 특정 정상화 위에서 실험해 온 것이었습니다.
 - 논문 각도는 결정 지점에 종속됩니다: 예측 대상(A 방향 / B 변동성 / C 추세) 중 무엇을
-  주력으로 삼는지에 따라 논문의 프레이밍이 달라집니다. 신호가 실재하는 B(변동성)를 주
-  재료로 승격하는 방향을 제안드립니다.
+  주력으로 삼는지에 따라 논문의 프레이밍이 달라집니다.
+- (신규) 결정 지점을 좁히는 추가 확인 7종: 방향 신호는 초단기엔 없지만 2일 이상 horizon
+  에서 재등장합니다(+0.09@6일 — Christoffersen-Diebold 이론과 일치). 전종목 20개 모두
+  동일 구조로 BTC 특정이 아님을 확정했습니다. GARCH 변동성 반감기는 8.6시간으로 B의 목표
+  horizon을 구체화했습니다. 허스트 지수 H=0.58로 분수차분을 시도할 근거를 확보했습니다.
+  거래량이 미래 변동을 lag=1에서 +0.20으로 선행합니다. BTC-알트 변동성 동시상관이
+  0.48~0.72로 강해 전종목 전이 가능성을 확인했습니다. Regime(고/저변동) 조건부 방향차이는
+  없다고 확인해(기각) 그쪽 탐색은 접었습니다.
+- 신호가 실재하는 B(변동성)를 주 재료로 승격하는 방향을 제안드리며, A는 장기 horizon으로,
+  C는 분수차분으로 각각 후속 확인이 가능한 상태입니다.
 
 [여쭐 것]
 1. 위 negative-result와 진단/교정을 방법론 논문으로 정리하는 방향이 적절한지.
@@ -982,6 +995,9 @@ def professor_publication_brief_email(commit_hash: str) -> tuple[str, str, str, 
 감사합니다."""
 
     html_body = f"""<html><body style="font-family:sans-serif; line-height:1.6;">
+<p style="background:#fff3cd; padding:10px; border:1px solid #ffe58f;"><b>이전 메일 말고
+이것을 봐 주세요</b> — 결정 지점을 좁히는 추가 확인을 반영해 다시 정리했습니다.</p>
+
 <p>교수님 안녕하세요. 지금까지의 시계열 연구를 정리해 논문화 가능성을 여쭙고자 메일드립니다.</p>
 
 <h3>[요약]</h3>
@@ -999,8 +1015,17 @@ def professor_publication_brief_email(commit_hash: str) -> tuple[str, str, str, 
 계속 다루고 있다고 생각했는데, 실제로는 1차 차분(로그수익률)이라는 특정 정상화 위에서
 실험해 온 것이었습니다.</li>
 <li><b>논문 각도는 결정 지점에 종속</b>됩니다: 예측 대상(A 방향 / B 변동성 / C 추세) 중
-무엇을 주력으로 삼는지에 따라 논문의 프레이밍이 달라집니다. 신호가 실재하는 <b>B(변동성)를
-주 재료로 승격</b>하는 방향을 제안드립니다.</li>
+무엇을 주력으로 삼는지에 따라 논문의 프레이밍이 달라집니다.</li>
+<li><b>(신규) 결정 지점을 좁히는 추가 확인 7종</b>: 방향 신호는 초단기엔 없지만
+<b>2일 이상 horizon에서 재등장</b>합니다(+0.09@6일 — Christoffersen&ndash;Diebold 이론과
+일치, 그림 3). <b>전종목 20개 모두 동일 구조</b>로 BTC 특정이 아님을 확정했습니다. GARCH
+변동성 반감기는 <b>8.6시간</b>으로 B의 목표 horizon을 구체화했습니다. 허스트 지수
+<b>H=0.58</b>로 분수차분을 시도할 근거를 확보했습니다. 거래량이 미래 변동을 lag=1에서
+<b>+0.20</b>으로 선행합니다. BTC&ndash;알트 변동성 동시상관이 <b>0.48~0.72</b>로 강해
+전종목 전이 가능성을 확인했습니다. Regime(고/저변동) 조건부 방향차이는 없다고 확인해
+(기각) 그쪽 탐색은 접었습니다.</li>
+<li>신호가 실재하는 <b>B(변동성)를 주 재료로 승격</b>하는 방향을 제안드리며, A는 장기
+horizon으로, C는 분수차분으로 각각 후속 확인이 가능한 상태입니다.</li>
 </ul>
 
 <p><b>[그림 1] 방향(위 2패널) vs 크기(아래 2패널) 자기상관</b> — 방향은 즉시 0으로 붕괴,
@@ -1009,6 +1034,10 @@ def professor_publication_brief_email(commit_hash: str) -> tuple[str, str, str, 
 
 <p><b>[그림 2] GARCH(1,1) 조건부 변동성</b>이 실제 변동 크기를 따라갑니다(상관 0.46):</p>
 <img src="cid:fig_garch" style="max-width:640px; width:100%; border:1px solid #ddd;">
+
+<p><b>[그림 3, 신규] 방향 자기상관의 horizon 스윕</b> — 초단기는 무신호, 2일 이상에서
+방향 신호가 재등장합니다:</p>
+<img src="cid:fig_horizon" style="max-width:640px; width:100%; border:1px solid #ddd;">
 
 <h3>[여쭐 것]</h3>
 <ol>
@@ -1025,12 +1054,12 @@ def professor_publication_brief_email(commit_hash: str) -> tuple[str, str, str, 
 <p>감사합니다.</p>
 </body></html>"""
 
-    subject = "[퀀트 연구] 비정상 암호화폐 시계열 예측 연구 정리 및 논문화 논의 요청"
+    subject = "이전 메일 말고 이것을 봐주세요 — [퀀트 연구] 비정상 암호화폐 시계열 예측 연구 정리 및 논문화 논의 요청"
     # 규칙(CLAUDE.md/AGENTS.md 2.7): 보고서는 GitHub 렌더링 링크로만 전달한다. .md 파일을
     # 그대로 첨부하면 받는 쪽에서 raw 텍스트로 열려 이미지·표가 안 보이고 가독성이 나빠진다
     # (2026-05-28에 이미 겪고 고친 문제 — 재발 방지를 위해 여기서 attachments를 비워 둔다).
     attachments: list[Path] = []
-    inline_images = [("fig_acf", acf_path), ("fig_garch", garch_path)]
+    inline_images = [("fig_acf", acf_path), ("fig_garch", garch_path), ("fig_horizon", horizon_path)]
     return subject, plain_body, html_body, attachments, inline_images
 
 
