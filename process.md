@@ -479,3 +479,24 @@
 - [ ] 다음: 17번 전면 EDA 착수 — 정상성 검정(ADF/KPSS 전종목 확장), 변수×target 상관/상호정보량,
       다중공선성, 분포·꼬리·이상치, 변동성 regime 분리, lead-lag(선행지표 탐색). "가격만으론
       방향신호 없음"을 EDA로 재확인한 뒤 외생변수(텍스트·cross-asset) 도입 여부를 결정한다.
+
+## 2026-07-22 17번 전면 EDA 완료 + 외생변수 계획 + 논문화 근거 정리
+
+- [x] 17번 EDA 드라이버 전면 재작성: describe(과학표기 없는 직관적 숫자) → 시계열 그림 →
+      분포 → ACF/PACF(방향 vs 크기) → 정상성 검정(ADF/KPSS/ARCH-LM) → STL 분해 → 방향신호
+      상호정보량. 100k autolag segfault는 최근 20k+고정 maxlag로 회피. BTC 전체 104,734행 실행.
+- [x] EDA 확정: 가격 레벨 명백 비정상(ADF p0.65+KPSS p0.01), 수익률 평균-정상이나 분산-비정상
+      (ARCH-LM p0, 변동성 군집). 방향 자기상관≈0(무신호), |수익률| 자기상관 0.36→0.12(크기 신호).
+      파생변수 60개 전수 방향신호 R² 미미. → 방향 예측은 가격만으론 한계(3번째 확정),
+      신호 있는 곳은 변동성(크기).
+- [x] 결과: `test/results/17_eda_direction_signal_20260722/eda_raw.md`(전 그림·표),
+      큐레이션 보고서 `test/results/17_eda_report_20260722.md`, 그림 5종.
+- [x] 교수님 공유용 논문화 근거: `test/results/professor_brief_publication_case_20260722.md`
+      (연구목적·초점·과정·결과·방법론·데이터 + baseline 참고문헌).
+- [x] Scrapling(적응형 스크래핑) 설치·검증, 외생변수 수집 계획
+      `test/experiment_specs/exogenous_data_collection_plan_20260722.md`(기존 text_context 통합,
+      API 우선·스크래핑 최후). deps: scikit-learn·tabulate·scrapling 추가.
+- [ ] 다음 결정(사용자): (1) 다음 축 — 변동성 모델링(GARCH/HAR 베이스라인) vs 외생변수 도입
+      vs 전종목 EDA 확장 중 무엇 먼저. (2) 차분 여부 — 레벨 직접(RevIN, lag-copy 평가 차단) vs
+      수익률 유지. (3) 외생변수 채널 우선순위(API 먼저 권장). (4) pre-commit 훅 비활성 상태에서
+      .py-only 커밋 유지할지 vs 훅 재활성+ipynb 미러 복원(CLAUDE.md 2.3와 현 상태 불일치 정리).
