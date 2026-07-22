@@ -9,7 +9,6 @@ from pathlib import Path
 
 REPO_SUBDIR = "quantitative_trading"
 TEST_SCRIPTS_PREFIX = f"{REPO_SUBDIR}/test/scripts/"
-TEST_MODELS_PREFIX = f"{REPO_SUBDIR}/test/models/"
 
 
 def run_git(args: list[str], cwd: Path) -> str:
@@ -50,10 +49,8 @@ def main() -> int:
                 "기존 스크립트, pipelines/, .githooks/, 또는 test/models/*.ipynb + *.py 미러를 사용하세요."
             )
 
-        if normalized.startswith(TEST_MODELS_PREFIX) and normalized.endswith(".py"):
-            sibling = root / Path(normalized).with_suffix(".ipynb")
-            if not sibling.exists():
-                errors.append(f"{normalized}: 같은 이름의 .ipynb 연구 노트북이 없습니다.")
+        # 2026-07-22: 동명 .ipynb 미러 강제 규칙 폐지. 연구 실험은 .py 헤드리스 드라이버가
+        # 기본이고(설명은 파일 내 # %% [markdown] 셀), ipynb 미러는 더 이상 요구하지 않는다.
 
     if errors:
         return fail("저장소 워크플로우 정책 검사 실패", errors)
