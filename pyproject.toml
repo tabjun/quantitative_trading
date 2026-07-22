@@ -23,6 +23,9 @@ dependencies = [
     "torch",
     "optuna",
     "statsmodels",
-    "pyupbit"
+    "pyupbit",
+    "scikit-learn",
+    "tabulate",
+    "scrapling"
 ]
 
