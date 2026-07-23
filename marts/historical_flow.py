@@ -526,21 +526,64 @@ class HistoricalFlowMart:
             )
         return pd.DataFrame(rows)
 
-    def _assign_archetypes(
+    def _prepare_blocks(
         self, path_vectors: np.ndarray, factor_vectors: np.ndarray, context_vectors: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, tuple[float, float, float]]:
+        """Put shape/factor/context on comparable scales so the configured weights actually
+        control their contribution.
+
+        Fixes M3-M5 documented in test/results/historical_flow_similarity_method_landscape_
+        20260723.md: previously factor vectors were unstandardized raw values, so rsi_14_last
+        (0-100) dominated ~99.9% of the k-means/Euclidean distance and the shape (return path)
+        contributed ~0.05% -- the documented 0.5/0.3/0.2 weights were nullified, and context
+        (all zero until text features exist) still consumed 0.2.
+
+        - path   : preserve cross-window amplitude & shape (research goal 2 needs large moves),
+                   so NO per-column z-score; only scale the whole block to unit total variance.
+        - factor : per-column population z-score (heterogeneous features), then unit total var.
+        - context: per-column z-score if it carries signal; if all-constant (e.g. not yet
+                   collected) drop it and renormalize the weights over shape+factor only.
+
+        Each returned block has unit total variance, so multiplying by sqrt(weight) makes the
+        block's contribution to squared Euclidean distance equal to its weight exactly.
+        """
+
+        def _unit_var(mat: np.ndarray) -> tuple[np.ndarray, bool]:
+            total = float(mat.var(axis=0).sum())
+            if total <= 1e-12:
+                return mat, False
+            return mat / np.sqrt(total), True
+
+        def _zcol(mat: np.ndarray) -> np.ndarray:
+            sd = mat.std(axis=0)
+            return (mat - mat.mean(axis=0)) / np.where(sd > 1e-12, sd, 1.0)
+
+        path_s, _ = _unit_var(path_vectors.astype(float))
+        factor_s, _ = _unit_var(_zcol(factor_vectors.astype(float)))
+        context_s, has_ctx = _unit_var(_zcol(context_vectors.astype(float)))
+        if not has_ctx:
+            context_s = np.zeros_like(context_vectors, dtype=float)
+
+        sw, fw, cw = self.config.shape_weight, self.config.factor_weight, self.config.context_weight
+        if not has_ctx:
+            cw = 0.0
+        total_w = sw + fw + cw
+        return path_s, factor_s, context_s, (sw / total_w, fw / total_w, cw / total_w)
+
+    def _assign_archetypes(
+        self, path_s: np.ndarray, factor_s: np.ndarray, context_s: np.ndarray,
+        weights: tuple[float, float, float],
     ) -> np.ndarray:
-        """Cluster windows into regime archetypes so neighbor search compares within a
-        cluster instead of the full population (bounds compute from O(N^2) to ~O(N^2/K))."""
-        n = path_vectors.shape[0]
+        """Layer-4 indexing: cluster STANDARDIZED windows into regime archetypes so neighbor
+        search compares within a cluster instead of the full population (~O(N^2/K)). Operates
+        on _prepare_blocks output so the shape actually participates (previously it did not)."""
+        n = path_s.shape[0]
         n_clusters = max(2, min(self.config.n_archetypes, n // 20))
         if n < n_clusters * 2:
             return np.zeros(n, dtype=int)
+        sw, fw, cw = weights
         combined = np.hstack(
-            [
-                path_vectors * np.sqrt(self.config.shape_weight),
-                factor_vectors * np.sqrt(self.config.factor_weight),
-                context_vectors * np.sqrt(self.config.context_weight),
-            ]
+            [path_s * np.sqrt(sw), factor_s * np.sqrt(fw), context_s * np.sqrt(cw)]
         )
         labels = KMeans(n_clusters=n_clusters, n_init=4, random_state=0).fit_predict(combined)
         return labels
@@ -573,7 +616,13 @@ class HistoricalFlowMart:
             window_ids = [row["window_id"] for row in group]
             tickers = [row["ticker"] for row in group]
 
-            cluster_labels = self._assign_archetypes(path_vectors, factor_vectors, context_vectors)
+            # M3-M5 fix: standardize blocks so the configured weights actually apply.
+            path_s, factor_s, context_s, eff_weights = self._prepare_blocks(
+                path_vectors, factor_vectors, context_vectors
+            )
+            w_shape, w_factor, w_context = eff_weights
+
+            cluster_labels = self._assign_archetypes(path_s, factor_s, context_s, eff_weights)
             members_by_cluster: dict[int, np.ndarray] = {}
             for i, label in enumerate(cluster_labels):
                 members_by_cluster.setdefault(int(label), []).append(i)
@@ -583,9 +632,9 @@ class HistoricalFlowMart:
                 m = len(member_idx)
                 if m < 2:
                     continue
-                sub_path = path_vectors[member_idx]
-                sub_factor = factor_vectors[member_idx]
-                sub_context = context_vectors[member_idx]
+                sub_path = path_s[member_idx]
+                sub_factor = factor_s[member_idx]
+                sub_context = context_s[member_idx]
                 sub_starts = window_starts[member_idx]
                 sub_ends = window_ends[member_idx]
                 k_eff = min(top_k, m - 1)
@@ -600,9 +649,9 @@ class HistoricalFlowMart:
                     factor_distances = cdist(sub_factor[idx_slice], sub_factor)
                     context_distances = cdist(sub_context[idx_slice], sub_context)
                     composite = (
-                        self.config.shape_weight * path_distances
-                        + self.config.factor_weight * factor_distances
-                        + self.config.context_weight * context_distances
+                        w_shape * path_distances
+                        + w_factor * factor_distances
+                        + w_context * context_distances
                     )
 
                     causal_mask = sub_ends[np.newaxis, :] >= sub_starts[idx_slice, np.newaxis]
@@ -643,7 +692,7 @@ class HistoricalFlowMart:
                                     "context_distance": float(context_distances[local_idx, sub_candidate_idx]),
                                     "composite_distance": float(dist),
                                     "archetype_id": label,
-                                    "method": "archetype_scoped_composite",
+                                    "method": "archetype_scoped_standardized_euclidean",
                                     "index_universe": "liquid-top",
                                     "updated_at": updated_at,
                                 }
