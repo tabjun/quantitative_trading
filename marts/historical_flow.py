@@ -20,6 +20,8 @@ import duckdb
 import numpy as np
 import pandas as pd
 from fastdtw import fastdtw
+from scipy.spatial.distance import cdist
+from sklearn.cluster import KMeans
 from database.paths import resolve_db_path
 
 
@@ -88,6 +90,8 @@ class HistoricalFlowConfig:
     shape_weight: float = 0.50
     factor_weight: float = 0.30
     context_weight: float = 0.20
+    n_archetypes: int = 40
+    liquid_only: bool = False
 
 
 def parse_window_lengths(raw: str | Sequence[int]) -> tuple[int, ...]:
@@ -120,6 +124,8 @@ class HistoricalFlowMart:
                 shape_weight=self.config.shape_weight,
                 factor_weight=self.config.factor_weight,
                 context_weight=self.config.context_weight,
+                n_archetypes=self.config.n_archetypes,
+                liquid_only=self.config.liquid_only,
             )
 
     def load_source_candles(self) -> pd.DataFrame:
@@ -301,6 +307,8 @@ class HistoricalFlowMart:
         built_at = datetime.utcnow()
 
         for ticker, ticker_df in candles.groupby("ticker", sort=True):
+            if self.config.liquid_only and ticker not in liquid_tickers:
+                continue
             ticker_df = ticker_df.sort_values("timestamp").reset_index(drop=True)
             for window_length in self.config.window_lengths:
                 if len(ticker_df) < window_length + 4:
@@ -518,6 +526,25 @@ class HistoricalFlowMart:
             )
         return pd.DataFrame(rows)
 
+    def _assign_archetypes(
+        self, path_vectors: np.ndarray, factor_vectors: np.ndarray, context_vectors: np.ndarray
+    ) -> np.ndarray:
+        """Cluster windows into regime archetypes so neighbor search compares within a
+        cluster instead of the full population (bounds compute from O(N^2) to ~O(N^2/K))."""
+        n = path_vectors.shape[0]
+        n_clusters = max(2, min(self.config.n_archetypes, n // 20))
+        if n < n_clusters * 2:
+            return np.zeros(n, dtype=int)
+        combined = np.hstack(
+            [
+                path_vectors * np.sqrt(self.config.shape_weight),
+                factor_vectors * np.sqrt(self.config.factor_weight),
+                context_vectors * np.sqrt(self.config.context_weight),
+            ]
+        )
+        labels = KMeans(n_clusters=n_clusters, n_init=4, random_state=0).fit_predict(combined)
+        return labels
+
     def _build_neighbors(self, feature_bundles: list[dict[str, dict[str, object]]]) -> pd.DataFrame:
         if not feature_bundles:
             return pd.DataFrame()
@@ -532,50 +559,97 @@ class HistoricalFlowMart:
         indexed_by_length: dict[int, list[dict[str, object]]] = {}
         for row in indexed:
             indexed_by_length.setdefault(int(row["window_length"]), []).append(row)
+        updated_at = datetime.utcnow()
+        query_chunk_size = 512
+        top_k = self.config.top_k
+
         for window_length, group in indexed_by_length.items():
             group = sorted(group, key=lambda row: row["window_end"])
-            path_vectors = np.vstack([json.loads(value) for value in [row["return_path_json"] for row in group]])
-            factor_vectors = np.vstack([json.loads(value) for value in [row["factor_vector_json"] for row in group]])
-            context_vectors = np.vstack([json.loads(value) for value in [row["context_vector_json"] for row in group]])
-            metadata = group
-            for idx, query in enumerate(metadata):
-                path_distances = np.linalg.norm(path_vectors - path_vectors[idx], axis=1)
-                factor_distances = np.linalg.norm(factor_vectors - factor_vectors[idx], axis=1)
-                context_distances = np.linalg.norm(context_vectors - context_vectors[idx], axis=1)
-                composite_distances = np.array(
-                    [
-                        self._composite_distance(path_distances[i], factor_distances[i], context_distances[i])
-                        for i in range(len(path_distances))
-                    ]
-                )
-                order = np.argsort(composite_distances)
-                rank = 0
-                for candidate_idx in order:
-                    if candidate_idx == idx:
-                        continue
-                    candidate = metadata[candidate_idx]
-                    if candidate["window_end"] >= query["window_start"]:
-                        continue
-                    rank += 1
-                    rows.append(
-                        {
-                            "query_window_id": query["window_id"],
-                            "neighbor_window_id": candidate["window_id"],
-                            "query_ticker": query["ticker"],
-                            "neighbor_ticker": candidate["ticker"],
-                            "window_length": int(window_length),
-                            "rank": rank,
-                            "shape_distance": float(path_distances[candidate_idx]),
-                            "factor_distance": float(factor_distances[candidate_idx]),
-                            "context_distance": float(context_distances[candidate_idx]),
-                            "composite_distance": float(composite_distances[candidate_idx]),
-                            "method": "shape_factor_context_composite",
-                            "index_universe": "liquid-top",
-                            "updated_at": datetime.utcnow(),
-                        }
+            path_vectors = np.vstack([json.loads(row["return_path_json"]) for row in group])
+            factor_vectors = np.vstack([json.loads(row["factor_vector_json"]) for row in group])
+            context_vectors = np.vstack([json.loads(row["context_vector_json"]) for row in group])
+            window_starts = np.array([row["window_start"] for row in group])
+            window_ends = np.array([row["window_end"] for row in group])
+            window_ids = [row["window_id"] for row in group]
+            tickers = [row["ticker"] for row in group]
+
+            cluster_labels = self._assign_archetypes(path_vectors, factor_vectors, context_vectors)
+            members_by_cluster: dict[int, np.ndarray] = {}
+            for i, label in enumerate(cluster_labels):
+                members_by_cluster.setdefault(int(label), []).append(i)
+            members_by_cluster = {label: np.array(idxs) for label, idxs in members_by_cluster.items()}
+
+            for label, member_idx in members_by_cluster.items():
+                m = len(member_idx)
+                if m < 2:
+                    continue
+                sub_path = path_vectors[member_idx]
+                sub_factor = factor_vectors[member_idx]
+                sub_context = context_vectors[member_idx]
+                sub_starts = window_starts[member_idx]
+                sub_ends = window_ends[member_idx]
+                k_eff = min(top_k, m - 1)
+                if k_eff <= 0:
+                    continue
+
+                for chunk_start in range(0, m, query_chunk_size):
+                    chunk_end = min(chunk_start + query_chunk_size, m)
+                    idx_slice = slice(chunk_start, chunk_end)
+
+                    path_distances = cdist(sub_path[idx_slice], sub_path)
+                    factor_distances = cdist(sub_factor[idx_slice], sub_factor)
+                    context_distances = cdist(sub_context[idx_slice], sub_context)
+                    composite = (
+                        self.config.shape_weight * path_distances
+                        + self.config.factor_weight * factor_distances
+                        + self.config.context_weight * context_distances
                     )
-                    if rank >= self.config.top_k:
-                        break
+
+                    causal_mask = sub_ends[np.newaxis, :] >= sub_starts[idx_slice, np.newaxis]
+                    composite[causal_mask] = np.inf
+                    for local_idx in range(chunk_end - chunk_start):
+                        composite[local_idx, chunk_start + local_idx] = np.inf
+
+                    valid_counts = np.isfinite(composite).sum(axis=1)
+                    partition_idx = np.argpartition(
+                        composite, kth=min(k_eff, composite.shape[1] - 1), axis=1
+                    )[:, :k_eff]
+
+                    for local_idx in range(chunk_end - chunk_start):
+                        if valid_counts[local_idx] == 0:
+                            continue
+                        global_idx = member_idx[chunk_start + local_idx]
+                        candidates = partition_idx[local_idx]
+                        candidate_distances = composite[local_idx, candidates]
+                        order = np.argsort(candidate_distances)
+                        rank = 0
+                        for order_pos in order:
+                            sub_candidate_idx = candidates[order_pos]
+                            dist = candidate_distances[order_pos]
+                            if not np.isfinite(dist):
+                                continue
+                            candidate_idx = member_idx[sub_candidate_idx]
+                            rank += 1
+                            rows.append(
+                                {
+                                    "query_window_id": window_ids[global_idx],
+                                    "neighbor_window_id": window_ids[candidate_idx],
+                                    "query_ticker": tickers[global_idx],
+                                    "neighbor_ticker": tickers[candidate_idx],
+                                    "window_length": int(window_length),
+                                    "rank": rank,
+                                    "shape_distance": float(path_distances[local_idx, sub_candidate_idx]),
+                                    "factor_distance": float(factor_distances[local_idx, sub_candidate_idx]),
+                                    "context_distance": float(context_distances[local_idx, sub_candidate_idx]),
+                                    "composite_distance": float(dist),
+                                    "archetype_id": label,
+                                    "method": "archetype_scoped_composite",
+                                    "index_universe": "liquid-top",
+                                    "updated_at": updated_at,
+                                }
+                            )
+                            if rank >= top_k:
+                                break
         return pd.DataFrame(rows)
 
     def _composite_distance(self, shape_distance: float, factor_distance: float, context_distance: float) -> float:
@@ -609,8 +683,14 @@ class HistoricalFlowMart:
 
         with con_ctx as con:
             for relation_name in [FEATURE_TABLE, SHAPE_TABLE, FACTOR_TABLE, CONTEXT_TABLE]:
-                con.execute(f"DROP VIEW IF EXISTS {relation_name}")
-                con.execute(f"DROP TABLE IF EXISTS {relation_name}")
+                try:
+                    con.execute(f"DROP VIEW IF EXISTS {relation_name}")
+                except duckdb.CatalogException:
+                    pass
+                try:
+                    con.execute(f"DROP TABLE IF EXISTS {relation_name}")
+                except duckdb.CatalogException:
+                    pass
 
             for table_name, frame in [
                 (WINDOW_TABLE, windows),
@@ -798,6 +878,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--shape-weight", type=float, default=0.50)
     parser.add_argument("--factor-weight", type=float, default=0.30)
     parser.add_argument("--context-weight", type=float, default=0.20)
+    parser.add_argument("--n-archetypes", type=int, default=40)
+    parser.add_argument("--liquid-only", action="store_true")
     return parser
 
 
@@ -813,6 +895,8 @@ def config_from_args(args: argparse.Namespace) -> HistoricalFlowConfig:
         shape_weight=args.shape_weight,
         factor_weight=args.factor_weight,
         context_weight=args.context_weight,
+        n_archetypes=args.n_archetypes,
+        liquid_only=args.liquid_only,
     )
 
 

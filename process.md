@@ -500,3 +500,16 @@
       vs 전종목 EDA 확장 중 무엇 먼저. (2) 차분 여부 — 레벨 직접(RevIN, lag-copy 평가 차단) vs
       수익률 유지. (3) 외생변수 채널 우선순위(API 먼저 권장). (4) pre-commit 훅 비활성 상태에서
       .py-only 커밋 유지할지 vs 훅 재활성+ipynb 미러 복원(CLAUDE.md 2.3와 현 상태 불일치 정리).
+
+## 2026-07-23 DTW 과거유사국면 마트(historical_flow) 빌드 완료
+
+- [x] 원래 목표 규모(liquid-top 50종목 × max-windows 2000 × 창길이 4종) 완주. 처음 O(N²)
+      브루트포스+전종목 방식으로는 12일 예상이었으나, 원인 규명(순수 파이썬 반복문+불필요한
+      219개 비유동종목 처리) 후 벡터화(scipy cdist)+클러스터링(sklearn KMeans, 국면 원형
+      먼저 정의 후 군집 내부만 비교)+`--liquid-only`(필요한 종목만 생성)로 재설계해 총 7~8분,
+      최대메모리 11.8GB로 완료. `marts/historical_flow.py`에 `--liquid-only`/`--n-archetypes`/
+      `archetype_id` 옵션 추가. 상세: `history.md` 2026-07-23 행.
+- [ ] 다음: `query_similar_flows()`로 실제 쿼리 검증(살아있는 티커에 대해 과거 유사 국면이
+      말이 되는지 스팟체크). 나머지 준비작업 4종(데이터품질감사·시장요인 PCA·계절성·거래량
+      선행지표, 이미지는 이미 `test/images/17_eda_direction_signal_20260722/s10~s12.png`로
+      생성됨)을 보고서에 정식 반영·커밋. A/B/C(방향/변동성/추세) 결정은 교수님 답변 대기 중.
