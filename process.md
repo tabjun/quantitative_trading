@@ -515,8 +515,14 @@
       `historical_flow_similarity_method_landscape_20260723.md`. **핵심 발견 M3(치명)**:
       `_standard_vector`가 표준화를 안 해서 factor의 rsi_14_last가 클러스터 분산을 독식
       (shape 기여 0.05%) → 문서상 0.5/0.3/0.2 가중치 무력화. M2: 유클리드 색인이 DTW 이웃 95% 놓침.
-- [ ] 다음(사용자 결정 대기): (1) 거리 메트릭 확정 — DTW(제약) vs FDA(FPCA) vs z정규화 유클리드.
-      (2) 구간정의를 change-point/HMM으로 확장할지. (3) M3/M4/M5 즉시교정(factor population
-      z정규화 + context 0가중 제외) 적용 여부. (4) 하이브리드(싼거리 pruning→DTW/FDA 재순위) 채택.
+- [x] **STEP1 완료(커밋 d294b18)**: M3/M4/M5 교정 — `_prepare_blocks`로 블록 표준화, 가중치 실효화
+      (shape 기여 0.05%→62.5%), context 0가중 드롭. 재빌드 완료.
+- [x] **STEP2 완료**: M2 교정 — 빌드=쿼리 DTW 하이브리드(표준화-유클리드 pruning→밴드 DTW 재순위,
+      dtaidistance C백엔드). 쿼리 3분→9.4초. 목적정합 평가: 크기 IC 0.19/MDD IC 0.27(랜덤≈0)/방향
+      48.7%(≈50%) — 크기·변동성·MDD 예측O, 방향 예측X, 연구 논지와 완전 정합. 문서
+      `historical_flow_metric_and_eval_20260723.md`.
+- [ ] 다음(사용자 결정 대기): (1) 진폭보존 DTW 유지 vs z정규화 순수모양. (2) 유클리드 archetype
+      버킷 → LB_Keogh 무손실색인 교체 여부. (3) 구간정의 change-point/HMM 확장. (4) context 외생채널
+      수집(채워지면 자동 가중치 복귀). FDA는 사용자 수학부담으로 보류(문서상 대안).
 - [ ] 나머지 준비작업 4종(데이터품질감사·시장요인 PCA·계절성·거래량 선행지표, s10~s12.png)
       보고서 정식 반영·커밋. A/B/C(방향/변동성/추세) 결정은 교수님 답변 대기 중.

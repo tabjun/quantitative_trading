@@ -26,6 +26,7 @@ dependencies = [
     "pyupbit",
     "scikit-learn",
     "tabulate",
-    "scrapling"
+    "scrapling",
+    "dtaidistance>=2.4.0",
 ]
 
