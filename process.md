@@ -509,7 +509,14 @@
       먼저 정의 후 군집 내부만 비교)+`--liquid-only`(필요한 종목만 생성)로 재설계해 총 7~8분,
       최대메모리 11.8GB로 완료. `marts/historical_flow.py`에 `--liquid-only`/`--n-archetypes`/
       `archetype_id` 옵션 추가. 상세: `history.md` 2026-07-23 행.
-- [ ] 다음: `query_similar_flows()`로 실제 쿼리 검증(살아있는 티커에 대해 과거 유사 국면이
-      말이 되는지 스팟체크). 나머지 준비작업 4종(데이터품질감사·시장요인 PCA·계절성·거래량
-      선행지표, 이미지는 이미 `test/images/17_eda_direction_signal_20260722/s10~s12.png`로
-      생성됨)을 보고서에 정식 반영·커밋. A/B/C(방향/변동성/추세) 결정은 교수님 답변 대기 중.
+- [x] `query_similar_flows()` 스팟체크 정상(KRW-BTC 96구간 과거 유사국면 5개 반환). 커밋 `13fc731`.
+- [x] 방법론 설명 문서 2종 커밋: (1) DTW vs 클러스터 1차 설명 `historical_flow_method_explainer_
+      20260723.md`(커밋 e5ebace), (2) 유사도 방법론 지형+문헌근거+싱크감사 6종
+      `historical_flow_similarity_method_landscape_20260723.md`. **핵심 발견 M3(치명)**:
+      `_standard_vector`가 표준화를 안 해서 factor의 rsi_14_last가 클러스터 분산을 독식
+      (shape 기여 0.05%) → 문서상 0.5/0.3/0.2 가중치 무력화. M2: 유클리드 색인이 DTW 이웃 95% 놓침.
+- [ ] 다음(사용자 결정 대기): (1) 거리 메트릭 확정 — DTW(제약) vs FDA(FPCA) vs z정규화 유클리드.
+      (2) 구간정의를 change-point/HMM으로 확장할지. (3) M3/M4/M5 즉시교정(factor population
+      z정규화 + context 0가중 제외) 적용 여부. (4) 하이브리드(싼거리 pruning→DTW/FDA 재순위) 채택.
+- [ ] 나머지 준비작업 4종(데이터품질감사·시장요인 PCA·계절성·거래량 선행지표, s10~s12.png)
+      보고서 정식 반영·커밋. A/B/C(방향/변동성/추세) 결정은 교수님 답변 대기 중.
