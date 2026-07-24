@@ -40,10 +40,10 @@
 ## 5. 문서 역할
 
 - [AGENTS.md](/c:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/AGENTS.md): 세션마다 반드시 지켜야 하는 강제 규칙
-- [skills.md](/c:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/skills.md): 기술 철학, 분석 원칙, 보고서 기준
+- `CLAUDE.md`: Claude Code용 강제 규칙(§2.11 코드 작성 루프·§4 분석 설계 원칙 포함, `AGENTS.md`와 동기)
 - [history.md](/c:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/history.md): 누적 작업 이력
 - [process.md](/c:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/process.md): 현재 단계와 다음 단계
-- [conversation_l2_cache.md](/c:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/conversation_l2_cache.md): 최근 요청 요약 캐시
+- `conversation_l2_cache.md`: 사용자 요청 원문 보존 캐시(요약은 process/history가 담당)
 - [test/README.md](/c:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/test/README.md): 연구 실험 공간 사용 가이드
 
 ## 6. 디렉토리 구조
@@ -187,7 +187,7 @@ uv run pipelines/simulate_and_send.py
 
 - AI 에이전트는 먼저 문서 컨텍스트를 읽고 작업을 시작합니다.
 - 저장소 규칙은 `README.md`보다 `AGENTS.md`가 우선합니다.
-- 기술 철학과 분석 기준은 `skills.md`를 기준으로 통일합니다.
+- 기술 철학·분석 기준은 `CLAUDE.md`(§2.11 코드 루프, §4 분석 설계 원칙)/`AGENTS.md`를 기준으로 통일합니다.
 - 연구 실험과 실제 활용 프레임워크를 섞지 않도록 `test/`와 루트 패키지를 구분합니다.
 
 ## 13. 향후 확장 및 배포 파이프라인
