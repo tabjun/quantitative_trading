@@ -1,7 +1,8 @@
-# 대화 L2 캐시
+# 대화 L2 캐시 (요청 원문 보존)
 
-목적: 전체 대화 원문이 아니라 최근 사용자 의도와 제약만 압축해서 남긴다.
-영구 규칙은 `AGENTS.md`와 `skills.md`에 둔다.
+목적: 사용자 요청을 **원문 그대로** 남긴다 — 이 파일에서는 요약하지 않는다.
+요약·정리·구조화는 `process.md`(현재 상태)와 `history.md`(이력)가 맡고,
+영구 규칙은 `CLAUDE.md`/`AGENTS.md`에 둔다.
 
 | 2026-06-28 | skill install 요청 | 사용자는 `arxiv` MCP, Hugging Face plugin, `research-workflow-orchestrator`, `harness` 설치를 요청했다. 현재 repo에는 `arxiv` 설정과 `research-workflow-orchestrator`가 있었고, Hugging Face는 설치 가능한 Codex skill/plugin 항목이 확인되지 않았다. | `harness`를 `~/.claude/skills/harness`에서 `~/.codex/skills/harness`로 복사해 Codex 전역 스킬로 설치했다. `research-workflow-orchestrator`는 이미 `~/.codex/skills/research-workflow-orchestrator`에 있었고, `arxiv-mcp-server` 실행 파일도 확인했다. | 다음부터는 Codex에서 `research-workflow-orchestrator`와 `harness`를 바로 쓸 수 있고, Hugging Face는 실제 설치 가능한 skill/plugin명이 확인되면 그때 추가한다. |
 | 2026-06-28 | Hugging Face Python stack install | 사용자는 uv 기반 Python 3.12/3.13 venv 두 개에 Hugging Face 계열 패키지를 모두 넣어 달라고 요청했다. | `../../.venvs/quant_uv_py312_20260614_045930`와 `../../.venvs/quant_uv_py313_20260614_040356`에 `huggingface_hub`, `datasets`, `transformers`, `sentence-transformers`, `evaluate`, `gradio`, `accelerate`, `peft`, `hf_transfer`, `trl`을 설치했다. 3.12/3.13 모두 성공했고, `huggingface_hub[cli]`는 extra 이름이 없다는 경고만 있었다. | 두 환경 모두에서 Hugging Face / research workflow 작업을 바로 실행할 수 있다. 필요하면 다음 단계에서 torch, inspect-ai, lighteval 같은 추가 연구용 패키지를 더 넣는다. |
@@ -9,12 +10,16 @@
 
 ## 유지 원칙
 
-- 최근 핵심 요청 최대 20개만 유지한다.
-- 오래된 항목 중 영구 규칙은 `AGENTS.md` 또는 `skills.md`로 승격한다.
-- 작업 이력은 `history.md`, 현재 단계는 `process.md`에 맡긴다.
-- 이 파일은 최근 사용자 의도와 선호를 복원하는 용도로만 쓴다.
+- 사용자 요청은 **원문 그대로**(블록인용) 남긴다 — 요약본으로 대체하지 않는다.
+- 요약·조치·다음 단계 같은 구조화된 정리는 `history.md`(이력)와 `process.md`(현재 상태)에 남긴다.
+- 오래된 항목 중 영구 규칙은 `CLAUDE.md`/`AGENTS.md`로 승격한다.
+- 이 파일은 사용자의 원래 의도를 원문으로 복원하는 용도다.
 
-## 최근 요청 캐시
+## 최근 요청 캐시 (이전 형식 — 요약 혼재, 참고용 보존)
+
+> 아래 표는 원문 보존 지침 확정(2026-07-18) 이전부터 써 온 요약 혼재 형식이다. 기록 보존을 위해
+> 그대로 둔다. 이후 항목은 이 표에 요약을 새로 붙이지 않고, "사용자 요청 원문" 블록인용으로만 남긴다
+> (요약·조치·다음 단계는 `history.md`/`process.md`가 맡는다).
 
 | 날짜 | 요청 | 제약 | 조치/산출물 | 다음 단계 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -137,3 +142,7 @@
 > (6) 일단 부합된 목적부터 분리하는게 우선이지, 그리고 성능, 평가 지표 등 아주 중요해 이것도 우리 목적에 맞게 해야지.(다만 FDA는 걱정이긴 해 내가 잘 알지 못하는 분야인데 함수형이다 보니 수학적 직관이 꽤 필요하긴 해서). 어쨌든 잘못된거 먼저 정리하고 > 그 다음 메트릭 정리해. 근데 2개 다 순차적으로 진행하고 나에게 안묻고 바로해. 그리고 새로운 세션에서 대화 진행할수있게 모든걸 기록하고 있지?
 
 | 2026-07-23 | DTW 마트 12일→7분 최적화 + 방법론 지형 문서 + 잘못된것 교정→메트릭 순차 (원문 위) | 12일 원인이 규모냐 병목이냐 / 표본추출로 구간 정의 우선 / 서버 다운 / k-means가 시계열 연속성 미반영 우려 / DTW 외 공분산·FDA 등 대안+문헌+목적분리 / 잘못된것 먼저→메트릭 순차·안묻고·전부기록. FDA는 사용자가 수학적 부담 우려 → 구현서 제외·문서 대안으로만. | **완료**: STEP1(커밋 d294b18, 표준화 교정 shape기여 0.05%→62.5%) + STEP2(커밋 2730c43, 빌드=쿼리 DTW 하이브리드, 목적정합 평가 크기IC 0.19/MDD IC 0.27/방향≈50%). 종합 문서 `test/results/historical_flow_metric_and_eval_20260723.md`. 다음 결정 대기: 진폭보존 DTW 유지·LB_Keogh 무손실색인·구간정의 change-point/HMM·context 외생채널. | 로컬+서버 |
+
+### 2026-07-24 사용자 요청 원문 (원문 보존 지침)
+
+> 작업 확인해. 그리고 대화 히스토리는 내 요청 원본으로 기록해 요약하지 말고, 그걸 요약해서 정리하는건 각 작업 지침이나 작업 과정 기록 process, history, state md로 해야하는거야/. 체크해

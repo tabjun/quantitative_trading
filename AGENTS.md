@@ -33,7 +33,7 @@
   `.codex/config.toml`, Claude Code=`.mcp.json`. 두 문서는 동일 규칙을 공유하므로 어느 도구로
   시작해도 이어받을 수 있다.
 - **세션 종료 전**: `history.md`에 수행 내용·산출물·다음 목표 한 행 추가, `process.md` 현재
-  단계 갱신, 방향 전환이 있었으면 `conversation_l2_cache.md`에 원문 그대로 한 행 추가. 중단/
+  단계 갱신, 방향 전환이 있었으면 `conversation_l2_cache.md`에 요청 원문 그대로 추가(요약 금지). 중단/
   복구 중이면 완료처럼 쓰지 말고 확보한 것·못한 것·다음 도구가 할 일을 명시한다.
 - **세션 시작 시**: `process.md` 미완료 체크리스트 → `history.md` 최근 완료 작업 →
   `conversation_l2_cache.md` 최근 선호·제약 순으로 복원한다.
@@ -158,7 +158,9 @@ Modes(Kitchen Sink/Wrong Abstraction/Optimistic Path/Runaway Refactor 경계).
   종료 시 1회. 실행 중 발견한 버그·이슈·수정은 결과 raw md에 전량 남긴다(취사선택은 사용자 몫).
 - **suite 승계·챔피언 선정**: 단일 지표 최고로 뽑지 않는다. 진폭 건전성(variance_ratio)과 큰
   변동 포착(tail_f1·large_move_da)을 함께 본다 — `known_pitfalls.md` P1/P4.
-- **요청 원문 보존**: `conversation_l2_cache.md`에 사용자 요청 원문을 가능하면 그대로 저장.
+- **요청 원문 보존(원문=대화캐시, 요약=process/history)**: `conversation_l2_cache.md`는 사용자
+  요청을 **원문 그대로** 남기는 곳이다 — 이 파일에서는 요약하지 않는다. 요약·정리·구조화는
+  `process.md`(현재 상태)와 `history.md`(이력)가 맡는다.
 - **데이터 축 기본값**: 업비트 KRW 전 종목 15분봉(원설계). 단일 종목은 진단 목적에 한해 쓰고
   결과는 "단일 축 한정"으로만 해석한다 — P3.
 - 배경·전체 사례: `test/results/governance_drift_rootcause_20260719.md`(왜 지침이 실행에
