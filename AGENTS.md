@@ -107,6 +107,18 @@
 ### 2.7 branch·Git 전달 규칙
 
 - 사용자 지시 없으면 작업 브랜치에서만 커밋/푸시. `main`/`develop` 병합은 명시 요청 시만.
+- **브랜치별 역할 분리 (2026-08-09 확정)**: `stock`은 연구 브랜치라 작업 지침 파일을 포함한
+  전량을 커밋한다. `develop`/`main`은 최종 결과물만 올라가는 브랜치라 아래 지침 파일은
+  **제외**한다 — `AGENTS.md`, `CLAUDE.md`, `conversation_l2_cache.md`, `history.md`,
+  `process.md`(및 향후 추가되는 동급 상태 파일). `stock → develop`/`stock → main` 병합 시:
+  ```bash
+  git merge --no-commit --no-ff stock
+  git reset -- AGENTS.md CLAUDE.md conversation_l2_cache.md history.md process.md
+  git checkout -- AGENTS.md CLAUDE.md conversation_l2_cache.md history.md process.md
+  # 위 파일들이 develop/main에 아직 없었다면 checkout 대신 rm으로 제거
+  git status   # 지침 파일이 스테이징/워킹트리에서 빠졌는지 확인 후 커밋
+  ```
+  `test/`, `pipelines/`, `marts/`, `engine/`, `analysis/` 등 코드·결과물은 그대로 병합된다.
 - **서버 ↔ GitHub은 SSH 원격**(`git@github.com:tabjun/personal_ai_project.git`)이 기본이다.
   학교 서버는 인바운드 SSH(22번)는 방화벽에 막혀 있지만 아웃바운드는 열려 있어 서버에서
   `ssh -T git@github.com` 인증은 정상 동작한다(2026-07-14 확인). **로컬 PC ↔ GitHub은 이
