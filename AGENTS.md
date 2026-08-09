@@ -1,15 +1,17 @@
-# AGENTS.md - Codex 작업 지침서
+# AGENTS.md - Codex/Claude Code 공용 작업 지침서
 
 ## 목적
 
-이 문서는 이 저장소에서 Codex가 매 세션 반드시 따라야 하는 강제 규칙을 정의한다.
-`CLAUDE.md`(Claude Code용)와 같은 규칙을 공유한다. 두 파일은 섹션 구조까지 동일하게 유지한다 —
-한쪽만 고치면 드리프트가 생기므로, 이 문서를 고치면 반드시 `CLAUDE.md`도 같이 고친다.
+이 문서는 이 저장소에서 Codex와 Claude Code가 매 세션 반드시 따라야 하는 강제 규칙을
+정의하는 **단일 source of truth**다. `CLAUDE.md`는 별도 규칙을 담지 않고 이 파일을 가리키는
+참조 스텁이다(2026-08-09부터 — 이전에는 두 파일에 동일 규칙을 중복 관리하며 섹션 구조까지
+맞췄으나, 드리프트 위험을 없애기 위해 이 파일 하나로 합쳤다). 규칙을 고칠 때는 이 문서만
+고치면 되고, `CLAUDE.md`는 건드릴 필요가 없다(Claude Code 전용 예외 2가지만 그 파일에 남음).
 
 도구별 사설 memory는 보조 정보일 뿐이다. source of truth는 저장소 문서다:
-`AGENTS.md`/`CLAUDE.md`(영구 규칙) → `process.md`(현재 단계) → `history.md`(이력) →
-`conversation_l2_cache.md`(최근 요청 원문) → `test/known_pitfalls.md`(실행 직전 체크) →
-`test/README.md`(연구 공간 안내).
+`AGENTS.md`(영구 규칙, Claude Code는 `CLAUDE.md` 스텁을 거쳐 진입) → `process.md`(현재 단계) →
+`history.md`(이력) → `conversation_l2_cache.md`(최근 요청 원문) →
+`test/known_pitfalls.md`(실행 직전 체크) → `test/README.md`(연구 공간 안내).
 
 이 문서는 **압축 유지가 원칙**이다. 새 사건이 생겨도 문단을 계속 붙이지 않는다 — 기계적으로
 판정 가능한 규칙은 `test/known_pitfalls.md`(코드 게이트)로, 한 시점 상태는 `process.md`로,
@@ -21,17 +23,18 @@
 
 ## 0. 항상 먼저 읽을 문서
 
-새 세션이 시작되면: `AGENTS.md`(이 파일) → `process.md` → `history.md` 최근 섹션 →
-`conversation_l2_cache.md` 최근 항목 → `test/known_pitfalls.md` → `test/README.md`.
-직전 작업자가 Claude Code였던 정황이 있으면 `CLAUDE.md`도 확인한다.
+새 세션이 시작되면: `AGENTS.md`(이 파일, Claude Code는 `CLAUDE.md` 스텁을 거쳐 여기로 옴) →
+`process.md` → `history.md` 최근 섹션 → `conversation_l2_cache.md` 최근 항목 →
+`test/known_pitfalls.md` → `test/README.md`.
 
 ---
 
 ## 1. Claude ↔ Codex 병행 사용
 
-- 설정 파일: Codex=`AGENTS.md`(이 파일), Claude Code=`CLAUDE.md`. MCP 설정: Codex=
-  `.codex/config.toml`, Claude Code=`.mcp.json`. 두 문서는 동일 규칙을 공유하므로 어느 도구로
-  시작해도 이어받을 수 있다.
+- 규칙 파일은 이 문서 하나(`AGENTS.md`)뿐이다. Claude Code는 자동으로 읽는 `CLAUDE.md`가
+  이 파일을 가리키는 3줄 스텁이라 결과적으로 같은 규칙을 본다. MCP 설정 파일만 도구별로
+  분리되어 있다: Codex=`.codex/config.toml`, Claude Code=`.mcp.json`. 어느 도구로 시작해도
+  같은 규칙을 이어받는다.
 - **세션 종료 전**: `history.md`에 수행 내용·산출물·다음 목표 한 행 추가, `process.md` 현재
   단계 갱신, 방향 전환이 있었으면 `conversation_l2_cache.md`에 요청 원문 그대로 추가(요약 금지). 중단/
   복구 중이면 완료처럼 쓰지 말고 확보한 것·못한 것·다음 도구가 할 일을 명시한다.
@@ -114,9 +117,9 @@
 
 ### 2.8 새 파일보다 기존 파일을 우선한다
 
-`AGENTS.md`, `process.md`, `history.md`, `conversation_l2_cache.md`, `test/known_pitfalls.md`,
-`test/README.md`, `pipelines/`, `test/scripts/`, 기존 `test/models/*`를 먼저 확인하고, 새 파일보다
-기존 파일 수정·확장을 우선한다.
+`AGENTS.md`(+ `CLAUDE.md` 스텁), `process.md`, `history.md`, `conversation_l2_cache.md`,
+`test/known_pitfalls.md`, `test/README.md`, `pipelines/`, `test/scripts/`, 기존
+`test/models/*`를 먼저 확인하고, 새 파일보다 기존 파일 수정·확장을 우선한다.
 
 ### 2.9 `test/scripts/`에는 재사용 도구만
 
@@ -218,9 +221,10 @@ uv run pipelines/simulate_and_send.py
 
 ## 7. 도구 전환 체크리스트
 
-**Codex → Claude**: 변경 파일 커밋/메모 → `history.md` 기록 → `process.md` 다음 스텝 갱신 →
-Claude Code는 `CLAUDE.md → process.md → history.md` 순으로 읽음. Codex memory에만 남긴 결정은
-반드시 저장소 파일에도 남긴다.
+두 도구가 같은 `AGENTS.md`를 보므로(Claude Code는 `CLAUDE.md` 스텁을 거침) 규칙 드리프트
+걱정 없이 전환 가능하다. 전환 시 확인할 것은 다음 두 가지뿐이다.
 
-**Claude → Codex**: Claude 세션 변경분 커밋 확인 → `AGENTS.md → process.md → history.md →
-conversation_l2_cache.md` 순으로 복원.
+**Codex → Claude / Claude → Codex 공통**: 변경 파일 커밋/메모 → `history.md` 기록 →
+`process.md` 다음 스텝 갱신. 새 세션은 `AGENTS.md`(또는 `CLAUDE.md` 스텁) → `process.md` →
+`history.md` → `conversation_l2_cache.md` 순으로 복원한다. 어느 쪽 memory에만 남긴 결정도
+반드시 저장소 파일에 남긴다.
