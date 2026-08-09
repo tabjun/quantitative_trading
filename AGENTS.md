@@ -10,8 +10,25 @@
 
 도구별 사설 memory는 보조 정보일 뿐이다. source of truth는 저장소 문서다:
 `AGENTS.md`(영구 규칙, Claude Code는 `CLAUDE.md` 스텁을 거쳐 진입) → `process.md`(현재 단계) →
-`history.md`(이력) → `conversation_l2_cache.md`(최근 요청 원문) →
-`test/known_pitfalls.md`(실행 직전 체크) → `test/README.md`(연구 공간 안내).
+`state.md`(요청 단위 완료 체크) → `history.md`(이력) → `conversation_l2_cache.md`(최근 요청
+원문) → `test/known_pitfalls.md`(실행 직전 체크) → `test/README.md`(연구 공간 안내).
+
+### 문서별 역할 (겹치지 않게 유지, 2026-08-09 확정)
+
+각 문서는 아래 역할 하나만 맡는다. 새 내용을 적을 때 이 표로 어느 파일에 쓸지 먼저 판단한다.
+
+| 문서 | 역할 | 갱신 주체 | 형식 |
+| :--- | :--- | :--- | :--- |
+| `README.md` | 프로젝트 전체 설명(무엇인지, 왜 하는지) — 거의 안 바뀜 | 사용자+AI | 서술 |
+| `AGENTS.md`/`CLAUDE.md` | 항상 적용되는 영구 규칙(source of truth) | 사용자 승인 후 AI | 서술 |
+| `process.md` | 연구 단계별 To-Do(무엇을 할 것인가, Phase/실험 단위) | AI | `[x]`/`[ ]` + 서술 |
+| `state.md` | **사용자 요청 단위로 "실행됐는가"만** 체크(연구 서술 없음) | AI(요청마다 자동 갱신) | `[x]`/`[ ]`/`[~]` 표 |
+| `history.md` | 완료된 작업의 이력(무엇을·왜·어떻게·결과) | AI | 표 |
+| `conversation_l2_cache.md` | 사용자 요청 **원문** 보존(최근 20개, 요약 안 함) | AI | 표 |
+
+`process.md`와 `state.md`를 혼동하지 않는다 — `process.md`는 "이 연구를 어떤 순서로 할
+것인가"이고, `state.md`는 "사용자가 요청한 각각의 일이 끝났는가"다. 전자는 실험이
+바뀔 때만 갱신되고, 후자는 매 요청마다 갱신된다.
 
 이 문서는 **압축 유지가 원칙**이다. 새 사건이 생겨도 문단을 계속 붙이지 않는다 — 기계적으로
 판정 가능한 규칙은 `test/known_pitfalls.md`(코드 게이트)로, 한 시점 상태는 `process.md`로,
@@ -24,8 +41,8 @@
 ## 0. 항상 먼저 읽을 문서
 
 새 세션이 시작되면: `AGENTS.md`(이 파일, Claude Code는 `CLAUDE.md` 스텁을 거쳐 여기로 옴) →
-`process.md` → `history.md` 최근 섹션 → `conversation_l2_cache.md` 최근 항목 →
-`test/known_pitfalls.md` → `test/README.md`.
+`process.md` → `state.md`(미완료 요청 확인) → `history.md` 최근 섹션 →
+`conversation_l2_cache.md` 최근 항목 → `test/known_pitfalls.md` → `test/README.md`.
 
 ---
 
@@ -35,11 +52,16 @@
   이 파일을 가리키는 3줄 스텁이라 결과적으로 같은 규칙을 본다. MCP 설정 파일만 도구별로
   분리되어 있다: Codex=`.codex/config.toml`, Claude Code=`.mcp.json`. 어느 도구로 시작해도
   같은 규칙을 이어받는다.
+- **요청을 받을 때마다**: `conversation_l2_cache.md`에 새 인덱스로 요청 원문을 먼저 기록하고,
+  같은 인덱스로 `state.md`에 `[ ]`(진행중) 행을 추가한다. 요청을 완료하면 `state.md`의 그
+  행을 `[x]`로 갱신한다(중단/보류는 `[~]`).
 - **세션 종료 전**: `history.md`에 수행 내용·산출물·다음 목표 한 행 추가, `process.md` 현재
-  단계 갱신, 방향 전환이 있었으면 `conversation_l2_cache.md`에 요청 원문 그대로 추가(요약 금지). 중단/
+  단계 갱신, `state.md`에 미완료로 남은 항목이 있으면 `[~]`와 비고로 정확히 표시. 방향
+  전환이 있었으면 `conversation_l2_cache.md`에 요청 원문 그대로 추가(요약 금지). 중단/
   복구 중이면 완료처럼 쓰지 말고 확보한 것·못한 것·다음 도구가 할 일을 명시한다.
-- **세션 시작 시**: `process.md` 미완료 체크리스트 → `history.md` 최근 완료 작업 →
-  `conversation_l2_cache.md` 최근 선호·제약 순으로 복원한다.
+- **세션 시작 시**: `process.md` 미완료 체크리스트 → `state.md`의 `[ ]`/`[~]` 행(무엇이
+  안 끝났는지) → `history.md` 최근 완료 작업 → `conversation_l2_cache.md` 최근 선호·제약
+  순으로 복원한다.
 
 ---
 
@@ -108,17 +130,20 @@
 
 - 사용자 지시 없으면 작업 브랜치에서만 커밋/푸시. `main`/`develop` 병합은 명시 요청 시만.
 - **브랜치별 역할 분리 (2026-08-09 확정)**: `stock`은 연구 브랜치라 작업 지침 파일을 포함한
-  전량을 커밋한다. `develop`/`main`은 최종 결과물만 올라가는 브랜치라 아래 지침 파일은
-  **제외**한다 — `AGENTS.md`, `CLAUDE.md`, `conversation_l2_cache.md`, `history.md`,
-  `process.md`(및 향후 추가되는 동급 상태 파일). `stock → develop`/`stock → main` 병합 시:
+  전량을 커밋한다. `develop`/`main`은 최종 결과물만 올라가는 브랜치라 아래 지침 파일 6종은
+  **존재 자체를 제외**한다 — `AGENTS.md`, `CLAUDE.md`, `conversation_l2_cache.md`, `history.md`,
+  `process.md`, `state.md`. 일반 `git merge stock`을 그대로 실행해도 되며, 이 파일들이
+  스테이징되면 `.githooks/check_repo_policy.py`(pre-commit)가 `develop`/`main`에서 커밋
+  자체를 자동 차단하고 되돌리는 명령을 안내한다(삭제는 허용). 훅이 막았을 때 되돌리는 예:
   ```bash
-  git merge --no-commit --no-ff stock
-  git reset -- AGENTS.md CLAUDE.md conversation_l2_cache.md history.md process.md
-  git checkout -- AGENTS.md CLAUDE.md conversation_l2_cache.md history.md process.md
-  # 위 파일들이 develop/main에 아직 없었다면 checkout 대신 rm으로 제거
-  git status   # 지침 파일이 스테이징/워킹트리에서 빠졌는지 확인 후 커밋
+  git restore --staged --worktree -- AGENTS.md CLAUDE.md conversation_l2_cache.md history.md process.md state.md
+  # 해당 브랜치에 그 파일이 원래 없었다면(신규 추가로 잡힌 경우)
+  git rm --cached -- <해당 파일>
   ```
   `test/`, `pipelines/`, `marts/`, `engine/`, `analysis/` 등 코드·결과물은 그대로 병합된다.
+  이 자동 차단은 로컬 git이 `core.hooksPath=quantitative_trading/.githooks`를 가리킬 때만
+  동작한다 — 새로 clone한 환경에서는 `git config core.hooksPath quantitative_trading/.githooks`를
+  먼저 실행한다.
 - **서버 ↔ GitHub은 SSH 원격**(`git@github.com:tabjun/personal_ai_project.git`)이 기본이다.
   학교 서버는 인바운드 SSH(22번)는 방화벽에 막혀 있지만 아웃바운드는 열려 있어 서버에서
   `ssh -T git@github.com` 인증은 정상 동작한다(2026-07-14 확인). **로컬 PC ↔ GitHub은 이
@@ -137,9 +162,10 @@
 
 ### 2.8 새 파일보다 기존 파일을 우선한다
 
-`AGENTS.md`(+ `CLAUDE.md` 스텁), `process.md`, `history.md`, `conversation_l2_cache.md`,
-`test/known_pitfalls.md`, `test/README.md`, `pipelines/`, `test/scripts/`, 기존
-`test/models/*`를 먼저 확인하고, 새 파일보다 기존 파일 수정·확장을 우선한다.
+`AGENTS.md`(+ `CLAUDE.md` 스텁), `process.md`, `state.md`, `history.md`,
+`conversation_l2_cache.md`, `test/known_pitfalls.md`, `test/README.md`, `pipelines/`,
+`test/scripts/`, 기존 `test/models/*`를 먼저 확인하고, 새 파일보다 기존 파일 수정·확장을
+우선한다.
 
 ### 2.9 `test/scripts/`에는 재사용 도구만
 
@@ -245,6 +271,7 @@ uv run pipelines/simulate_and_send.py
 걱정 없이 전환 가능하다. 전환 시 확인할 것은 다음 두 가지뿐이다.
 
 **Codex → Claude / Claude → Codex 공통**: 변경 파일 커밋/메모 → `history.md` 기록 →
-`process.md` 다음 스텝 갱신. 새 세션은 `AGENTS.md`(또는 `CLAUDE.md` 스텁) → `process.md` →
-`history.md` → `conversation_l2_cache.md` 순으로 복원한다. 어느 쪽 memory에만 남긴 결정도
-반드시 저장소 파일에 남긴다.
+`process.md` 다음 스텝 갱신 → `state.md`에 미완료 항목 정확히 표시. 새 세션은
+`AGENTS.md`(또는 `CLAUDE.md` 스텁) → `process.md` → `state.md` → `history.md` →
+`conversation_l2_cache.md` 순으로 복원한다. 어느 쪽 memory에만 남긴 결정도 반드시 저장소
+파일에 남긴다.

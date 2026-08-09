@@ -20,6 +20,7 @@ GOVERNANCE_FILES = {
     f"{REPO_SUBDIR}/conversation_l2_cache.md",
     f"{REPO_SUBDIR}/history.md",
     f"{REPO_SUBDIR}/process.md",
+    f"{REPO_SUBDIR}/state.md",
 }
 GOVERNANCE_EXCLUDED_BRANCHES = {"develop", "main"}
 
