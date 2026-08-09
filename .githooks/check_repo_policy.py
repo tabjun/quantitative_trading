@@ -24,6 +24,14 @@ GOVERNANCE_FILES = {
 }
 GOVERNANCE_EXCLUDED_BRANCHES = {"develop", "main"}
 
+# 2026-08-10: AGENTS.md 2.9절은 test/scripts에 "재사용 도구"는 허용하고 "이번 한 번만 쓰는
+# ad-hoc 스크립트"만 금지하는데, 이 검사는 신규 .py를 무조건 막아 문서보다 엄격했다.
+# 재사용 도구를 추가할 때만 여기에 파일명을 명시적으로 올린다 — 기본값은 여전히 차단이라
+# ad-hoc 스크립트가 슬쩍 들어오는 것을 막는 원래 목적은 그대로 유지된다.
+TEST_SCRIPTS_ALLOWED = {
+    "mcp_client.py",   # MCP 서버(arxiv/HF) 직접 호출기 — AGENTS.md 5절
+}
+
 
 def run_git(args: list[str], cwd: Path) -> str:
     return subprocess.check_output(["git", *args], cwd=cwd, text=True, encoding="utf-8").strip()
@@ -63,10 +71,17 @@ def main() -> int:
 
     for status, path in staged:
         normalized = path.replace("\\", "/")
-        if status.startswith("A") and normalized.startswith(TEST_SCRIPTS_PREFIX) and normalized.endswith(".py"):
+        if (
+            status.startswith("A")
+            and normalized.startswith(TEST_SCRIPTS_PREFIX)
+            and normalized.endswith(".py")
+            and normalized[len(TEST_SCRIPTS_PREFIX):] not in TEST_SCRIPTS_ALLOWED
+        ):
             errors.append(
                 f"{normalized}: test/scripts 아래에는 단발성 연구·워크플로우 스크립트를 추가하지 마세요. "
-                "기존 스크립트, pipelines/, .githooks/, 또는 test/models/*.ipynb + *.py 미러를 사용하세요."
+                "기존 스크립트, pipelines/, .githooks/, 또는 test/models/*.ipynb + *.py 미러를 사용하세요. "
+                "재사용 도구라면(AGENTS.md 2.9절) check_repo_policy.py의 TEST_SCRIPTS_ALLOWED에 "
+                "파일명을 명시적으로 추가하세요."
             )
 
         # 2026-07-22: 동명 .ipynb 미러 강제 규칙 폐지. 연구 실험은 .py 헤드리스 드라이버가

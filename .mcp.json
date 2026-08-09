@@ -1,8 +1,14 @@
 {
   "mcpServers": {
     "arxiv": {
+      "type": "stdio",
       "command": "arxiv-mcp-server",
-      "args": []
+      "args": [],
+      "env": {}
+    },
+    "huggingface": {
+      "type": "http",
+      "url": "https://huggingface.co/mcp"
     }
   }
 }

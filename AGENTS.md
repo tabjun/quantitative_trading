@@ -169,8 +169,12 @@
 
 ### 2.9 `test/scripts/`에는 재사용 도구만
 
-허용: 노트북 빌더, 보고서 변환기, 이미지 추출기, 환경 복구기, 메일/리포트 전달기.
+허용: 노트북 빌더, 보고서 변환기, 이미지 추출기, 환경 복구기, 메일/리포트 전달기, MCP 호출기.
 금지: 이번 한 번만 쓰는 ad-hoc 스크립트.
+
+`check_repo_policy.py`는 기본적으로 `test/scripts/`의 **신규 `.py`를 전부 차단**한다(ad-hoc
+유입 방지). 재사용 도구라서 예외가 필요하면 그 훅의 `TEST_SCRIPTS_ALLOWED`에 파일명을
+명시적으로 올린다 — 예외는 자동이 아니라 매번 의도적으로 선언한다(2026-08-10 신설).
 
 ### 2.10 가상환경은 재사용한다
 
@@ -245,10 +249,32 @@ n8n/Cron/CI/Docker/Kubernetes 설계, 학교 서버 커널 실행 절차·파라
 
 ## 5. MCP 도구 설정
 
-`.codex/config.toml`에 arxiv MCP 등록. 논문 검색은 arxiv MCP 사용(세션에 노출 안 되면 웹검색 +
-arxiv.org 직접 대조로 대체하고 미확인 인용은 명시).
+| 서버 | 등록 위치 | 용도 | 인증 |
+| :--- | :--- | :--- | :--- |
+| `arxiv` (stdio) | `.mcp.json`(Claude Code) + `.codex/config.toml`(Codex) | 논문 검색·초록·BibTeX·인용그래프 | 불필요 |
+| `huggingface` (http) | `.mcp.json` | 모델·데이터셋·Space 검색(`hub_repo_search` 등) | 익명 가능, `HF_TOKEN` 있으면 rate limit 완화 |
 
-미설치 시: `uv tool install --managed-python --python 3.12 git+https://github.com/blazickjp/arxiv-mcp-server.git`
+**논문 검색은 arxiv MCP를 쓴다.** 인용은 `search_papers` → `get_abstract`로 **초록까지 대조**한
+것만 쓰고, 대조 못 한 인용은 보고서에 "미검증 인용"으로 명시한다. HF MCP에는 논문 검색 툴이
+없다(모델·데이터셋 전용) — 문헌 근거를 HF로 대체하지 않는다.
+
+arxiv 서버 미설치 시:
+`uv tool install --managed-python --python 3.12 git+https://github.com/blazickjp/arxiv-mcp-server.git`
+
+**세션 밖에서 호출하기.** MCP 서버는 에이전트 세션 **시작 시점**에만 로드되므로, 새로 등록한
+서버는 같은 세션에서 툴로 노출되지 않는다. 이때는 웹검색으로 우회하지 말고
+`test/scripts/mcp_client.py`를 경유해 같은 서버를 그대로 호출한다.
+
+```bash
+python test/scripts/mcp_client.py arxiv tools
+python test/scripts/mcp_client.py arxiv search_papers '{"query": "...", "max_results": 6}'
+python test/scripts/mcp_client.py arxiv get_abstract '{"paper_id": "2109.12142v2"}'
+python test/scripts/mcp_client.py huggingface hub_repo_search '{"query": "garch", "type": "model"}'
+```
+
+**`.mcp.json`은 지침 파일이 아니다** — 2.7절 `GOVERNANCE_FILES`에 넣지 않는다. `mcp_client.py`
+(연구 재현 스크립트, develop/main에도 올라간다)가 이 파일을 읽어 서버 정의를 얻으므로,
+develop/main에서 제외하면 그 브랜치의 재현 명령이 깨진다.
 
 ---
 
