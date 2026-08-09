@@ -107,7 +107,15 @@
 ### 2.7 branch·Git 전달 규칙
 
 - 사용자 지시 없으면 작업 브랜치에서만 커밋/푸시. `main`/`develop` 병합은 명시 요청 시만.
-- GitHub SSH 원격(`git@github.com:tabjun/personal_ai_project.git`) 기본. HTTPS면 push 전 SSH로 교정.
+- **서버 ↔ GitHub은 SSH 원격**(`git@github.com:tabjun/personal_ai_project.git`)이 기본이다.
+  학교 서버는 인바운드 SSH(22번)는 방화벽에 막혀 있지만 아웃바운드는 열려 있어 서버에서
+  `ssh -T git@github.com` 인증은 정상 동작한다(2026-07-14 확인). **로컬 PC ↔ GitHub은 이
+  규칙과 무관** — 로컬은 HTTPS 원격을 그대로 써도 된다(2026-08-09 확인, push 정상 동작).
+  즉 "SSH가 기본"인 대상은 서버의 git 원격뿐이고, 로컬 origin 프로토콜까지 SSH로 맞출
+  필요는 없다.
+- VS Code Remote Tunnels의 GitHub 로그인(device code OAuth, `tools/USAGE.md` 방법 2)은
+  이 git 원격 설정과 무관한 별개 채널이다 — SSH가 막혀 있어도 아웃바운드 방식이라 서버
+  접속엔 쓸 수 있지만, git push/pull의 SSH/HTTPS 선택에는 영향을 주지 않는다.
 - 보고서/메일 링크는 GitHub 렌더링 Markdown URL만(commit history 링크 금지). 메일 본문엔
   핵심 개선점 + 보고서 링크.
 - **메일에 `.md` 원본 파일을 첨부하지 않는다 (2026-07-23 재확인).** raw `.md`는 받는 쪽에서
