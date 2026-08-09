@@ -14,6 +14,25 @@ ensure_gpu_server() {
   fi
 }
 
+ensure_uv_installed() {
+  if command -v uv >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "[bootstrap] uv not found. Installing uv via https://astral.sh/uv/install.sh ..."
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+
+  # uv's installer places the binary under ~/.local/bin (or ~/.cargo/bin on older versions).
+  export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "[bootstrap] uv installation failed. Install manually and re-run this script."
+    exit 1
+  fi
+
+  echo "[bootstrap] uv installed: $(command -v uv) ($(uv --version))"
+}
+
 detect_torch_index_url() {
   local cuda_version
 
@@ -24,6 +43,10 @@ detect_torch_index_url() {
     nvidia-smi
     exit 1
   fi
+
+  local cuda_major cuda_minor
+  cuda_major="${cuda_version%%.*}"
+  cuda_minor="${cuda_version#*.}"
 
   case "$cuda_version" in
     12.6)
@@ -36,10 +59,15 @@ detect_torch_index_url() {
       TORCH_INDEX_URL="https://download.pytorch.org/whl/cu121"
       ;;
     *)
-      echo "[bootstrap] Unsupported CUDA version: $cuda_version"
-      echo "[bootstrap] nvidia-smi output:"
-      nvidia-smi
-      exit 1
+      if [[ "$cuda_major" -gt 12 ]] || { [[ "$cuda_major" -eq 12 ]] && [[ "$cuda_minor" -gt 6 ]]; }; then
+        echo "[bootstrap] Driver CUDA $cuda_version has no matching PyTorch wheel yet; falling back to cu126 (driver is backward compatible)."
+        TORCH_INDEX_URL="https://download.pytorch.org/whl/cu126"
+      else
+        echo "[bootstrap] Unsupported CUDA version: $cuda_version"
+        echo "[bootstrap] nvidia-smi output:"
+        nvidia-smi
+        exit 1
+      fi
       ;;
   esac
 
@@ -118,6 +146,8 @@ packages = [
     "optuna",
     "torch",
     "ipykernel",
+    "ipywidgets",
+    "jupyterlab_widgets",
     "openai",
     "google.generativeai",
     "fastdtw",

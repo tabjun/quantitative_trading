@@ -1,0 +1,12 @@
+{
+  "recommendations": [
+    "anthropic.claude-code",
+    "openai.chatgpt",
+    "ms-ceintl.vscode-language-pack-ko",
+    "ms-python.python",
+    "ms-toolsai.jupyter",
+    "charliermarsh.ruff",
+    "eamodio.gitlens",
+    "usernamehw.errorlens"
+  ]
+}

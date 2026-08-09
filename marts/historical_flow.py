@@ -20,6 +20,15 @@ import duckdb
 import numpy as np
 import pandas as pd
 from fastdtw import fastdtw
+from scipy.spatial.distance import cdist
+from sklearn.cluster import KMeans
+
+try:  # C-optimized banded (Sakoe-Chiba) DTW; ~135x faster than pure-python fastdtw
+    from dtaidistance import dtw as _dtai_dtw
+
+    _HAS_DTAI = True
+except Exception:  # pragma: no cover - fallback keeps the mart runnable without the dep
+    _HAS_DTAI = False
 from database.paths import resolve_db_path
 
 
@@ -88,6 +97,10 @@ class HistoricalFlowConfig:
     shape_weight: float = 0.50
     factor_weight: float = 0.30
     context_weight: float = 0.20
+    n_archetypes: int = 40
+    liquid_only: bool = False
+    rerank_pool_m: int = 40  # cheap-Euclidean candidates kept per query before DTW re-rank
+    dtw_band: int = 12  # Sakoe-Chiba band (max |i-j|) for constrained DTW
 
 
 def parse_window_lengths(raw: str | Sequence[int]) -> tuple[int, ...]:
@@ -120,6 +133,10 @@ class HistoricalFlowMart:
                 shape_weight=self.config.shape_weight,
                 factor_weight=self.config.factor_weight,
                 context_weight=self.config.context_weight,
+                n_archetypes=self.config.n_archetypes,
+                liquid_only=self.config.liquid_only,
+                rerank_pool_m=self.config.rerank_pool_m,
+                dtw_band=self.config.dtw_band,
             )
 
     def load_source_candles(self) -> pd.DataFrame:
@@ -209,27 +226,51 @@ class HistoricalFlowMart:
         if candidates.empty:
             return candidates
 
+        # Same two-stage hybrid as the build (metric consistency, M2): standardize blocks with
+        # the candidate population (query appended as row 0), cheap-Euclidean prune to a pool,
+        # then banded-DTW re-rank. The query is the latest window, so every stored candidate is
+        # already in the past (causal by construction).
+        cand_paths = np.vstack([json.loads(x) for x in candidates["return_path_json"]])
+        cand_factor = np.vstack([json.loads(x) for x in candidates["factor_vector_json"]])
+        cand_context = np.vstack([json.loads(x) for x in candidates["context_vector_json"]])
+        all_path = np.vstack([query_path[np.newaxis, :], cand_paths])
+        all_factor = np.vstack([query_factor[np.newaxis, :], cand_factor])
+        all_context = np.vstack([query_context[np.newaxis, :], cand_context])
+        path_s, factor_s, context_s, eff_weights = self._prepare_blocks(all_path, all_factor, all_context)
+        w_shape, w_factor, w_context = eff_weights
+
+        q_path_s, cand_path_s = path_s[0], path_s[1:]
+        q_factor_s, cand_factor_s = factor_s[0], factor_s[1:]
+        q_context_s, cand_context_s = context_s[0], context_s[1:]
+
+        shape_euclid = np.linalg.norm(cand_path_s - q_path_s, axis=1)
+        factor_dist = np.linalg.norm(cand_factor_s - q_factor_s, axis=1)
+        context_dist = np.linalg.norm(cand_context_s - q_context_s, axis=1)
+        prune_score = w_shape * shape_euclid + w_factor * factor_dist + w_context * context_dist
+
+        pool_m = min(self.config.rerank_pool_m, len(candidates))
+        pool = np.argpartition(prune_score, kth=min(pool_m, len(prune_score) - 1))[:pool_m]
+
+        dtw_d = np.array([_banded_dtw(q_path_s, cand_path_s[c], self.config.dtw_band) for c in pool])
+        fac_d = factor_dist[pool]
+        ctx_d = context_dist[pool]
+        comp = self._robust_composite(dtw_d, fac_d, ctx_d, eff_weights)
+        order = np.argsort(comp)[:top_k]
+
         scored_rows = []
-        for row in candidates.to_dict("records"):
-            candidate_path = np.asarray(json.loads(row["return_path_json"]), dtype=float)
-            candidate_factor = np.asarray(json.loads(row["factor_vector_json"]), dtype=float)
-            candidate_context = np.asarray(json.loads(row["context_vector_json"]), dtype=float)
-            shape_distance, _ = fastdtw(query_path, candidate_path, dist=_point_distance)
-            factor_distance = _safe_norm(query_factor - candidate_factor)
-            context_distance = _safe_norm(query_context - candidate_context)
-            composite_distance = self._composite_distance(shape_distance, factor_distance, context_distance)
+        cand_records = candidates.to_dict("records")
+        for oi in order:
+            cand_idx = int(pool[oi])
             scored_rows.append(
                 {
-                    **row,
-                    "query_dtw_distance": float(shape_distance),
-                    "query_factor_distance": float(factor_distance),
-                    "query_context_distance": float(context_distance),
-                    "query_composite_distance": float(composite_distance),
+                    **cand_records[cand_idx],
+                    "query_dtw_distance": float(dtw_d[oi]),
+                    "query_factor_distance": float(fac_d[oi]),
+                    "query_context_distance": float(ctx_d[oi]),
+                    "query_composite_distance": float(comp[oi]),
                 }
             )
-
-        result = pd.DataFrame(scored_rows).sort_values("query_composite_distance").head(top_k)
-        return result.reset_index(drop=True)
+        return pd.DataFrame(scored_rows).reset_index(drop=True)
 
     def _prepare_candles(self, candles: pd.DataFrame) -> pd.DataFrame:
         required = {"timestamp", "ticker", "open", "high", "low", "close", "volume", "value"}
@@ -301,6 +342,8 @@ class HistoricalFlowMart:
         built_at = datetime.utcnow()
 
         for ticker, ticker_df in candles.groupby("ticker", sort=True):
+            if self.config.liquid_only and ticker not in liquid_tickers:
+                continue
             ticker_df = ticker_df.sort_values("timestamp").reset_index(drop=True)
             for window_length in self.config.window_lengths:
                 if len(ticker_df) < window_length + 4:
@@ -518,6 +561,68 @@ class HistoricalFlowMart:
             )
         return pd.DataFrame(rows)
 
+    def _prepare_blocks(
+        self, path_vectors: np.ndarray, factor_vectors: np.ndarray, context_vectors: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, tuple[float, float, float]]:
+        """Put shape/factor/context on comparable scales so the configured weights actually
+        control their contribution.
+
+        Fixes M3-M5 documented in test/results/historical_flow_similarity_method_landscape_
+        20260723.md: previously factor vectors were unstandardized raw values, so rsi_14_last
+        (0-100) dominated ~99.9% of the k-means/Euclidean distance and the shape (return path)
+        contributed ~0.05% -- the documented 0.5/0.3/0.2 weights were nullified, and context
+        (all zero until text features exist) still consumed 0.2.
+
+        - path   : preserve cross-window amplitude & shape (research goal 2 needs large moves),
+                   so NO per-column z-score; only scale the whole block to unit total variance.
+        - factor : per-column population z-score (heterogeneous features), then unit total var.
+        - context: per-column z-score if it carries signal; if all-constant (e.g. not yet
+                   collected) drop it and renormalize the weights over shape+factor only.
+
+        Each returned block has unit total variance, so multiplying by sqrt(weight) makes the
+        block's contribution to squared Euclidean distance equal to its weight exactly.
+        """
+
+        def _unit_var(mat: np.ndarray) -> tuple[np.ndarray, bool]:
+            total = float(mat.var(axis=0).sum())
+            if total <= 1e-12:
+                return mat, False
+            return mat / np.sqrt(total), True
+
+        def _zcol(mat: np.ndarray) -> np.ndarray:
+            sd = mat.std(axis=0)
+            return (mat - mat.mean(axis=0)) / np.where(sd > 1e-12, sd, 1.0)
+
+        path_s, _ = _unit_var(path_vectors.astype(float))
+        factor_s, _ = _unit_var(_zcol(factor_vectors.astype(float)))
+        context_s, has_ctx = _unit_var(_zcol(context_vectors.astype(float)))
+        if not has_ctx:
+            context_s = np.zeros_like(context_vectors, dtype=float)
+
+        sw, fw, cw = self.config.shape_weight, self.config.factor_weight, self.config.context_weight
+        if not has_ctx:
+            cw = 0.0
+        total_w = sw + fw + cw
+        return path_s, factor_s, context_s, (sw / total_w, fw / total_w, cw / total_w)
+
+    def _assign_archetypes(
+        self, path_s: np.ndarray, factor_s: np.ndarray, context_s: np.ndarray,
+        weights: tuple[float, float, float],
+    ) -> np.ndarray:
+        """Layer-4 indexing: cluster STANDARDIZED windows into regime archetypes so neighbor
+        search compares within a cluster instead of the full population (~O(N^2/K)). Operates
+        on _prepare_blocks output so the shape actually participates (previously it did not)."""
+        n = path_s.shape[0]
+        n_clusters = max(2, min(self.config.n_archetypes, n // 20))
+        if n < n_clusters * 2:
+            return np.zeros(n, dtype=int)
+        sw, fw, cw = weights
+        combined = np.hstack(
+            [path_s * np.sqrt(sw), factor_s * np.sqrt(fw), context_s * np.sqrt(cw)]
+        )
+        labels = KMeans(n_clusters=n_clusters, n_init=4, random_state=0).fit_predict(combined)
+        return labels
+
     def _build_neighbors(self, feature_bundles: list[dict[str, dict[str, object]]]) -> pd.DataFrame:
         if not feature_bundles:
             return pd.DataFrame()
@@ -532,51 +637,125 @@ class HistoricalFlowMart:
         indexed_by_length: dict[int, list[dict[str, object]]] = {}
         for row in indexed:
             indexed_by_length.setdefault(int(row["window_length"]), []).append(row)
+        updated_at = datetime.utcnow()
+        query_chunk_size = 512
+        top_k = self.config.top_k
+
         for window_length, group in indexed_by_length.items():
             group = sorted(group, key=lambda row: row["window_end"])
-            path_vectors = np.vstack([json.loads(value) for value in [row["return_path_json"] for row in group]])
-            factor_vectors = np.vstack([json.loads(value) for value in [row["factor_vector_json"] for row in group]])
-            context_vectors = np.vstack([json.loads(value) for value in [row["context_vector_json"] for row in group]])
-            metadata = group
-            for idx, query in enumerate(metadata):
-                path_distances = np.linalg.norm(path_vectors - path_vectors[idx], axis=1)
-                factor_distances = np.linalg.norm(factor_vectors - factor_vectors[idx], axis=1)
-                context_distances = np.linalg.norm(context_vectors - context_vectors[idx], axis=1)
-                composite_distances = np.array(
-                    [
-                        self._composite_distance(path_distances[i], factor_distances[i], context_distances[i])
-                        for i in range(len(path_distances))
-                    ]
-                )
-                order = np.argsort(composite_distances)
-                rank = 0
-                for candidate_idx in order:
-                    if candidate_idx == idx:
-                        continue
-                    candidate = metadata[candidate_idx]
-                    if candidate["window_end"] >= query["window_start"]:
-                        continue
-                    rank += 1
-                    rows.append(
-                        {
-                            "query_window_id": query["window_id"],
-                            "neighbor_window_id": candidate["window_id"],
-                            "query_ticker": query["ticker"],
-                            "neighbor_ticker": candidate["ticker"],
-                            "window_length": int(window_length),
-                            "rank": rank,
-                            "shape_distance": float(path_distances[candidate_idx]),
-                            "factor_distance": float(factor_distances[candidate_idx]),
-                            "context_distance": float(context_distances[candidate_idx]),
-                            "composite_distance": float(composite_distances[candidate_idx]),
-                            "method": "shape_factor_context_composite",
-                            "index_universe": "liquid-top",
-                            "updated_at": datetime.utcnow(),
-                        }
+            path_vectors = np.vstack([json.loads(row["return_path_json"]) for row in group])
+            factor_vectors = np.vstack([json.loads(row["factor_vector_json"]) for row in group])
+            context_vectors = np.vstack([json.loads(row["context_vector_json"]) for row in group])
+            window_starts = np.array([row["window_start"] for row in group])
+            window_ends = np.array([row["window_end"] for row in group])
+            window_ids = [row["window_id"] for row in group]
+            tickers = [row["ticker"] for row in group]
+
+            # M3-M5 fix: standardize blocks so the configured weights actually apply.
+            path_s, factor_s, context_s, eff_weights = self._prepare_blocks(
+                path_vectors, factor_vectors, context_vectors
+            )
+            w_shape, w_factor, w_context = eff_weights
+
+            cluster_labels = self._assign_archetypes(path_s, factor_s, context_s, eff_weights)
+            members_by_cluster: dict[int, np.ndarray] = {}
+            for i, label in enumerate(cluster_labels):
+                members_by_cluster.setdefault(int(label), []).append(i)
+            members_by_cluster = {label: np.array(idxs) for label, idxs in members_by_cluster.items()}
+
+            for label, member_idx in members_by_cluster.items():
+                m = len(member_idx)
+                if m < 2:
+                    continue
+                sub_path = path_s[member_idx]
+                sub_factor = factor_s[member_idx]
+                sub_context = context_s[member_idx]
+                sub_starts = window_starts[member_idx]
+                sub_ends = window_ends[member_idx]
+                k_eff = min(top_k, m - 1)
+                if k_eff <= 0:
+                    continue
+
+                pool_m = min(self.config.rerank_pool_m, m - 1)
+                for chunk_start in range(0, m, query_chunk_size):
+                    chunk_end = min(chunk_start + query_chunk_size, m)
+                    idx_slice = slice(chunk_start, chunk_end)
+
+                    # Stage 1 (cheap prune): standardized-Euclidean composite -> top-M candidates.
+                    shape_euclid = cdist(sub_path[idx_slice], sub_path)
+                    factor_distances = cdist(sub_factor[idx_slice], sub_factor)
+                    context_distances = cdist(sub_context[idx_slice], sub_context)
+                    prune_score = (
+                        w_shape * shape_euclid
+                        + w_factor * factor_distances
+                        + w_context * context_distances
                     )
-                    if rank >= self.config.top_k:
-                        break
+                    causal_mask = sub_ends[np.newaxis, :] >= sub_starts[idx_slice, np.newaxis]
+                    prune_score[causal_mask] = np.inf
+                    for local_idx in range(chunk_end - chunk_start):
+                        prune_score[local_idx, chunk_start + local_idx] = np.inf
+
+                    valid_counts = np.isfinite(prune_score).sum(axis=1)
+                    partition_idx = np.argpartition(
+                        prune_score, kth=min(pool_m, prune_score.shape[1] - 1), axis=1
+                    )[:, :pool_m]
+
+                    # Stage 2 (precise re-rank): banded DTW on the pruned pool, same metric as
+                    # the live query -> fixes the build/query inconsistency (M2).
+                    for local_idx in range(chunk_end - chunk_start):
+                        if valid_counts[local_idx] == 0:
+                            continue
+                        global_idx = member_idx[chunk_start + local_idx]
+                        pool = partition_idx[local_idx]
+                        pool = pool[np.isfinite(prune_score[local_idx, pool])]
+                        if pool.size == 0:
+                            continue
+                        qpath = sub_path[chunk_start + local_idx]
+                        dtw_d = np.array(
+                            [_banded_dtw(qpath, sub_path[c], self.config.dtw_band) for c in pool]
+                        )
+                        fac_d = factor_distances[local_idx, pool]
+                        ctx_d = context_distances[local_idx, pool]
+                        comp = self._robust_composite(dtw_d, fac_d, ctx_d, eff_weights)
+                        order = np.argsort(comp)[:top_k]
+                        for rank, order_pos in enumerate(order, start=1):
+                            candidate_idx = member_idx[pool[order_pos]]
+                            rows.append(
+                                {
+                                    "query_window_id": window_ids[global_idx],
+                                    "neighbor_window_id": window_ids[candidate_idx],
+                                    "query_ticker": tickers[global_idx],
+                                    "neighbor_ticker": tickers[candidate_idx],
+                                    "window_length": int(window_length),
+                                    "rank": rank,
+                                    "shape_distance": float(dtw_d[order_pos]),
+                                    "factor_distance": float(fac_d[order_pos]),
+                                    "context_distance": float(ctx_d[order_pos]),
+                                    "composite_distance": float(comp[order_pos]),
+                                    "archetype_id": label,
+                                    "method": "archetype_prune_then_banded_dtw",
+                                    "index_universe": "liquid-top",
+                                    "updated_at": updated_at,
+                                }
+                            )
         return pd.DataFrame(rows)
+
+    @staticmethod
+    def _robust_composite(
+        shape_d: np.ndarray, factor_d: np.ndarray, context_d: np.ndarray,
+        weights: tuple[float, float, float],
+    ) -> np.ndarray:
+        """Combine heterogeneous distance types (DTW shape + Euclidean factor/context) within
+        a candidate pool. Each component is scaled by its median over the pool so the weights
+        are comparable across metrics that live on different scales, then weighted."""
+
+        def _rs(x: np.ndarray) -> np.ndarray:
+            finite = x[np.isfinite(x)]
+            med = float(np.median(finite)) if finite.size else 1.0
+            return x / (med + 1e-12)
+
+        sw, fw, cw = weights
+        return sw * _rs(shape_d) + fw * _rs(factor_d) + cw * _rs(context_d)
 
     def _composite_distance(self, shape_distance: float, factor_distance: float, context_distance: float) -> float:
         return (
@@ -609,8 +788,14 @@ class HistoricalFlowMart:
 
         with con_ctx as con:
             for relation_name in [FEATURE_TABLE, SHAPE_TABLE, FACTOR_TABLE, CONTEXT_TABLE]:
-                con.execute(f"DROP VIEW IF EXISTS {relation_name}")
-                con.execute(f"DROP TABLE IF EXISTS {relation_name}")
+                try:
+                    con.execute(f"DROP VIEW IF EXISTS {relation_name}")
+                except duckdb.CatalogException:
+                    pass
+                try:
+                    con.execute(f"DROP TABLE IF EXISTS {relation_name}")
+                except duckdb.CatalogException:
+                    pass
 
             for table_name, frame in [
                 (WINDOW_TABLE, windows),
@@ -739,6 +924,27 @@ def _point_distance(left: object, right: object) -> float:
     return float(abs(float(np.asarray(left).squeeze()) - float(np.asarray(right).squeeze())))
 
 
+def _banded_dtw(a: np.ndarray, b: np.ndarray, band: int) -> float:
+    """Sakoe-Chiba band-constrained DTW distance between two 1-D sequences.
+
+    Uses the C backend when available (dtaidistance, ~8us for length 96); falls back to
+    pure-python fastdtw otherwise. Constraining the warping path (band) keeps alignments
+    meaningful and follows the standard time-series practice (Sakoe & Chiba 1978;
+    Keogh & Ratanamahatana 2005).
+    """
+    if _HAS_DTAI:
+        return float(
+            _dtai_dtw.distance_fast(
+                np.ascontiguousarray(a, dtype=np.double),
+                np.ascontiguousarray(b, dtype=np.double),
+                window=max(1, int(band)),
+                use_pruning=True,
+            )
+        )
+    distance, _ = fastdtw(a, b, radius=max(1, int(band)), dist=_point_distance)
+    return float(distance)
+
+
 def _standard_vector(values: Sequence[float]) -> np.ndarray:
     arr = np.asarray(values, dtype=float)
     return np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)
@@ -798,6 +1004,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--shape-weight", type=float, default=0.50)
     parser.add_argument("--factor-weight", type=float, default=0.30)
     parser.add_argument("--context-weight", type=float, default=0.20)
+    parser.add_argument("--n-archetypes", type=int, default=40)
+    parser.add_argument("--liquid-only", action="store_true")
     return parser
 
 
@@ -813,6 +1021,8 @@ def config_from_args(args: argparse.Namespace) -> HistoricalFlowConfig:
         shape_weight=args.shape_weight,
         factor_weight=args.factor_weight,
         context_weight=args.context_weight,
+        n_archetypes=args.n_archetypes,
+        liquid_only=args.liquid_only,
     )
 
 
