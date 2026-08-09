@@ -8,6 +8,10 @@ Usage examples:
     python test/scripts/send_email.py --preset optimization_context_brief
     python test/scripts/send_email.py --preset forecasting_methodology_review
     python test/scripts/send_email.py --preset optimization_stabilization_stage
+    python test/scripts/send_email.py --preset breadth_expansion_interpretation
+    python test/scripts/send_email.py --preset preprocessing_matrix_results
+    python test/scripts/send_email.py --preset feature_guardrail_transition
+    python test/scripts/send_email.py --preset trend_capture_defense
 """
 
 from __future__ import annotations
@@ -61,13 +65,13 @@ def github_blob(path: str) -> str:
 
 
 def simulation_email(commit_hash: str) -> tuple[str, str, list[Path]]:
-    commit_url = f"{GITHUB_BASE}/commit/{commit_hash}"
+    report_path = "analysis_report.md"
     body = f"""교수님 안녕하세요.
 
 실시간 모의투자 결과 보고 메일입니다.
 
-커밋 링크:
-{commit_url}
+보고서 링크:
+{github_blob(report_path)}
 
 이번 메일은 `analysis_report.md`와 `analysis_report.pdf`가 존재하면 첨부해 전송하도록 구성했습니다.
 기본 용도는 `pipelines/simulate_and_send.py`가 생성한 결과 전달입니다.
@@ -80,14 +84,10 @@ def simulation_email(commit_hash: str) -> tuple[str, str, list[Path]]:
 
 
 def text_context_email(commit_hash: str) -> tuple[str, str, list[Path]]:
-    commit_url = f"{GITHUB_BASE}/commit/{commit_hash}"
     report_path = "test/results/text_context_feature_report_20260608_012237.md"
     body = f"""교수님 안녕하세요.
 
 실시간 텍스트 데이터(뉴스, 리포트, SNS)를 독립변수로 반영하는 환경 구축 내용을 공유드립니다.
-
-커밋 링크:
-{commit_url}
 
 보고서:
 {github_blob(report_path)}
@@ -104,14 +104,10 @@ def text_context_email(commit_hash: str) -> tuple[str, str, list[Path]]:
 
 
 def independent_variables_email(commit_hash: str) -> tuple[str, str, list[Path]]:
-    commit_url = f"{GITHUB_BASE}/commit/{commit_hash}"
     report_path = "test/research_materials/independent_variables_literature_review_20260608.md"
     body = f"""교수님 안녕하세요.
 
 주식/코인 예측용 독립변수 설계에 관한 문헌 정리 보고서를 공유드립니다.
-
-커밋 링크:
-{commit_url}
 
 보고서:
 {github_blob(report_path)}
@@ -123,14 +119,10 @@ def independent_variables_email(commit_hash: str) -> tuple[str, str, list[Path]]
 
 
 def historical_flow_email(commit_hash: str) -> tuple[str, str, list[Path]]:
-    commit_url = f"{GITHUB_BASE}/commit/{commit_hash}"
     report_path = "test/research_materials/historical_flow_datamart_research_20260608.md"
     body = f"""교수님 안녕하세요.
 
 KRW 전 종목 기준 historical flow data mart 설계 및 구축 내용을 공유드립니다.
-
-커밋 링크:
-{commit_url}
 
 보고서:
 {github_blob(report_path)}
@@ -147,7 +139,6 @@ KRW 전 종목 기준 historical flow data mart 설계 및 구축 내용을 공�
 
 
 def optimization_context_brief_email(commit_hash: str) -> tuple[str, str, list[Path]]:
-    commit_url = f"{GITHUB_BASE}/commit/{commit_hash}"
     report_path = "test/results/5_optimization_diagnostics_quick_probe_20260613.md"
     design_path = "test/experiment_specs/5_optimization_diagnostics_framework_design_20260613.md"
     next_path = "test/experiment_specs/6_optimization_stabilization_plan_20260613.md"
@@ -189,9 +180,6 @@ def optimization_context_brief_email(commit_hash: str) -> tuple[str, str, list[P
 - 1단계는 5번 결과 재현 확인, 2단계는 level target 제거와 return target 고정, 3단계는 normalization ablation, 4단계는 loss ablation, 5단계는 collapse-aware model selection입니다.
 - 이 단계를 통과한 뒤에 텍스트 독립변수, historical flow mart, 온체인/유동성 변수 결합으로 넘어가겠습니다.
 
-커밋 링크:
-{commit_url}
-
 보고서 및 코드 링크:
 - 최종 5번 보고서:
 {github_blob(report_path)}
@@ -218,7 +206,6 @@ def optimization_context_brief_email(commit_hash: str) -> tuple[str, str, list[P
 
 
 def forecasting_methodology_review_email(commit_hash: str) -> tuple[str, str, list[Path]]:
-    commit_url = f"{GITHUB_BASE}/commit/{commit_hash}"
     report_path = "test/research_materials/forecasting_methodology_literature_review_20260613.md"
     report_3_path = "test/results/3_time_series_multi_ticker_test_report_20260526_020000.md"
     report_5_path = "test/results/5_optimization_diagnostics_quick_probe_20260613.md"
@@ -249,9 +236,6 @@ def forecasting_methodology_review_email(commit_hash: str) -> tuple[str, str, li
 
 이번 보고서의 결론은, 이 논문들처럼 예측 연구로 통과하려면 단순히 모델 종류를 늘리는 것보다 먼저 학습 붕괴와 평가 착시를 충분히 해소해야 한다는 것입니다. 그래야 이후 텍스트 독립변수, historical flow data mart, 온체인/유동성 변수 등을 붙였을 때 성능 개선이 실제 변수 효과인지 논문에서 설득력 있게 주장할 수 있습니다.
 
-커밋 링크:
-{commit_url}
-
 문헌 리뷰 보고서:
 {github_blob(report_path)}
 
@@ -277,7 +261,6 @@ def forecasting_methodology_review_email(commit_hash: str) -> tuple[str, str, li
 
 
 def optimization_stabilization_stage_email(commit_hash: str) -> tuple[str, str, list[Path]]:
-    commit_url = f"{GITHUB_BASE}/commit/{commit_hash}"
     report_5_path = "test/results/5_optimization_diagnostics_quick_probe_20260613.md"
     report_6_path = "test/results/6_optimization_stabilization_stage_report_20260613.md"
     plan_6_path = "test/experiment_specs/6_optimization_stabilization_plan_20260613.md"
@@ -314,9 +297,6 @@ def optimization_stabilization_stage_email(commit_hash: str) -> tuple[str, str, 
 - 7번에서는 `Autoformer-like`, `PatchTST-like`, `DLinear/NLinear-like`, `TimesNet/TimeXer-like`, `iTransformer-like`, `ModernTCN-like`, `Mamba-like` 같은 확장 단일 모델군과, `LSTM + Autoformer`, `TCN + Transformer`, `validation weighted top-k ensemble` 같은 앙상블군까지 포함해 더 넓은 폭으로 확인할 계획입니다.
 - 즉 6번은 “순서를 정하는 단계”, 7번은 “더 넓게 실제 비교해 방향을 고르는 단계”로 역할을 분리했습니다.
 
-커밋 링크:
-{commit_url}
-
 보고서 및 계획 링크:
 - 5번 진단 보고서:
 {github_blob(report_5_path)}
@@ -350,23 +330,788 @@ def optimization_stabilization_stage_email(commit_hash: str) -> tuple[str, str, 
     return subject, body, []
 
 
+def breadth_expansion_interpretation_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    report_7_path = "test/results/7_optimization_breadth_expansion_interpretation_20260616.md"
+    report_8_path = "test/experiment_specs/8_optimization_breadth_training_plan_20260616.md"
+    body = f"""교수님 안녕하세요.
+
+7번 확장 실험 결과를 정리해 공유드립니다. 결론부터 말씀드리면, 7번은 모델 성능 결과가 아니라 6번 안정화 이후의 후속 breadth expansion을 어떤 자원 프로필과 실행 순서로 돌릴지 정리한 stage plan입니다.
+
+이번 7번에서 실제로 나온 것
+- 학교 서버/로컬 환경의 CPU, RAM, GPU, CUDA, PyTorch 상태를 감지했습니다.
+- `school_4090_15gb` 자원 프로필을 적용했고, 과도한 병렬화와 장시간 단일 실행을 피하도록 실행 원칙을 고정했습니다.
+- `breadth_probe`, `ensemble_probe`, `normalization_cross_check`, `loss_cross_check`, `scale_confirmation` 같은 후속 실험 suite를 정의했습니다.
+
+왜 이 해석이 필요한가
+- 7번은 학습 곡선, 예측 그래프, collapse 진단, leaderboard를 만든 실험이 아닙니다.
+- 따라서 7번을 성능 순위표로 읽으면 안 되고, 다음 실험을 돌릴 때 어떤 축을 먼저 확인해야 하는지 정리한 중간 산출물로 읽어야 합니다.
+- 특히 지금 연구의 핵심은 모델 이름만 늘리는 것이 아니라 preprocessing, normalization, loss, optimizer/scheduler, gradient policy, ensemble 조합까지 함께 넓혀서 무엇이 실제로 영향을 주는지 보는 것입니다.
+
+현재 결론
+- 7번은 확장 학습의 결과가 아니라 확장 학습을 안전하게 설계하는 문서입니다.
+- 7번만으로는 모델 우열을 말할 수 없고, 실제 판단은 8번 breadth training에서 해야 합니다.
+- 그래서 8번은 새 번호로 분리해 실제 GPU 학습 실험으로 다시 작성했습니다.
+
+교수님께서 보실 때는
+- 7번 보고서는 “왜 이 뒤에 8번이 필요한가”를 설명하는 해석 문서로 보시면 됩니다.
+- 8번 계획서는 “앞으로 어떤 축을 실제 학습으로 비교할 것인가”를 보여줍니다.
+- 이 두 문서를 합쳐 보시면, 현재 연구가 단순 모델 비교가 아니라 학습 붕괴를 먼저 해소한 뒤 외생변수와 데이터마트를 붙이려는 흐름이라는 점을 확인하실 수 있습니다.
+
+7번 해석 보고서:
+{github_blob(report_7_path)}
+
+8번 계획서:
+{github_blob(report_8_path)}
+
+조금 더 자세히 보실 때는 7번 해석 보고서에서 “왜 7번이 stage plan인지”와 “왜 8번이 필요한지”를 보시면 되고, 8번 계획서에서는 앞으로 어떤 축으로 실제 학습을 돌릴지 보실 수 있습니다.
+
+감사합니다.
+"""
+    subject = "[시계열 연구] 7번 확장 실험 해석 및 8번 breadth training 계획"
+    return subject, body, []
+
+
+def preprocessing_uncertainty_diagnostics_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    report_8_path = "test/results/8_optimization_breadth_training_report_20260623.md"
+    plan_9_path = "test/experiment_specs/9_preprocessing_uncertainty_diagnostics_plan_20260623.md"
+    notebook_9_path = "test/models/9_preprocessing_uncertainty_diagnostics_test.ipynb"
+    video_black_scholes = "https://www.youtube.com/watch?v=99BHnu64pu8"
+    video_double_descent = "https://www.youtube.com/watch?v=5ruiphjlOwo"
+    body = f"""교수님 안녕하세요.
+
+업비트 비정상 시계열의 최적화 문제를 확인하기 위해 수행한 8번 breadth training 결과와, 이를 반영해 설계한 9번 전처리·불확실성 진단 실험을 공유드립니다.
+
+앞서 보낸 메일에서 `persistence`, `0수익률 평탄화`, `예측 분산`, `방향성`을 용어 중심으로 너무 압축해 설명한 부분이 있어, 이번 메일에서는 각 용어의 뜻과 숫자 예시, 이번 실험에서의 의미, 좋은 신호와 나쁜 신호를 구분해 보충드립니다.
+
+1. 왜 8번을 수행했는가
+
+앞선 5번과 6번에서는 loss가 감소하더라도 예측이 직전 가격 복사 또는 0수익률 근처로 붕괴할 수 있다는 문제를 확인했습니다. 7번은 실제 학습 결과가 아니라 서버 자원과 실행 단계를 정리한 계획이었기 때문에, 8번에서는 Linear, LSTM, GRU, TCN, Transformer와 Autoformer-like, PatchTST-like, DLinear/NLinear-like, TimesNet-like, TimeXer-like, iTransformer-like, ModernTCN-like, Mamba-like를 같은 조건에서 실제 학습했습니다.
+
+2. 8번 결과와 핵심 용어 설명
+
+먼저 persistence baseline이 무엇인지 설명드리겠습니다.
+
+`Persistence`는 “다음 가격도 지금 가격과 같을 것”이라고 예측하는 가장 단순한 기준선입니다. 예를 들어 현재 비트코인 가격이 1억 원이면, 별도의 모델 없이 다음 15분 가격도 1억 원이라고 예측합니다. 수익률로 표현하면 다음 수익률을 항상 0%라고 예측하는 것과 같습니다.
+
+금융 가격은 직전 가격과 매우 비슷한 경우가 많기 때문에 이 단순한 방법도 의외로 강합니다. 그래서 복잡한 모델은 최소한 persistence보다 가격 오차가 작아야 “직전 가격을 그대로 복사하는 것보다 새로운 정보를 학습했다”고 말할 수 있습니다. 이번 실험에서 persistence의 평균절대오차(MAE)는 약 190,608원이었습니다. MAE는 각 시점에서 예측 가격과 실제 가격이 평균적으로 얼마만큼 떨어져 있었는지를 원화로 나타낸 값이며, 작을수록 좋습니다.
+
+이번 14개 모델은 모두 persistence의 MAE를 이기지 못했습니다. 즉 모델을 복잡하게 만들었지만, 평균 가격 오차만 놓고 보면 “다음 가격은 현재 가격과 같다”는 단순 예측보다 정확하지 않았습니다.
+
+다음으로 “0수익률 근처로 평평해졌다”는 표현의 의미를 설명드리겠습니다.
+
+실제 다음 수익률이 순서대로 `+1.0%, -0.8%, +0.6%, -1.2%`처럼 오르내렸다고 가정하겠습니다. 평탄화된 모델은 이를 `+0.02%, -0.01%, 0.00%, -0.02%`처럼 거의 0에 가까운 값으로만 예측합니다. 그래프에서는 실제 수익률 선은 위아래로 움직이는데 예측선은 0을 따라 거의 직선처럼 보입니다.
+
+이런 예측은 급등과 급락의 크기를 맞히지 못했지만, 대부분의 15분 수익률이 작은 값이라는 특성을 이용해 평균 오차를 무난하게 줄일 수 있습니다. 따라서 loss나 MAE가 persistence에 가까워 보여도 실제 시장 움직임을 배운 결과라고 볼 수 없습니다. 이번에 “예측 분산이 실제의 1% 미만”이라는 말은 예측 오차가 1%라는 뜻이 아닙니다. 예측 수익률이 위아래로 퍼진 정도, 즉 움직임의 폭이 실제 수익률 변동 폭의 1%도 되지 않았다는 뜻입니다.
+
+TimesNetLike, NLinearLike, DLinearLike, TCN이 여기에 해당했습니다. 이 모델들은 MAE가 persistence에 비교적 가까웠지만, 예측 분산이 실제의 1% 미만으로 줄었습니다. 따라서 상대적으로 낮은 MAE는 실제 상승·하락 패턴을 잘 맞혀서 얻은 성과라기보다, 대부분의 예측을 0수익률 근처에 놓아 큰 판단을 피한 결과로 해석하는 것이 맞습니다.
+
+“방향성과 예측 분산을 보존했다”는 표현도 좋은 결과와 같은 뜻은 아닙니다.
+
+`방향성`은 다음 수익률이 양수인지 음수인지, 즉 상승과 하락의 부호를 얼마나 맞혔는지를 뜻합니다. 실제가 상승일 때 상승, 하락일 때 하락으로 예측하면 방향을 맞힌 것입니다. 방향 정확도가 50% 정도라면 대체로 동전 던지기 수준이고, 여러 구간과 seed에서 지속적으로 50%를 넘어야 유용한 신호 가능성을 검토할 수 있습니다.
+
+`예측 분산`은 예측값이 평균 주변에서 얼마나 넓게 움직이는지를 나타냅니다. 실제 시장이 크게 움직이는데 예측 분산이 거의 0이면 평탄화이고, 반대로 실제보다 지나치게 크면 폭주입니다. 따라서 예측 분산을 보존한다는 것은 실제처럼 어느 정도 위아래로 움직였다는 뜻이며, 모델이 무조건 0만 출력하지 않았다는 점에서는 좋은 신호입니다. 다만 움직임의 방향과 크기가 실제와 맞아야 하므로, 분산 보존만으로 정확한 모델이라고 할 수는 없습니다.
+
+Linear와 PatchTSTLike는 평탄화된 모델보다 상승·하락 방향과 움직임의 폭을 더 많이 남겼습니다. 이는 “실제 신호를 학습할 후보로 추가 점검할 가치가 있다”는 점에서는 긍정적입니다. 그러나 두 모델의 원화 MAE는 persistence보다 더 컸습니다. 쉽게 말하면 가만히 있지는 않고 시장처럼 움직이려고 했지만, 움직인 방향이나 크기가 충분히 정확하지 않아 가격 예측 오차는 오히려 커졌습니다. 따라서 이 결과는 최종적으로 좋은 모델이라는 결론이 아니라, 평탄화 문제는 덜하지만 정확도 문제가 남은 별도의 실패 유형으로 해석해야 합니다.
+
+반대쪽 실패도 있었습니다. LSTM과 GRU의 variance ratio는 각각 약 2.28, 4.39였습니다. `Variance ratio`는 예측 수익률 분산을 실제 수익률 분산으로 나눈 값입니다. 1이면 움직임의 폭이 실제와 비슷하고, 1보다 매우 작으면 평탄화, 1보다 매우 크면 실제보다 과도하게 흔들리는 폭주를 뜻합니다. 따라서 LSTM은 실제보다 약 2.28배, GRU는 약 4.39배 큰 분산을 만들었습니다.
+
+AutoformerLike는 MAE 약 163만 원, variance ratio 약 59.39로 가장 심하게 폭주했습니다. 이는 실제 수익률의 변동 폭보다 예측이 지나치게 크게 움직였다는 뜻입니다. 과거 3번 실험에서 좋게 보였던 Autoformer 결과를 구조 자체의 우위로 해석할 수 없다는 점이 다시 확인됐습니다.
+
+정리하면 이번 결과에는 두 종류의 실패가 동시에 있었습니다.
+
+- 평탄화 실패: 예측을 거의 0수익률로 만들어 persistence와 비슷해 보이지만 실제 변동을 놓칩니다.
+- 분산 폭주 실패: 예측은 활발하게 움직이지만 실제보다 너무 크게 움직여 가격 오차가 커집니다.
+
+좋은 모델은 이 두 극단 사이에서 단순히 움직임만 만드는 것이 아니라, persistence보다 낮은 원화 MAE, 실제에 가까운 분산, 우연 수준을 넘는 방향 정확도를 여러 seed와 시간 구간에서 동시에 보여야 합니다.
+
+따라서 현재 단계에서 최신 모델을 더 추가하는 것만으로는 문제가 해결되지 않습니다. 전처리, 분포 이동, 변동성, 불확실성, 모델 용량과 seed 변동을 분리해 확인해야 합니다.
+
+3. 9번에서 무엇을 추가했는가
+
+9번은 8번을 덮어쓰지 않고 새 번호로 분리했습니다.
+
+- 극단값 처리: winsorization 강도 3종, Hampel filter
+- heavy-tail 처리: robust asinh, signed log, winsor+asinh, Hampel+asinh
+- 추세 처리: first/seasonal difference, EMA residual, linear detrend, median residual
+- 주파수 처리: high-pass 강도 3종, band-pass, winsor+frequency 조합
+- 변동성 처리: local volatility scaling과 asinh 결합
+- 총 28개 preprocessing pipeline
+- Linear, PatchTSTLike, TimesNetLike, AutoformerLike 비교
+- seed ensemble과 conformal prediction interval
+- interval coverage, width, miss distance
+- hidden width와 parameter count 변화에 따른 generalization error
+- 원시 데이터부터 전처리 전후, 학습곡선, gradient, 예측, 불확실성, heatmap까지 notebook inline 시각화
+
+4. 영상 내용을 어떻게 반영했는가
+
+Black–Scholes 관련 영상:
+{video_black_scholes}
+
+이 영상에서 참고한 핵심은 미래 가격을 하나의 값으로 단정하지 않고 확률분포와 변동성으로 표현하는 관점입니다. Black–Scholes의 로그정규 가정을 코인에 그대로 적용하지는 않고, seed ensemble과 conformal interval을 이용해 예측구간의 실제 coverage와 폭을 평가하도록 반영했습니다.
+
+Double Descent 관련 영상:
+{video_double_descent}
+
+이 영상에서 참고한 핵심은 모델이 커질수록 일반화 오차가 단순히 증가하거나 감소한다고 가정할 수 없다는 점입니다. 9번에서는 hidden width와 parameter count를 단계적으로 늘리고 seed와 epoch 변화까지 함께 기록해 interpolation threshold 부근의 불안정성을 확인하도록 구성했습니다.
+
+영상은 문제를 이해하기 위한 참고 자료로 사용했고, 실제 설계 근거는 RevIN, Dish-TS, FAN, FredNormer, NoRIN, Double Descent, conformal time-series forecasting 관련 원 논문을 사용했습니다.
+
+5. 현재 시사점
+
+이번 연구의 핵심은 점예측 성능 하나를 높이는 것이 아니라, 모델이 어떤 방식으로 틀리는지를 분리하는 것입니다. MAE가 낮아도 0수익률 collapse일 수 있고, 방향 정확도가 높아도 가격 오차가 클 수 있으며, prediction interval coverage가 높아도 구간이 지나치게 넓으면 실용적이지 않을 수 있습니다.
+
+따라서 9번에서는 다음 조건을 동시에 만족하는 조합만 후속 독립변수·데이터마트 결합 단계로 넘길 예정입니다.
+
+- persistence보다 낮은 MAE
+- 예측 분산 보존
+- 0수익률 쏠림 감소
+- seed 간 안정성
+- 적절한 interval coverage와 width
+- 모델 용량 변화에 대한 일반화 안정성
+
+8번 결과 보고서:
+{github_blob(report_8_path)}
+
+9번 실험 설계서:
+{github_blob(plan_9_path)}
+
+9번 실행 노트북:
+{github_blob(notebook_9_path)}
+
+8번 보고서에서는 각 모델이 persistence에 미달한 이유와 평탄화/폭주 collapse의 차이를 보실 수 있습니다. 9번 설계서에서는 두 영상과 관련 논문을 전처리·불확실성·모델 용량 실험으로 어떻게 변환했는지 확인하실 수 있습니다.
+
+감사합니다.
+"""
+    subject = "[보충 설명] 8번 breadth 결과 용어 해설 및 9번 후속 진단"
+    return subject, body, []
+
+
+def preprocessing_matrix_results_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    report_path = "test/results/9_preprocessing_uncertainty_diagnostics_report_20260623.md"
+    notebook_path = "test/models/9_preprocessing_uncertainty_diagnostics_test.ipynb"
+    plan_10_path = "test/experiment_specs/10_objective_ensemble_confirmation_plan_20260623.md"
+    notebook_10_path = "test/models/10_objective_ensemble_confirmation_test.ipynb"
+    summary_image = "test/images/9_preprocessing_uncertainty_diagnostics_test_cell002_230.png"
+    heatmap_image = "test/images/9_preprocessing_uncertainty_diagnostics_test_cell002_231.png"
+    best_image = "test/images/9_preprocessing_uncertainty_diagnostics_test_cell002_81.png"
+    direction_image = "test/images/9_preprocessing_uncertainty_diagnostics_test_cell002_33.png"
+    flat_image = "test/images/9_preprocessing_uncertainty_diagnostics_test_cell002_11.png"
+    explosion_image = "test/images/9_preprocessing_uncertainty_diagnostics_test_cell002_13.png"
+    body = f"""교수님 안녕하세요.
+
+9번 전처리 진단 112개 케이스 실행이 완료되어, 결과와 다음 10번 본실험 방향을 정리해 공유드립니다.
+
+이번 실행은 비트코인 15분봉 39,935행을 시간 순서대로 train 70%, validation 15%, test 15%로 나누고, Linear·PatchTSTLike·TimesNetLike·AutoformerLike 네 모델과 28개 전처리를 조합한 실험입니다. 목표는 다음 15분 가격 자체가 아니라 다음 로그수익률이며, 예측 수익률을 다시 원화 가격으로 복원해 평가했습니다.
+
+먼저 기준선인 persistence는 “다음 가격도 현재 가격과 같다”고 예측하는 방법입니다. 현재 가격이 1억 원이면 다음 15분 가격도 1억 원이라고 예측하며, 수익률로는 항상 0%를 예측하는 것과 같습니다. 이번 persistence 평균절대오차는 약 190,608원이었습니다. 복잡한 모델은 이 값보다 낮아야 직전 가격 복사 이상의 정보를 학습했다고 말할 수 있습니다.
+
+9번의 결론은 전처리만으로 persistence를 이긴 조합은 없었다는 것입니다.
+
+- 최저 MAE는 `PatchTSTLike + seasonal_diff16`의 약 227,412원이었습니다. persistence보다 약 19.3% 큰 오차입니다.
+- `PatchTSTLike + winsor_025`는 방향 정확도 약 55.45%로 상대적으로 높았지만, MAE는 약 240,822원으로 persistence보다 약 26.3% 컸습니다.
+- 따라서 최종 우승 모델은 없지만, 다음 objective 실험에 넘길 후보와 버려야 할 실패 형태는 분명해졌습니다.
+
+1. 전체 결과를 보는 그래프
+
+전체 요약:
+{github_blob(summary_image)}
+
+왼쪽 막대의 x축은 모델·전처리 조합, y축은 모델 MAE를 persistence MAE로 나눈 copy-risk ratio입니다. 검은 선 1 아래로 내려가야 persistence를 이기지만 모든 막대가 1보다 위에 있습니다.
+
+가운데 산점도의 x축은 예측 분산을 실제 분산으로 나눈 variance ratio, y축은 상승·하락 방향 정확도입니다. x축 1 근처이면서 y축 0.5보다 안정적으로 위에 있어야 합니다. x축 0.01 미만의 점들은 예측이 0수익률에 가깝게 평평해진 경우입니다.
+
+전처리·모델 heatmap:
+{github_blob(heatmap_image)}
+
+y축은 전처리, x축은 모델, 색은 `모델 MAE / persistence MAE`입니다. AutoformerLike는 대부분 전처리에서 큰 오차가 유지됐고, TimesNetLike는 1에 가까워 보이지만 수익률 움직임을 포기해 persistence와 비슷해진 경우였습니다. PatchTSTLike와 Linear는 전처리에 따라 결과가 달라져 다음 실험 후보로 남겼습니다.
+
+2. 다음 방향을 잡는 데 유용한 후보
+
+최저 MAE 후보:
+{github_blob(best_image)}
+
+이 그림은 `PatchTSTLike + seasonal_diff16`의 test 결과입니다. 위쪽 x축은 test 시점 순서, y축은 다음 로그수익률이며 파란 선이 실제, 주황 선이 예측입니다. 예측은 0에 붙어 있지는 않지만 실제 급등락을 축소했습니다. 중간 패널의 y축은 원화 종가이며, 주황 예측선이 초록 persistence에서 벗어나기는 하지만 실제 파란 선보다 일관되게 정확하지 않았습니다.
+
+방향성 후보:
+{github_blob(direction_image)}
+
+`PatchTSTLike + winsor_025`는 예측선이 실제처럼 양수와 음수를 자주 오가며 방향 정확도 약 55.45%를 기록했습니다. 다만 큰 하락 폭을 충분히 맞히지 못해 원화 MAE가 더 컸습니다. 즉 방향 정보는 일부 남겼지만 가격 변화의 크기를 정확히 맞히지는 못했습니다.
+
+3. 좋지 않은 결과로 확인한 두 실패 유형
+
+0수익률 평탄화:
+{github_blob(flat_image)}
+
+`TimesNetLike + none`은 위쪽 수익률 그래프에서 주황 예측선이 거의 0에 붙어 있습니다. 중간 원화 가격 그래프에서는 예측과 persistence가 거의 겹쳐 실제 가격에도 가까워 보이지만, 이는 새로운 신호를 학습한 것이 아니라 다음 변화가 없다고 예측한 결과입니다.
+
+출력 분산 폭주:
+{github_blob(explosion_image)}
+
+`AutoformerLike + none`은 실제 15분 수익률보다 훨씬 큰 약 -7%~+6%의 가짜 장기 파동을 예측했습니다. 원화 복원 가격도 실제와 persistence에서 크게 이탈했습니다. 학습 loss와 gradient는 감소했으므로 단순 기울기 소실 문제가 아니라, 현재 손실함수가 지나치게 큰 출력 변동을 충분히 막지 못한 문제로 해석했습니다.
+
+4. 다음 10번 본실험
+
+9번 결과를 토대로 10번은 전처리를 더 늘리지 않고 다음 축을 확인하도록 수정했습니다.
+
+- 주 실험 모델: Linear, PatchTSTLike
+- 실패 통제군: 평탄화 TimesNetLike, 폭주 AutoformerLike
+- 입력 후보: seasonal_diff16, frequency_bandpass, median_residual_5, linear_detrend+asinh_robust, winsor_025, none
+- objective: Huber, 방향, 분산, 상관, tail, 변동성 regime, anti-collapse, balanced composite
+- 보조 손실이 Huber를 압도하지 않도록 크기를 Huber 기준으로 정규화하고 첫 3 epoch 동안 점진적으로 적용
+- seed 42·137·2026 재현성 확인
+- test 결과를 선택에 사용하지 않는 validation-only ensemble
+- calibration scatter의 축 공유 오류 수정
+
+10번에서는 persistence보다 낮은 MAE, 실제에 가까운 분산, 우연 수준을 안정적으로 넘는 방향 정확도를 여러 seed에서 동시에 만족하는 조합만 통과시키겠습니다.
+
+9번 최종 보고서:
+{github_blob(report_path)}
+
+9번 실행 노트북:
+{github_blob(notebook_path)}
+
+10번 실험 계획서:
+{github_blob(plan_10_path)}
+
+10번 실행 노트북:
+{github_blob(notebook_10_path)}
+
+감사합니다.
+"""
+    subject = "[시계열 연구] 9번 전처리 진단 최종 결과 및 10번 본실험 계획"
+    return subject, body, []
+
+
+def feature_guardrail_transition_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    transition_report_path = "test/results/10_11_to_12_feature_guardrail_transition_report_20260624.md"
+    synthesis_report_path = "test/results/10_11_point_risk_synthesis_report_20260624.md"
+    report_10_path = "test/results/10_objective_ensemble_confirmation_report_20260623.md"
+    report_11_path = "test/results/11_distributional_capacity_diagnostics_report_20260623.md"
+    plan_12_path = "test/experiment_specs/12_feature_guardrail_fusion_plan_20260624.md"
+    notebook_12_path = "test/models/12_feature_guardrail_fusion_test.ipynb"
+    py_12_path = "test/models/12_feature_guardrail_fusion_test.py"
+    point_flat_image = "test/images/10_objective_ensemble_confirmation_test_cell002_01.png"
+    point_balanced_image = "test/images/10_objective_ensemble_confirmation_test_cell002_06.png"
+    risk_best_image = "test/images/11_distributional_capacity_diagnostics_test_cell002_12.png"
+    risk_calibrated_image = "test/images/11_distributional_capacity_diagnostics_test_cell002_22.png"
+    body = f"""교수님 안녕하세요.
+
+업비트 비정상 시계열 최적화 진단 흐름에서 10번과 11번 결과를 종합해, 다음 12번 실험 방향을 정리하여 공유드립니다.
+
+이번 결론부터 말씀드리면, 이제 모델 구조를 계속 늘리기보다 10번의 점예측 최적화 구조를 기본 토대로 두고, 11번의 위험확률을 guardrail로 붙인 뒤, 코인 독립변수 조합을 바꾸며 어떤 feature group을 데이터마트로 승격할지 확인하는 방향이 맞다고 판단했습니다.
+
+1. 10번에서 확인한 점예측 최적화 결과
+
+10번은 다음 15분 수익률을 하나의 숫자로 예측하는 point forecast 실험입니다.
+여기서 기준선인 persistence는 "다음 가격은 현재 가격과 같다"고 보는 단순 예측입니다. 예를 들어 현재 BTC가 1억 원이면 다음 15분도 1억 원이라고 보는 방식입니다. 수익률로는 다음 수익률을 0으로 두는 것과 같습니다.
+
+10번의 중요한 그래프는 두 가지입니다.
+
+첫 번째 그래프:
+{github_blob(point_flat_image)}
+
+- 대상: `Linear + seasonal_diff16 + Huber + seed42`
+- x축: epoch 또는 test time index
+- y축: 위쪽은 total objective, 아래쪽은 실제/예측 다음 로그수익률
+- 목적: loss가 줄어도 예측이 실제 변동을 배웠는지 확인하기 위한 그림입니다.
+- 결과: 학습 손실은 안정적으로 내려가지만, 예측 수익률은 실제 수익률보다 훨씬 0 근처에 붙어 있습니다. Pearson 상관도 거의 0에 가까웠습니다.
+- 해석: Huber는 학습 안정화에는 좋지만, 이 데이터에서는 "작게만 예측하는 쉬운 해"를 허용할 수 있습니다.
+
+두 번째 그래프:
+{github_blob(point_balanced_image)}
+
+- 대상: `Linear + seasonal_diff16 + balanced_composite + seed2026`
+- x축: epoch 또는 test time index
+- y축: total objective, objective components, gradient norm, 실제/예측 수익률
+- 목적: Huber보다 collapse를 덜 일으키는 objective인지 확인하기 위한 그림입니다.
+- 결과: 예측 수익률이 Huber보다 덜 평평해졌고, 방향성과 분산이 더 남았습니다. 다만 아직 persistence를 명확히 넘지는 못했습니다.
+- 해석: `balanced_composite`는 최종 성공 모델은 아니지만, 다음 단계에서 점예측 branch의 기본 objective로 가져갈 수 있습니다.
+
+따라서 10번의 결론은 "점예측 모델 완성"이 아니라 "최적화가 쉬운 해로 바로 붕괴하는 문제를 줄인 objective 후보 확보"입니다.
+
+2. 11번에서 확인한 위험확률 guardrail
+
+11번은 다음 가격을 직접 맞히는 것이 아니라, 향후 4시간 안에 큰 움직임이 발생할 확률을 예측했습니다. 여기서 중요한 target은 `absolute_move`입니다. 이는 상승이든 하락이든 큰 움직임이 있으면 1, 조용하면 0으로 보는 위험 이벤트입니다.
+
+세 번째 그래프:
+{github_blob(risk_best_image)}
+
+- 대상: `PatchTSTLike + seasonal_diff16 + absolute_move + seed2026`
+- x축: test time index, recall, predicted probability 등
+- y축: 위험 이벤트 확률, precision, observed frequency 등
+- 목적: 위험 이벤트를 기준선보다 잘 구분하는지 확인하기 위한 그림입니다.
+- 결과: Average Precision 약 0.608, AP lift 약 1.648, ROC AUC 약 0.716, Brier skill 약 0.321로 단순 발생률 기준선보다 좋았습니다.
+- 해석: 다음 가격을 정확히 맞히지는 못해도, 위험한 구간을 걸러내는 확률 정보는 존재합니다.
+
+네 번째 그래프:
+{github_blob(risk_calibrated_image)}
+
+- 대상: `PatchTSTLike + winsor_025 + absolute_move + seed42`
+- x축: 평균 예측 확률 또는 test time index
+- y축: 실제 발생률 또는 위험 이벤트 확률
+- 목적: 예측 확률을 운영 guardrail로 믿을 수 있는지 보는 calibration 그림입니다.
+- 결과: 최고 AP 후보와 달리 ECE가 약 0.047로 더 낮아, 확률 보정 측면에서 운영용 risk gate에 더 가깝습니다.
+- 해석: 11번은 점예측을 대체하는 모델이 아니라, "언제 점예측을 믿지 말아야 하는가"를 알려주는 guardrail로 쓰는 것이 적절합니다.
+
+3. 12번에서 바꾸는 것
+
+12번은 새 알고리즘 확장이 아니라 feature group ablation입니다.
+
+구조는 다음과 같습니다.
+
+10번 balanced_composite 점예측
+-> 11번 absolute_move 위험확률
+-> risk gate cutoff
+-> point-only / risk-only / point+risk gate 정책 비교
+-> MDD, 거래비용 반영 누적수익률, signal share 확인
+
+12번에서 비교할 코인 독립변수군은 다음입니다.
+
+- `ohlcv_core`: 가격·거래량 기준선
+- `coin_liquidity_micro`: 거래대금, turnover, range, illiquidity proxy
+- `coin_volatility_regime`: 변동성 비율, downside/upside volatility, drawdown
+- `coin_momentum_reversal`: RSI, MACD, EMA gap, trend/reversal
+- `coin_calendar_cycle`: 24시간 거래 시간대 효과
+- `coin_text_context`: text_features_15m가 있으면 sentiment, shock, topic count 결합
+- `coin_cross_market`: 다중 ticker 테이블이면 ETH/XRP/SOL 등 cross return 결합
+- `coin_full_available`: 사용 가능한 모든 feature를 합친 상한선 후보
+
+이 방향은 코인 예측 문헌 흐름과도 맞습니다. 최근 연구들은 OHLCV만 쓰기보다 기술지표, 유동성, sentiment/search, cross-market, macro, on-chain/orderflow 같은 data source를 구분해 성능 기여를 확인합니다. 다만 현재 저장소에는 on-chain/funding/orderbook mart가 아직 없기 때문에, 12번은 먼저 현재 데이터에서 구성 가능한 proxy feature와 선택적 text/cross-market feature부터 검증하도록 했습니다.
+
+4. 실현 가능성과 기대
+
+12번은 실현 가능성이 높은 편입니다.
+
+- 10번 학습 엔진을 그대로 재사용합니다.
+- 11번 위험 이벤트 엔진을 그대로 재사용합니다.
+- 새로 늘리는 것은 모델 구조가 아니라 feature group입니다.
+- 사용자가 12번만 실행할 예정이므로, 기본값은 약 56개 case를 넓게 수행하도록 구성했습니다.
+- 각 case는 point branch와 risk branch를 함께 학습하고, 거래비용 반영 policy 비교까지 inline 그래프로 출력합니다.
+
+성공 판단은 단순히 MAE 하나가 아니라 다음을 함께 봅니다.
+
+- point copy-risk가 10번보다 낮아지는가
+- direction accuracy가 50%보다 안정적으로 높아지는가
+- risk gate 결합 후 point-only보다 MDD가 줄어드는가
+- 거래가 거의 0이 되어 MDD만 좋아지는 착시가 아닌가
+- 어떤 feature group을 데이터마트 정식 스키마로 올릴지 결정할 수 있는가
+
+5. 보고서와 코드 링크
+
+10·11번에서 12번으로 넘어가는 전환 보고서:
+{github_blob(transition_report_path)}
+
+10·11번 종합 보고서:
+{github_blob(synthesis_report_path)}
+
+10번 개별 보고서:
+{github_blob(report_10_path)}
+
+11번 개별 보고서:
+{github_blob(report_11_path)}
+
+12번 실험 계획서:
+{github_blob(plan_12_path)}
+
+12번 실행 노트북:
+{github_blob(notebook_12_path)}
+
+12번 py mirror:
+{github_blob(py_12_path)}
+
+다음 작업은 학교 서버에서 12번 노트북을 실행하고, 결과 그래프를 다시 추출해 feature group별로 어떤 독립변수가 collapse 완화와 MDD 방어에 실제로 도움 되는지 보고서로 정리하는 것입니다.
+
+감사합니다.
+"""
+    subject = "[시계열 연구] 10·11번 결과 기반 12번 feature guardrail 실험 전환"
+    return subject, body, []
+
+
+def feature_guardrail_results_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    report_path = "test/results/12_feature_guardrail_fusion_report_20260624.md"
+    summary_image = "test/images/12_feature_guardrail_fusion_test_cell002_289.png"
+    point_image = "test/images/12_feature_guardrail_fusion_test_cell002_121.png"
+    risk_image = "test/images/12_feature_guardrail_fusion_test_cell002_122.png"
+    policy_image = "test/images/12_feature_guardrail_fusion_test_cell002_123.png"
+    body = f"""교수님 안녕하세요.
+
+12번 feature guardrail fusion 결과를 다시 보기 편한 본문 형식으로 짧게 정리해 공유드립니다.
+
+이번 실험에서 가장 우선순위가 높았던 변수셋은 `coin_multitimeframe_structure`였습니다.
+이 이름만 보면 추상적이라, 실제 의미를 풀어 말씀드리면
+"15분, 1시간, 4시간, 16시간, 2일 근처의 수익률, 변동성, 거래량/거래대금 위치, 추세 강도를 함께 넣은 묶음"
+입니다.
+
+대표적으로 아래 같은 정보가 들어갑니다.
+- 15분, 1시간, 4시간, 16시간, 2일 누적 수익률
+- 최근 4시간, 16시간, 2일 변동성
+- 현재 가격, 거래량, 거래대금이 최근 2일 기준으로 높은지 낮은지
+- 최근 16시간, 2일 추세 강도
+
+핵심 결과를 먼저 말씀드리면 다음과 같습니다.
+
+1위는 case 41입니다.
+- 변수셋: 위의 multi-timeframe 구조 변수셋
+- 전처리: `seasonal_diff16`
+- 점예측 모델: `Linear`
+- seed: 42
+- 최종 결과: fusion return `+1.7899%`, fusion MDD `-0.8542%`
+
+여기서 각 용어의 뜻은 다음과 같습니다.
+- `seasonal_diff16`:
+  각 입력값에서 16개 15분봉 전 값을 빼는 전처리입니다. 15분봉 기준으로 약 4시간 전 대비 변화량을 보게 만듭니다.
+- `Linear`:
+  시퀀스 입력을 펼쳐서 얕은 MLP 형태로 다음 수익률을 예측하는 baseline 모델입니다. Transformer 계열보다 단순한 구조입니다.
+- `seed42`:
+  모델 초기값과 학습 랜덤 시작점을 42로 둔 반복 조건입니다. 독립변수 자체가 아니라 우연성 확인용입니다.
+- `fusion MDD`:
+  점예측과 위험확률 gate를 합친 최종 정책의 최대 낙폭입니다. 0에 가까울수록 하방 방어가 좋습니다.
+- `fusion return`:
+  같은 최종 정책의 거래비용 반영 후 누적수익률입니다.
+- "유일한 양의 fusion return":
+  96개 case 중 최종 정책 수익률이 0보다 큰 케이스가 case 41 하나뿐이었다는 뜻입니다.
+
+top3를 plain text로 정리하면 아래와 같습니다.
+
+1. case 41
+변수셋은 15분, 1시간, 4시간, 16시간, 2일 근처의 수익률·변동성·추세 묶음입니다.
+fusion return은 `+1.7899%`, fusion MDD는 `-0.8542%`였습니다.
+이번 96개 case 중 최종 결과가 가장 좋았고, 테스트 종료 시점 수익률이 유일하게 플러스였습니다.
+
+2. case 68
+변수셋은 24시간 시장의 시간대와 요일 주기를 반영한 calendar cycle 묶음입니다.
+fusion MDD는 `-0.4145%`, fusion return은 `-0.0595%`였습니다.
+낙폭은 가장 작았지만 거래가 4회뿐이라 너무 보수적이었을 가능성은 더 확인해야 합니다.
+
+3. case 28
+변수셋은 단기 추세와 되돌림을 보는 momentum/reversal 묶음입니다.
+fusion MDD는 `-1.0469%`, fusion return은 `-0.2873%`였습니다.
+방향성은 나쁘지 않았지만, 평균적으로는 multi-timeframe 묶음보다 약했습니다.
+
+대표 그림 링크는 아래입니다.
+최종 요약 그림:
+{github_blob(summary_image)}
+
+case 41 점예측 진단:
+{github_blob(point_image)}
+
+case 41 risk 진단:
+{github_blob(risk_image)}
+
+case 41 policy 진단:
+{github_blob(policy_image)}
+
+다음 단계는 현재 1순위인 multi-timeframe 변수셋을 데이터마트 정식 후보로 유지하면서,
+text, cross-market, macro, on-chain, derivatives 같은 변수는 실제 컬럼 overlap이 확보되는 대로 같은 방식으로 다시 검증하는 것입니다.
+
+이번 수정본 보고서에는
+- RAW 입력 변수가 무엇인지
+- 어떤 파생변수를 어떤 방식으로 만들었는지
+- case 41 이름을 문장으로 풀면 무엇인지
+를 표와 설명으로 보강해 두었습니다.
+
+12번 최종 보고서:
+{github_blob(report_path)}
+
+감사합니다.
+"""
+    subject = "[시계열 연구] 12번 feature guardrail 결과 요약"
+    attachments = [
+        ROOT / report_path,
+        ROOT / summary_image,
+        ROOT / point_image,
+        ROOT / risk_image,
+        ROOT / policy_image,
+    ]
+    return subject, body, attachments
+
+
+def feature_algorithm_resource_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    full_report_path = "test/results/13_feature_algorithm_resource_full_captured_results_20260628.md"
+    status_report_path = "test/results/13_feature_algorithm_resource_status_report_20260627.md"
+    recovery_report_path = "test/results/13_feature_algorithm_resource_output_recovery_20260627.md"
+    body = f"""교수님 안녕하세요.
+
+13번 feature-algorithm-resource 실험의 중간 결과와 현재 상태를 공유드립니다.
+
+이번 13번은 단순 feature group 비교가 아니라, 12번에서 1순위로 올라온 multi-timeframe 변수셋을 기준으로
+feature 후보군 + 알고리즘 + 전처리 + risk gate + seed 안정성을 함께 넓게 본 공동 최적화 실험이었습니다.
+
+수행한 축은 다음과 같습니다.
+- 1단계: multi-timeframe 내부 분해
+- 2단계: feature group 확장
+- 3단계: 알고리즘 확장
+- 4단계: 전처리와 risk gate 민감도 확인
+
+확인된 핵심 결과는 다음과 같습니다.
+- 1순위 feature family는 `coin_multitimeframe_structure`였습니다.
+- 대표 top case는 `seasonal_diff16 + Linear + seed42`였고, fusion return `+1.7899%`, fusion MDD `-0.8542%`였습니다.
+- 다만 calibration collapse, gradient norm spike, shared memory/shm 에러가 함께 관찰되어 최종 leaderboard와 summary는 저장 전에 끊겼습니다.
+
+즉, 방향성은 맞았지만 아직 완주하지 못한 상태입니다.
+실행이 3~4일 걸린 뒤 서버 세션이 아웃되어 결과가 디스크에 온전히 남지 않았고,
+현재는 복원 가능한 캡처 결과와 상태 보고서를 기반으로만 정리할 수 있습니다.
+
+그래서 다음 단계는 서버에 Claude/Codex 분석 환경을 다시 붙여서,
+`num_workers`를 더 낮추고, batch/output volume을 줄이고, gradient clipping을 추가한 뒤
+13번을 재실행하는 것입니다.
+
+정리 문서:
+- full captured results: {github_blob(full_report_path)}
+- status report: {github_blob(status_report_path)}
+- output recovery note: {github_blob(recovery_report_path)}
+
+이번 메일은 13번이 어떤 실험이었는지, 결과가 어디까지 나왔는지, 그리고 왜 재실행이 필요한지를
+짧게 공유드리는 용도입니다.
+
+감사합니다.
+"""
+    subject = "[시계열 연구] 13번 feature-algorithm-resource 중간 결과 및 재실행 계획"
+    attachments = [
+        ROOT / full_report_path,
+        ROOT / status_report_path,
+        ROOT / recovery_report_path,
+    ]
+    return subject, body, attachments
+
+
+def fusion_alignment_rerun_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    report = "test/results/14_fusion_alignment_rerun_report_20260630.md"
+    variables = "test/results/12_feature_guardrail_fusion_report_20260624.md"
+    body = f"""교수님 안녕하세요. 오늘 진행 상황 간단히 보고드립니다.
+
+1. 기존 분석 코드에서 문제 3가지를 발견해 고쳤습니다.
+ - 시점 밀림(window 정렬) 오류: 가격 예측 신호와 위험 신호가 한 칸씩 어긋난 시점끼리 비교되고 있었습니다.
+ - 텍스트 데이터가 없는데도 "텍스트를 쓴 변수"처럼 잡혀 집계되던 오류.
+ - 거의 매매를 안 한 경우를 "손실을 잘 막았다"로 착각해 1등으로 뽑던 오류.
+
+2. 고친 뒤 다시 분석한 결과, 여러 변수 묶음 중 multi-timeframe(여러 시간대의 수익률·변동성·추세) 변수셋이 가장 좋았고, 기존에 1순위로 잡아둔 방향과 같았습니다.
+ - 변수셋 변수명·구성 설명: {github_blob(variables)}
+
+3. 다음 단계는 이 변수셋에 '위험 게이트'를 붙여 검증하는 것입니다.
+ - 위험 게이트: 앞으로 큰 하락·급변이 예상되면 새로 사지 않고 쉬는 안전장치입니다(가격을 맞히는 게 아니라 위험할 때 빠지는 역할).
+ - 확인 방법: 게이트를 켰을 때 최대낙폭(MDD, 고점 대비 최대 하락폭)이 줄어드는지로 봅니다. 오늘 결과에선 모든 변수셋에서 게이트가 낙폭을 줄였습니다.
+
+오늘 정리 보고서: {github_blob(report)}
+
+감사합니다."""
+    subject = "[퀀트 연구] 오늘 진행 상황 간단 보고"
+    return subject, body, []
+
+
+def trend_capture_defense_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    report_path = "test/results/15_trend_capture_defense_report_20260716.md"
+    body = f"""교수님 안녕하세요. 15번 실험 결과 간단히 보고드립니다.
+
+1. 왜 다시 설계했는지
+ - 13번까지는 "다음 15분" 가격을 맞히려 했는데, 15분 뒤는 사실상 랜덤워크에 가까워 어떤 모델도
+   "그냥 직전 값을 그대로 쓴다"는 가장 단순한 기준선을 못 이겼습니다. 그 결과 예측이 방향성 없이
+   평평해지거나(방어에는 유리해 보이지만 예측으로선 의미 없음), 반대로 분산이 실제보다 수천 배
+   요동치는 식으로 붕괴했습니다.
+ - 그래서 이번에는 "다음 15분"이 아니라 "앞으로 4시간 동안의 누적 변화(추세)"를 맞히도록 목표
+   자체를 바꿨습니다. 위험을 피하는 안전장치(risk gate)는 그대로 유지한 채, 추세를 잘 잡는
+   모델·손실함수·변수 구성을 다시 찾는 데 집중했습니다.
+
+2. 확인된 핵심 결과
+ - 목표를 4시간 추세로 바꾸자, 처음으로 "예측이 죽지도(평평해지지도) 폭주하지도 않는" 상태를
+   확보했습니다. 큰 변동이 있었던 구간만 따로 보면 방향을 맞춘 비율이 51~52%로, 단순히
+   "오르던 추세가 계속된다"고 가정하는 것(46~47%)보다 조금 더 나았습니다.
+ - 어떤 변수가 이 신호를 만드는지도 특정했습니다. 여러 시간대(1시간~16시간)의 추세 위치를
+   보여주는 변수 묶음이 핵심이었고, 단순 수익률이나 거래량 변수만으로는 신호가 없었습니다.
+ - 위험 회피 안전장치(risk gate)는 이번에도 확실히 작동했습니다. 급락 구간에서 매수를 미리
+   차단해 최대 낙폭을 평균 33%에서 18%로, 절반 가까이 줄였습니다.
+ - 다만 아직 한계도 있습니다. 신호가 약해서 거래 비용을 이기지 못해 절대 수익은 여전히
+   마이너스입니다. 낙폭을 줄이는 방어 효과는 확실하지만, 수익으로 전환하는 것은 다음 과제입니다.
+
+3. 다음 단계
+ - 학습 데이터를 더 넓게 쓰고, 큰 변동 구간에 가중치를 더 주는 손실함수, 여러 시드 앙상블로
+   신호 자체를 강화하는 것이 다음 목표입니다. 다른 코인으로도 같은 변수 조합이 통하는지
+   확인할 계획입니다.
+
+전체 결과 보고서: {github_blob(report_path)}
+
+이번 실험부터는 노트북 대신 파이썬 스크립트로 직접 실행하고, 모든 수치·그래프를 결과 폴더에
+자동 저장하는 방식으로 바꿔 재현과 추적이 더 쉬워졌습니다.
+
+감사합니다."""
+    subject = "[퀀트 연구] 15번: 방어 중심에서 추세 포착 + 방어 융합으로 방향 전환 결과"
+    return subject, body, [ROOT / report_path]
+
+
+def professor_publication_brief_email(commit_hash: str) -> tuple[str, str, str, list[Path], list[tuple[str, Path]]]:
+    """5-tuple preset: HTML body with three inline figures + plain-text fallback.
+
+    2026-07-23 갱신: 결정 지점(A 방향/B 변동성/C 추세)을 좁히는 추가 확인 7종(horizon 스윕,
+    전종목 확인, GARCH 반감기, 허스트 지수, regime, 거래량 lead-lag, cross-asset 변동성
+    전이)을 이전 메일 내용에 첨삭했다. 제목에 "이전 메일 대신 이것을 참고해 달라"는 안내를
+    덧붙여 구버전과 구분한다. 본문에 핵심 그림 3장을 직접 임베드하고, 상세 전체(서론/관련연구/
+    방법론/EDA/결과/결론·논의/향후연구/참고문헌 + 그림 전부)는 GitHub 렌더링 링크로 안내한다
+    (규칙: .md 원본은 첨부하지 않는다, known_pitfalls.md P7).
+    """
+    report_path = "test/results/professor_brief_publication_case_20260722.md"
+    acf_path = ROOT / "test/images/17_eda_direction_signal_20260722/s3_acf_pacf.png"
+    garch_path = ROOT / "test/images/17_eda_direction_signal_20260722/s7_garch_volatility.png"
+    horizon_path = ROOT / "test/images/17_eda_direction_signal_20260722/s9_horizon_sweep.png"
+    report_url = github_blob(report_path)
+
+    plain_body = f"""[이전 메일 말고 이것을 봐 주세요 — 결정 지점을 좁히는 추가 확인을 반영해 다시 정리했습니다]
+
+교수님 안녕하세요. 지금까지의 시계열 연구를 정리해 논문화 가능성을 여쭙고자 메일드립니다.
+(이 메일은 텍스트만 지원하는 뷰어용입니다. 그림은 아래 보고서 링크에서 보실 수 있습니다.)
+
+[요약]
+- 최종 목표: 과거 유사 국면·시장 텍스트·예측/위험 신호를 LLM에 태워 트레이딩 상황을 자문하게
+  하는 시스템 구축입니다. 지금까지의 실험(1~17번)은 그 시스템에 들어갈 예측 재료를 만들고,
+  최적화·손실함수를 그 재료(추세·변동성·방향)를 최대한 잘 잡도록 개선해 온 과정입니다.
+- 핵심 발견(데이터로 확정): 15분봉에서 방향(다음이 오를지/내릴지)은 사실상 예측 불가입니다
+  (자기상관 약 0.05, 방향 정확도 0.48~0.54로 동전 던지기 수준). 반면 변동의 '크기'(변동성)는
+  예측 가능합니다(자기상관 0.36, GARCH로 0.46). 저희 모델의 결함이 아니라 효율시장 하 고빈도
+  수익률의 알려진 구조이며 문헌과 일치합니다.
+- 정직한 재검토: 연구를 처음부터 다시 훑으며, 차분(differencing)이 2026-05 설계 이후 모든
+  실험에 이미 적용돼 있었음을 뒤늦게 확인했습니다. 비정상 시계열 자체를 계속 다루고 있다고
+  생각했는데, 실제로는 1차 차분(로그수익률)이라는 특정 정상화 위에서 실험해 온 것이었습니다.
+- 논문 각도는 결정 지점에 종속됩니다: 예측 대상(A 방향 / B 변동성 / C 추세) 중 무엇을
+  주력으로 삼는지에 따라 논문의 프레이밍이 달라집니다.
+- (신규) 결정 지점을 좁히는 추가 확인 7종: 방향 신호는 초단기엔 없지만 2일 이상 horizon
+  에서 재등장합니다(+0.09@6일 — Christoffersen-Diebold 이론과 일치). 전종목 20개 모두
+  동일 구조로 BTC 특정이 아님을 확정했습니다. GARCH 변동성 반감기는 8.6시간으로 B의 목표
+  horizon을 구체화했습니다. 허스트 지수 H=0.58로 분수차분을 시도할 근거를 확보했습니다.
+  거래량이 미래 변동을 lag=1에서 +0.20으로 선행합니다. BTC-알트 변동성 동시상관이
+  0.48~0.72로 강해 전종목 전이 가능성을 확인했습니다. Regime(고/저변동) 조건부 방향차이는
+  없다고 확인해(기각) 그쪽 탐색은 접었습니다.
+- 신호가 실재하는 B(변동성)를 주 재료로 승격하는 방향을 제안드리며, A는 장기 horizon으로,
+  C는 분수차분으로 각각 후속 확인이 가능한 상태입니다.
+
+[여쭐 것]
+1. 위 negative-result와 진단/교정을 방법론 논문으로 정리하는 방향이 적절한지.
+2. 예측 대상을 변동성(B) 중심으로 가는 방향에 대한 의견.
+3. 확장(변동성 GARCH 베이스라인·외생정보 도입·cross-sectional·최종 LLM 결합)을 본 논문에
+   포함할지, 후속 논문으로 분리할지.
+
+자세한 내용(서론·관련연구·방법론·EDA·결과·결론및논의·향후연구·참고문헌, 그림 전부 포함)은
+아래 링크의 보고서를 참고해 주세요:
+{report_url}
+
+감사합니다."""
+
+    html_body = f"""<html><body style="font-family:sans-serif; line-height:1.6;">
+<p style="background:#fff3cd; padding:10px; border:1px solid #ffe58f;"><b>이전 메일 말고
+이것을 봐 주세요</b> — 결정 지점을 좁히는 추가 확인을 반영해 다시 정리했습니다.</p>
+
+<p>교수님 안녕하세요. 지금까지의 시계열 연구를 정리해 논문화 가능성을 여쭙고자 메일드립니다.</p>
+
+<h3>[요약]</h3>
+<ul>
+<li><b>최종 목표</b>: 과거 유사 국면·시장 텍스트·예측/위험 신호를 <b>LLM에 태워 트레이딩
+상황을 자문</b>하게 하는 시스템 구축입니다. 지금까지의 실험(1~17번)은 그 시스템에 들어갈
+예측 재료를 만들고, 최적화·손실함수를 그 재료(추세·변동성·방향)를 최대한 잘 잡도록 개선해
+온 과정입니다.</li>
+<li><b>핵심 발견(데이터로 확정)</b>: 15분봉에서 <b>방향</b>(다음이 오를지/내릴지)은 사실상
+예측 불가입니다(자기상관 약 0.05, 방향 정확도 0.48~0.54 = 동전 던지기). 반면 변동의
+<b>'크기'(변동성)</b>는 예측 가능합니다(자기상관 0.36, GARCH로 0.46). 저희 모델의 결함이
+아니라 효율시장 하 고빈도 수익률의 알려진 구조이며 문헌과 일치합니다.</li>
+<li><b>정직한 재검토</b>: 연구를 처음부터 다시 훑으며, <b>차분(differencing)이 2026-05
+설계 이후 모든 실험에 이미 적용돼 있었음을 뒤늦게 확인</b>했습니다. 비정상 시계열 자체를
+계속 다루고 있다고 생각했는데, 실제로는 1차 차분(로그수익률)이라는 특정 정상화 위에서
+실험해 온 것이었습니다.</li>
+<li><b>논문 각도는 결정 지점에 종속</b>됩니다: 예측 대상(A 방향 / B 변동성 / C 추세) 중
+무엇을 주력으로 삼는지에 따라 논문의 프레이밍이 달라집니다.</li>
+<li><b>(신규) 결정 지점을 좁히는 추가 확인 7종</b>: 방향 신호는 초단기엔 없지만
+<b>2일 이상 horizon에서 재등장</b>합니다(+0.09@6일 — Christoffersen&ndash;Diebold 이론과
+일치, 그림 3). <b>전종목 20개 모두 동일 구조</b>로 BTC 특정이 아님을 확정했습니다. GARCH
+변동성 반감기는 <b>8.6시간</b>으로 B의 목표 horizon을 구체화했습니다. 허스트 지수
+<b>H=0.58</b>로 분수차분을 시도할 근거를 확보했습니다. 거래량이 미래 변동을 lag=1에서
+<b>+0.20</b>으로 선행합니다. BTC&ndash;알트 변동성 동시상관이 <b>0.48~0.72</b>로 강해
+전종목 전이 가능성을 확인했습니다. Regime(고/저변동) 조건부 방향차이는 없다고 확인해
+(기각) 그쪽 탐색은 접었습니다.</li>
+<li>신호가 실재하는 <b>B(변동성)를 주 재료로 승격</b>하는 방향을 제안드리며, A는 장기
+horizon으로, C는 분수차분으로 각각 후속 확인이 가능한 상태입니다.</li>
+</ul>
+
+<p><b>[그림 1] 방향(위 2패널) vs 크기(아래 2패널) 자기상관</b> — 방향은 즉시 0으로 붕괴,
+크기는 느리게 감소(변동성 군집):</p>
+<img src="cid:fig_acf" style="max-width:640px; width:100%; border:1px solid #ddd;">
+
+<p><b>[그림 2] GARCH(1,1) 조건부 변동성</b>이 실제 변동 크기를 따라갑니다(상관 0.46):</p>
+<img src="cid:fig_garch" style="max-width:640px; width:100%; border:1px solid #ddd;">
+
+<p><b>[그림 3, 신규] 방향 자기상관의 horizon 스윕</b> — 초단기는 무신호, 2일 이상에서
+방향 신호가 재등장합니다:</p>
+<img src="cid:fig_horizon" style="max-width:640px; width:100%; border:1px solid #ddd;">
+
+<h3>[여쭐 것]</h3>
+<ol>
+<li>위 negative-result와 진단/교정을 방법론 논문으로 정리하는 방향이 적절한지.</li>
+<li>예측 대상을 변동성(B) 중심으로 가는 방향에 대한 의견.</li>
+<li>확장(변동성 GARCH 베이스라인·외생정보 도입·cross-sectional·최종 LLM 결합)을 본
+논문에 포함할지, 후속 논문으로 분리할지.</li>
+</ol>
+
+<p>자세한 내용(서론·관련연구·방법론·EDA·결과·결론및논의·향후연구·참고문헌, 그림 전부
+포함)은 아래 링크의 보고서를 참고해 주세요:<br>
+<a href="{report_url}">{report_url}</a></p>
+
+<p>감사합니다.</p>
+</body></html>"""
+
+    subject = "이전 메일 말고 이것을 봐주세요 — [퀀트 연구] 비정상 암호화폐 시계열 예측 연구 정리 및 논문화 논의 요청"
+    # 규칙(CLAUDE.md/AGENTS.md 2.7): 보고서는 GitHub 렌더링 링크로만 전달한다. .md 파일을
+    # 그대로 첨부하면 받는 쪽에서 raw 텍스트로 열려 이미지·표가 안 보이고 가독성이 나빠진다
+    # (2026-05-28에 이미 겪고 고친 문제 — 재발 방지를 위해 여기서 attachments를 비워 둔다).
+    attachments: list[Path] = []
+    inline_images = [("fig_acf", acf_path), ("fig_garch", garch_path), ("fig_horizon", horizon_path)]
+    return subject, plain_body, html_body, attachments, inline_images
+
+
 PRESETS = {
     "simulation": simulation_email,
+    "professor_publication_brief": professor_publication_brief_email,
+    "fusion_alignment_rerun": fusion_alignment_rerun_email,
+    "trend_capture_defense": trend_capture_defense_email,
     "text_context": text_context_email,
     "independent_variables": independent_variables_email,
     "historical_flow_mart": historical_flow_email,
     "optimization_context_brief": optimization_context_brief_email,
     "forecasting_methodology_review": forecasting_methodology_review_email,
     "optimization_stabilization_stage": optimization_stabilization_stage_email,
+    "breadth_expansion_interpretation": breadth_expansion_interpretation_email,
+    "preprocessing_uncertainty_diagnostics": preprocessing_uncertainty_diagnostics_email,
+    "preprocessing_matrix_results": preprocessing_matrix_results_email,
+    "feature_guardrail_transition": feature_guardrail_transition_email,
+    "feature_guardrail_results": feature_guardrail_results_email,
+    "feature_algorithm_resource": feature_algorithm_resource_email,
 }
 
 
 def build_message(preset: str, sender: str, receiver: str) -> tuple[EmailMessage, list[Path]]:
+    """Build the email. Preset functions normally return a 3-tuple
+    (subject, plain_body, attachments). Presets that need inline images in an
+    HTML body (e.g. embedded figures) return a 4-tuple adding
+    (plain_fallback_body, html_body, inline_images) where inline_images is a
+    list of (content_id, Path) pairs referenced in html_body as
+    `<img src="cid:CONTENT_ID">`.
+    """
     commit_hash = git_head_short()
-    subject, body, attachments = PRESETS[preset](commit_hash)
+    result = PRESETS[preset](commit_hash)
     msg = EmailMessage()
     msg["From"] = sender
     msg["To"] = receiver
+
+    if len(result) == 5:
+        subject, plain_body, html_body, attachments, inline_images = result
+        msg["Subject"] = subject
+        msg.set_content(plain_body, subtype="plain", charset="utf-8", cte="base64")
+        msg.add_alternative(html_body, subtype="html", charset="utf-8", cte="base64")
+        html_part = msg.get_payload()[1]
+        for cid, path in inline_images:
+            if not path.exists():
+                continue
+            html_part.add_related(
+                path.read_bytes(), maintype="image", subtype="png", cid=f"<{cid}>"
+            )
+        return msg, attachments
+
+    subject, body, attachments = result
     msg["Subject"] = subject
     msg.set_content(body, subtype="plain", charset="utf-8", cte="base64")
     return msg, attachments
@@ -415,3 +1160,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+

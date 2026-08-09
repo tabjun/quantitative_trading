@@ -1,5 +1,9 @@
 # .gitignore (루트용)
 
+# 서버 사용 시 생성될 수 있는 임시 대화 로그/작업 흔적 제외
+_chat_log.md
+logs/
+
 # 가상환경 폴더 무시
 .venv/
 venv/
@@ -13,6 +17,7 @@ env/
 
 # 파이썬 캐시 무시
 __pycache__/
+.ipynb_checkpoints/
 *.pyc
 build/
 dist/
@@ -23,9 +28,12 @@ wheels/
 
 # VS Code 설정 무시
 .vscode/
+!.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
 resume.pdf
 
-#  [주요내용 보호] 
+#  [주요내용 보호]
 !materials/
 !materials/quant_architecture.png
 materials/research_overview.docx
@@ -37,8 +45,16 @@ materials/research_overview.docx
 *.xls*
 *.jpeg
 *.docx
+*.pptx
 
 # 에이전트 설정 및 로컬 스킬 제외
 .agents/
+.claude/settings.local.json
 
-
+# AI 에이전트 작업 문서: 서버 ↔ 로컬 클로드/코덱스가 동일 지침/이력을 공유하도록 추적한다.
+# (실제 시크릿/키 값은 포함하지 않음. .env/*.key/*.ini 등은 위에서 차단됨)
+# AGENTS.md
+# CLAUDE.md
+# conversation_l2_cache.md
+# history.md
+# process.md

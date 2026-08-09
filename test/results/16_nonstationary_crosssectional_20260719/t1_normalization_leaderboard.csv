@@ -1,0 +1,9 @@
+suite,ticker,model,loss,normalization,preprocessing,seed,mae_return,mae_zero_ratio,mase_momentum,trend_corr,direction_accuracy,large_move_da,variance_ratio,pred_return_std,actual_return_std,copy_risk_krw,healthy_variance,tail_precision,tail_recall,tail_f1,val_overfit_gap,horizon,champion_score
+t1_normalization,KRW-BTC,ITransformerLike,huber,revin,seasonal_diff16,42,0.010291,1.720449,1.124257,0.025736,0.515,0.526667,1.550159,0.010234,0.00822,1.72244,True,0.205,0.205,0.205,0.001102,16,0.1659
+t1_normalization,KRW-BTC,ITransformerLike,huber,dishts_lite,seasonal_diff16,42,0.009819,1.64161,1.072738,-0.000954,0.5225,0.533333,0.313925,0.004606,0.00822,1.631004,True,0.25,0.25,0.25,1.2e-05,16,0.1095
+t1_normalization,KRW-BTC,PatchTSTLike,huber,none,seasonal_diff16,42,0.008455,1.413612,0.923749,0.032776,0.526667,0.546667,0.209497,0.003762,0.00822,1.406521,True,0.23,0.23,0.23,0.000636,16,0.0422
+t1_normalization,KRW-BTC,PatchTSTLike,huber,window_standard,seasonal_diff16,42,0.006756,1.129528,0.738109,0.020441,0.499583,0.496667,0.169798,0.003387,0.00822,1.133404,True,0.261667,0.261667,0.261667,0.001889,16,-0.0076
+t1_normalization,KRW-BTC,ITransformerLike,huber,none,seasonal_diff16,42,0.008995,1.503909,0.982755,0.045869,0.524583,0.556667,0.125991,0.002918,0.00822,1.495095,True,0.235,0.235,0.235,0.003962,16,-0.0191
+t1_normalization,KRW-BTC,PatchTSTLike,huber,revin,seasonal_diff16,42,0.006641,1.110244,0.725508,-0.002478,0.52125,0.495,0.149301,0.003176,0.00822,1.108713,True,0.263333,0.263333,0.263333,0.0,16,-0.0269
+t1_normalization,KRW-BTC,ITransformerLike,huber,window_standard,seasonal_diff16,42,0.007927,1.325277,0.866024,0.01623,0.515,0.536667,0.171285,0.003402,0.00822,1.318943,True,0.2,0.2,0.2,0.0,16,-0.028
+t1_normalization,KRW-BTC,PatchTSTLike,huber,dishts_lite,seasonal_diff16,42,0.006852,1.145586,0.748603,0.076009,0.5,0.485,0.134836,0.003018,0.00822,1.149474,True,0.268333,0.268333,0.268333,0.001186,16,-0.0472

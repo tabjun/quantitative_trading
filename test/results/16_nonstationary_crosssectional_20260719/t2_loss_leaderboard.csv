@@ -1,0 +1,5 @@
+suite,ticker,model,loss,normalization,preprocessing,seed,mae_return,mae_zero_ratio,mase_momentum,trend_corr,direction_accuracy,large_move_da,variance_ratio,pred_return_std,actual_return_std,copy_risk_krw,healthy_variance,tail_precision,tail_recall,tail_f1,val_overfit_gap,horizon,champion_score
+t2_loss,KRW-BTC,ITransformerLike,huber,revin,seasonal_diff16,42,0.010291,1.720449,1.124257,0.025736,0.515,0.526667,1.550159,0.010234,0.00822,1.72244,True,0.205,0.205,0.205,0.001102,16,0.1659
+t2_loss,KRW-BTC,ITransformerLike,pinball,revin,seasonal_diff16,42,0.008497,1.420629,0.928334,-0.03592,0.487083,0.456667,0.667633,0.006716,0.00822,1.426179,True,0.243333,0.243333,0.243333,0.00188,16,0.1394
+t2_loss,KRW-BTC,ITransformerLike,student_t,revin,seasonal_diff16,42,0.01768,2.955781,1.931505,-0.036591,0.4725,0.445,2.234798,0.012288,0.00822,2.998338,True,0.24,0.24,0.24,0.07388,16,0.0644
+t2_loss,KRW-BTC,ITransformerLike,tail_weighted,revin,seasonal_diff16,42,0.007514,1.256154,0.820855,0.069005,0.529167,0.55,0.154351,0.003229,0.00822,1.250982,True,0.231667,0.231667,0.231667,0.0,16,0.0014

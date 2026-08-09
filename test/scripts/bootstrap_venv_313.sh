@@ -31,7 +31,13 @@ source "$VENV_PATH/bin/activate"
 python -m pip install --upgrade pip
 UV_CACHE_DIR="$PROJECT_ROOT/.uv-cache" UV_NO_CONFIG=1 uv export --format requirements-txt --output requirements.txt
 python -m pip install -r requirements.txt
-python -m pip install --force-reinstall ipykernel
+python -m pip install --force-reinstall \
+  "ipykernel==6.29.5" \
+  "jupyter_client==8.6.3" \
+  "traitlets==5.14.3" \
+  "pyzmq==26.2.1" \
+  "ipywidgets==8.1.8" \
+  "jupyterlab_widgets"
 
 # Force PyTorch to match the detected CUDA runtime, e.g. cu126 on RTX 4090 server.
 python -m pip install --force-reinstall --index-url "$TORCH_INDEX_URL" \

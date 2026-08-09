@@ -15,7 +15,9 @@
 - 새 실험은 `test/models/*.ipynb`부터 만든다.
 - 같은 이름의 `.py` 미러를 함께 유지한다.
 - 후속 연구가 기존 번호 실험의 의미를 바꾸면, 기존 파일을 덮어쓰지 않고 새 번호 실험(`5 -> 6 -> 7`)으로 분리한다.
+- **실험 번호는 순번이 아니라 불변 식별자다.** 실험 코드가 폐기·삭제돼도(예: 13번, 2026-07-19) 그 번호는 결번으로 남기고 재사용·재정렬하지 않는다 — 보고서·이력·커밋이 참조하는 번호가 어긋나면 연구 추적성이 깨진다. 다음 실험은 항상 "지금까지 쓴 최대 번호 + 1"이다.
 - 무거운 연구 실행은 학교 서버 커널이나 승인된 원격 환경에서 한다.
+- 노트북 결과는 기본적으로 `plt.show()`와 셀 출력으로 본다. `savefig()`나 서버 저장 CSV/Markdown은 예외적으로만 쓴다.
 - 루트 프레임워크로 올릴 로직은 `analysis/`, `contexts/`, `marts/`, `pipelines/`로 옮긴다.
 - 노트북을 파일별로 하나씩 실행한 뒤에는 서버의 `Kernel -> Shut Down All Kernels`로 이전 커널을 완전히 종료하고 다음 파일을 연다.
 - 원격 Jupyter 서버에 다시 붙을 때는 서버 `IP:port`와 `token`으로 접속하며, 커널 상태가 꼬이면 재연결보다 기존 커널 종료를 먼저 한다.
@@ -28,12 +30,30 @@
 - `4_text_independent_variable_analysis.ipynb`: 텍스트 독립변수 결합 실험
 - `5_optimization_diagnostics_test.ipynb`: 최적화 경로와 shortcut collapse 진단
 - `6_optimization_stabilization_test.ipynb`: target, normalization, loss, model selection 안정화 실험
+- `7_optimization_breadth_expansion_test.ipynb`: 6번 이후 확장 실험의 자원 인식형 stage plan
+- `8_optimization_breadth_training_test.ipynb`: 7번 계획을 실제 GPU 학습/시각화/붕괴 진단으로 연결한 breadth training 실험. 알고리즘뿐 아니라 preprocessing, normalization, loss, optimizer/scheduler, gradient policy, ensemble 축을 함께 비교한다.
+- `9_preprocessing_uncertainty_diagnostics_test.ipynb`: 8번의 전 모델 persistence 미달 결과를 바탕으로 전처리 조합, seed ensemble, conformal interval, 모델 용량과 Double Descent 가능성을 진단한다.
+- `10_objective_ensemble_confirmation_test.ipynb`: 9번 전처리 후보를 고정하고 방향·분산·상관·tail·regime objective와 validation-only ensemble이 persistence 미달과 collapse를 줄이는지 확인하는 본실험이다.
+- `11_distributional_capacity_diagnostics_test.ipynb`: 10번 점예측과 병렬 비교할 향후 4시간 급변·하방 위험 확률, Gaussian·Student-t·quantile 분포 예측, 보조 Double Descent를 진단한다.
+- `12_feature_guardrail_fusion_test.ipynb`: 10번 `balanced_composite` 점예측을 기본 토대로 두고, 11번 `absolute_move` 위험 확률을 guardrail로 붙인 뒤 OHLCV proxy, liquidity, volatility, order-flow proxy, multi-timeframe, shock/event, attention, text, cross-market, optional macro/on-chain/derivatives/social-dev 독립변수 조합별로 collapse 완화와 MDD 방어 가능성을 확인한다.
+- `13_feature_algorithm_resource_test` (**코드 파일 삭제됨, 2026-07-19**): 12번 1순위 multi-timeframe 변수셋을 내부 분해하려던 실험. shared memory/notebook backup 실패로 완주 전 중단됐고(출력 0), 코드가 교정 전 12번의 결함 3종(시점 미정렬·텍스트 둔갑·비활동 둔갑)을 `load_module`로 그대로 체인하고 있어 재실행 시 잘못된 분석만 재생산하므로 방향 감사(2026-07-18) 후 사용자 지시로 삭제했다(git 이력에는 보존). 확보된 결과·장애 기록은 `test/results/13_*` 보고서 4건과 `test/images/13_output_recovery_20260627/`에 남아 있으며, 연구 의도는 15번이 교정 엔진 위에서 계승했다.
+- `14_fusion_alignment_rerun_test.ipynb`: 12번 fusion 코드의 결함 3건(시점 미정렬, 텍스트 둔갑, 비활동 둔갑)을 공용 엔진 `engine/`에서 교정하고 재실행한다. multi-timeframe 1위 재확인, 점예측 폭주가 Linear 모델 고유 문제임을 확인했다.
+- `15_trend_capture_defense_test.ipynb`(`.py` 드라이버 기준 헤드리스 실행): "다음 15분 수익률" 점예측이 8~14번 내내 persistence를 못 이긴 문제를 재정의해, target을 h-step 누적수익률(추세)로 바꿔 변동을 살린 예측이 가능한지 본다. objective/정규화·전처리/multi-timeframe 변수 분해/risk gate 융합을 T1~T5 단계로 비교한다. **13번 이후 실행 방식이 노트북 셀에서 헤드리스 `.py` 드라이버로 전환**됐다(서버 원격 세션 + notebook 저장 실패 교훈). 결과는 `test/results/15_trend_capture_defense_20260716/`(raw md + csv)와 `test/images/15_trend_capture_defense_20260716/`(suite별 그림)에 전량 저장된다.
 
-## 4. 4번부터 6번까지의 연구 흐름
+## 4. 4번부터 8번까지의 연구 흐름
 
 - `4번`은 텍스트와 외생변수가 가격 예측에 실제 정보 가치를 주는지 보는 실험이다.
 - `5번`은 objective, target, architecture가 직전가 복사나 0 수익률 같은 쉬운 해로 붕괴하는지 보는 진단 실험이다.
 - `6번`은 독립변수와 데이터마트를 본격적으로 붙이기 전에 target, normalization, loss, model selection 기준을 안정화하는 실험이다.
+- `7번`은 실제 학습 결과가 아니라, 6번 안정화 이후 확장 실험을 어떤 자원 profile과 stage로 실행할지 정리한 계획/점검 산출물이다.
+- `8번`은 7번에서 빠진 실제 학습 backend를 새 번호로 분리한 실험이며, 모델군 확장만이 아니라 전처리/정규화/손실함수/최적화/기울기 안정화/앙상블 조합까지 서버 GPU에서 비교한다.
+- `9번`은 8번에서 관찰된 0수익률 평탄화와 출력 분산 폭주를 분리하기 위해 극단값·heavy-tail·추세·주파수·변동성 전처리를 조합하고, 예측구간과 모델 용량 변화까지 확인한다.
+- `10번`은 전처리만으로 해결되지 않은 학습 붕괴를 objective 구성과 seed/model ensemble 관점에서 다시 확인한다. test 결과는 모델 선택에 사용하지 않고 validation 결과만으로 ensemble 구성원을 고른다.
+- `11번`은 10번 결과를 기다리지 않고 별도 venv/kernel에서 병렬 실행할 경쟁 가설이다. 기본 연구 질문은 향후 4시간 급변·하방 위험 확률이며, Gaussian·Student-t·quantile 분포와 Double Descent는 후속·보조 suite로 둔다.
+- `12번`은 10번을 점예측 최적화 토대로 유지하고 11번을 위험 guardrail로 결합한다. 새 알고리즘 확장보다 OHLCV, 유동성, 변동성 레짐, momentum/reversal, order-flow proxy, multi-timeframe, shock/event, attention, 시간대, 선택적 텍스트·cross-market·macro·on-chain·derivatives·social-dev feature group을 넓게 비교해 어떤 독립변수군을 데이터마트로 승격할지 고른다.
+- `13번`은 12번 결과를 바탕으로 multi-timeframe 변수셋이 특정 모델·seed 우연인지 검증한다. 변수셋 내부 분해, 변수 확장, Linear/PatchTSTLike/TCN/Transformer/DLinear/NLinear/Autoformer/iTransformer/ModernTCN/Mamba 계열, 전처리, risk gate 민감도, 대형 batch resource 설정을 함께 비교한다. shared memory/notebook backup 문제로 완주 전 중단됐다.
+- `14번`은 13번을 직접 고치지 않고(완료 노트북 read-only), 12번 fusion 코드에서 발견된 결함(시점 미정렬·텍스트 둔갑·비활동 둔갑)을 공용 엔진 `engine/`에서 교정한 뒤 재실행한 검증 실험이다.
+- `15번`은 14번까지 반복된 "다음 15분 수익률 점예측이 persistence를 못 이긴다"는 한계를 하방 방어 로직으로 우회하지 않고, target을 h-step 추세로 재설계해 정면으로 다룬다. multi-timeframe 변수 분해로 신호원(추세·위치 블록)을 특정하고, risk gate는 방어층으로 유지한 채 함께 평가한다.
 - 문헌 기반 논문화 방향과 후속 알고리즘 후보는 `test/research_materials/forecasting_methodology_literature_review_20260613.md`를 본다.
 - 세부 해석은 각 노트북의 결과 셀과 `test/results/*.md` 보고서를 우선 본다.
 - 설계 메모와 참고문헌은 `test/experiment_specs/`에 둔다.
@@ -42,12 +62,81 @@
 
 - 기본 실행 예시는 각 연구 노트북 안의 셀과 `test/models/*.py`에 둔다.
 - 결과 해석의 1차 원본은 `ipynb` 출력 셀이다.
+- `8_optimization_breadth_training_test`는 기본적으로 PNG/CSV/Markdown 파일을 서버에 저장하지 않고, 노트북 inline 출력만 남긴다. `savefig()`는 기본 경로가 아니라 예외 경로로만 사용한다. 보고서용 이미지 추출은 `test/scripts/extract_notebook_images.py` 같은 보조 도구로 처리한다.
 - `test/scripts/extract_notebook_images.py`는 노트북 출력 그림 추출용 보조 유틸리티다.
 - `results/`는 보고서와 필요 시 CSV를 둔다.
 - 새 보고서는 이전 보고서를 참고하더라도 알고리즘/손실함수/정규화/지표/그래프 읽는 법을 다시 적는 독립 문서로 작성한다.
 - `test/README.md`에는 폴더 안내만 유지하고, 긴 연구 서술은 노트북/보고서로 보낸다.
 
 ## 6. 서버 환경 구성
+
+### 서버 홈 디렉터리가 통째로 초기화된 경우 (최초 구성 포함)
+
+서버 재설치·컨테이너 재발급 등으로 홈 디렉터리(`~/`)가 완전히 비어 있으면(`.ssh/`만 있고
+git 저장소도 uv venv도 없는 상태), 아래 순서를 처음부터 끝까지 수행한다. 이 순서는
+새 서버를 처음 구성할 때도 동일하게 적용한다.
+
+1. **SSH 키 생성** (기존 개인키가 다른 곳에 백업되어 있지 않다면 새로 만든다)
+
+   ```bash
+   ssh-keygen -t ed25519 -C "std_jun99120-<server-name>" -f ~/.ssh/id_ed25519 -N ""
+   cat ~/.ssh/id_ed25519.pub
+   ```
+
+2. **GitHub 계정에 공개키 등록** — `https://github.com/settings/keys` → New SSH key →
+   위 `cat` 출력값 전체 붙여넣기. (리포지토리 Settings의 "Deploy keys"가 아니라
+   반드시 개인 계정 설정이다. 저장소 Settings에는 이 메뉴가 없다.)
+
+3. **ssh-agent 등록 및 인증 확인**
+
+   ```bash
+   eval "$(ssh-agent -s)"
+   ssh-add ~/.ssh/id_ed25519
+   ssh -T git@github.com
+   # "Hi <username>! You've successfully authenticated..." 확인
+   ```
+
+4. **저장소 clone**
+
+   ```bash
+   cd ~
+   git clone git@github.com:tabjun/personal_ai_project.git
+   cd personal_ai_project
+   git checkout stock
+   ```
+
+5. **uv venv 재구축** — 이 상황(env 자체가 없음)은 "env가 깨진 경우"에 해당하므로
+   bootstrap 스크립트를 그대로 사용한다(아래 "환경이 깨져 재구축이 필요할 때" 절 참고).
+
+   ```bash
+   cd ~/personal_ai_project/quantitative_trading
+   bash test/scripts/bootstrap_uv_312.sh
+   ```
+
+6. **웹 VS Code(code-server) 기동** — Claude Code 확장을 포함해 자동 설치된다.
+
+   ```bash
+   bash ~/personal_ai_project/tools/vscode/start-vscode.sh start ~/personal_ai_project/quantitative_trading
+   bash ~/personal_ai_project/tools/vscode/start-vscode.sh status
+   ```
+
+   접속 주소는 `tools/vscode/README.md`에 고정되어 있다(`https://stat5.kmu.ac.kr:9500/user/<user>/proxy/9999/`).
+7. **세션 복원** — code-server에서 Claude Code(또는 Codex)를 열고
+   `CLAUDE.md`(Codex는 `AGENTS.md`) → `process.md` → `history.md` → `conversation_l2_cache.md`
+   순서로 읽어 이전 작업 상태를 복원한 뒤 이어서 진행한다.
+
+### 기본 운영: 기존 uv venv를 재사용한다 (새로 만들지 않는다)
+
+평소 연구 실행은 새 env를 만들지 않고 서버에 이미 있는 uv venv 두 개를 그대로 재사용한다.
+
+- `quantitative_trading/.venvs/quant_uv_py312_20260614_045930` -> Python 3.12 (**기본 정합성 기준**, 단일 실험은 이것으로 통일)
+- `quantitative_trading/.venvs/quant_uv_py313_20260614_040356` -> Python 3.13
+- 두 env는 동명 Jupyter 커널로 등록되어 있어 노트북에서 바로 선택할 수 있다.
+- `11_` vs `12_`처럼 상반되는 두 실험을 **동시에 비교 실행**할 때만 3.12 + 3.13을 병렬로 쓴다(한쪽 312, 한쪽 313).
+- 평소에는 아래 bootstrap 스크립트를 돌리지 않는다. 기존 env를 `source .venvs/<env>/bin/activate`로 활성화해 쓰면 된다.
+- bootstrap은 **env가 깨졌을 때 재구축하는 용도로만** 사용한다(아래 절은 그 재구축 절차다).
+
+아래는 환경이 깨져 재구축이 필요할 때의 절차다.
 
 이 저장소는 반복되는 서버 환경 구축을 스크립트로 고정한다.
 
@@ -58,6 +147,25 @@
 - 모든 스크립트는 고정 `.venv`를 덮어쓰지 않고 `.venvs/<env_name>` 형태로 새 환경을 만든다.
 - 기본 환경 이름은 날짜/시간이 붙은 형태로 자동 생성되며, 실행 전에 기존 env 디렉터리와 Jupyter kernel 목록도 같이 출력한다.
 - 각 스크립트는 설치 후 최소 smoke test를 자동 수행한다. 기본 import(`numpy`, `pandas`, `duckdb`, `statsmodels`, `optuna`, `torch`, `ipykernel`, `openai`, `google.generativeai`, `fastdtw`)와 `torch.cuda.is_available()` 확인까지 포함한다.
+
+### 학교 서버 JupyterLab 저버전 호환 고정값
+
+학교 서버에서는 커널 Python이나 CUDA가 정상이더라도, 상위 JupyterLab/JupyterHub 버전이 낮으면 최신 widget/kernel stack과 충돌할 수 있다. 이 저장소에서는 다음 조합을 **known-good compatibility set**으로 취급한다.
+
+```bash
+UV_NO_CONFIG=1 uv pip install --reinstall \
+  "ipykernel==6.29.5" \
+  "jupyter_client==8.6.3" \
+  "traitlets==5.14.3" \
+  "pyzmq==26.2.1" \
+  "ipywidgets==8.1.8" \
+  "jupyterlab_widgets"
+```
+
+- 이 조합은 "커널 Python은 정상인데 JupyterLab 쪽 버전이 낮아서 커널 시작/위젯 호환이 꼬이는 경우"를 기준으로 고정한 값이다.
+- bootstrap 스크립트는 위 버전 세트를 기본으로 재설치한다.
+- 서버에서 이미 env가 살아 있고 `ipywidgets`/`jupyterlab_widgets` 계열만 부족한 것이 확인되면, env 전체를 다시 만들기보다 위 명령만 추가 수행해도 된다.
+- 반대로 `torch`, `cuda`, `ipykernel`까지 모두 깨졌다면 새 env 재구축을 우선한다.
 
 실행 예시는 다음처럼 쓴다.
 
@@ -81,6 +189,10 @@ ENV_NAME=my_quant_313 KERNEL_NAME=my_quant_313 bash test/scripts/bootstrap_uv_31
 - smoke test가 실패하면 그 환경은 바로 쓰지 말고, 실패한 import 이름이나 CUDA 체크 메시지를 기준으로 다시 점검한다.
 
 ### 로컬 VSCode에서 학교 Jupyter 서버 커널 연결
+
+> 상태 (2026-06-30~): 이 연결 절차는 **잠시 소강**이다. 현재는 세션이 서버에서 직접 돌고 있어
+> 로컬 VSCode를 학교 Jupyter 서버에 붙일 필요가 없다. 절차는 삭제하지 않고 그대로 남겨 둔다
+> (로컬 노트북으로 다시 마이그레이션하면 재사용한다).
 
 로컬 VSCode에서는 서버의 `.venv` 경로를 직접 넣지 않고, 실행 중인 Jupyter 서버 URL로 접속한 뒤 등록된 Jupyter 커널을 선택한다.
 
@@ -137,6 +249,13 @@ cat ~/.local/share/jupyter/kernels/quant313/kernel.json
 -> 서버에 등록된 Jupyter 커널
 -> 서버 내부 uv/venv Python
 ```
+
+원격 연결 문제를 볼 때는 다음도 함께 확인한다.
+
+- VSCode 로그에 `Password ... was invalid`가 반복되면, 저장된 비밀번호/세션이 꼬였다는 뜻일 수 있다. `Existing Jupyter Server`를 다시 선택하고 `jupyter server list`에서 얻은 **새 token URL**로 재연결한다.
+- 노트북 메타데이터에 오래된 커널 이름이 박혀 있으면, 환경을 지운 뒤에도 예전 커널을 다시 잡으려 할 수 있다. 이 경우 VSCode에서 다른 커널을 직접 다시 선택한다.
+- 커널이 `Started session` 뒤 `Canceled future for execute_request message before replies were done`로 멈추면, 서버에서 먼저 `jupyter kernelspec list`, 해당 `kernel.json`, 그리고 `.../bin/python -c "import ipykernel, torch; print(torch.cuda.is_available())"`를 확인한다.
+- `ipykernel`, `torch`, `cuda`는 정상이지만 widget 계열만 깨져 있고 학교 서버 JupyterLab 버전이 낮다면, 위의 compatibility set으로 다시 맞춘 뒤 커널을 재선택한다.
 
 ### 장시간 환경 스크립트 백그라운드 실행
 
