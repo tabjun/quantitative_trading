@@ -29,7 +29,9 @@ GOVERNANCE_EXCLUDED_BRANCHES = {"develop", "main"}
 # 재사용 도구를 추가할 때만 여기에 파일명을 명시적으로 올린다 — 기본값은 여전히 차단이라
 # ad-hoc 스크립트가 슬쩍 들어오는 것을 막는 원래 목적은 그대로 유지된다.
 TEST_SCRIPTS_ALLOWED = {
-    "mcp_client.py",   # MCP 서버(arxiv/HF) 직접 호출기 — AGENTS.md 5절
+    "mcp_client.py",          # MCP 서버(arxiv/HF) 직접 호출기 — AGENTS.md 5절
+    "gpu_status.py",          # NVML 깨진 환경용 GPU 상태 조회(학습 중 감시)
+    "run_t8_multiseed.sh",    # t8 다중 시드 실행기(잡음 정량화) — 재현 명령 보존
 }
 
 

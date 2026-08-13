@@ -28,5 +28,10 @@ dependencies = [
     "tabulate",
     "scrapling",
     "dtaidistance>=2.4.0",
+    # GPU 사용률·온도·전력 조회용(torch.cuda.utilization 등이 이 패키지를 요구).
+    # 2026-08-14 현재 이 서버는 커널 모듈(595.71.05)과 유저스페이스 라이브러리(595.84) 버전
+    # 불일치로 NVML 자체가 막혀 있어 실제 값은 재부팅 후에 나온다. 이 패키지가 없어도
+    # test/scripts/gpu_status.py는 메모리 조회까지 정상 동작한다(드라이버 API 경로).
+    "nvidia-ml-py",
 ]
 
