@@ -508,8 +508,8 @@ def build_and_save_report(df: pd.DataFrame, args):
 def parse_args(argv=None):
     p = argparse.ArgumentParser(description="17번 전면 EDA")
     p.add_argument("--db", default=None)
-    p.add_argument("--table", default="btc_15m_advance")
-    p.add_argument("--ticker", default=None)
+    p.add_argument("--table", default="upbit_krw_candle")
+    p.add_argument("--ticker", default="KRW-BTC")
     p.add_argument("--max-rows", type=int, default=0)
     p.add_argument("--horizon", type=int, default=16)
     p.add_argument("--dry-run", action="store_true")

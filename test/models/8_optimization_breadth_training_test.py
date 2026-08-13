@@ -260,12 +260,23 @@ def resolve_db_path(db_arg: str | None) -> Path:
 
 
 def load_price_data(db_path: Path, table: str, ticker: str | None, max_rows: int | None) -> pd.DataFrame:
+    """이 함수는 `engine/data.py`로 옮겨진 원본이다(정본은 engine 쪽).
+
+    2026-08-14: 다종목 테이블을 ticker 없이 읽으면 종목이 섞여 차분이 오염되는 문제를 막는
+    가드를 engine 정본과 동일하게 추가했다. 자세한 배경은 `engine/data.py:load_price_data`.
+    """
+
     import duckdb
 
     where = ""
     params: list[object] = []
     with duckdb.connect(str(db_path), read_only=True) as con:
         columns = [row[1] for row in con.execute(f"PRAGMA table_info('{table}')").fetchall()]
+        if "ticker" in columns and not ticker:
+            raise ValueError(
+                f"'{table}'은 ticker 컬럼을 가진 다종목 테이블인데 ticker가 지정되지 않았다. "
+                "이대로 읽으면 종목 경계에서 차분이 오염된다 — --ticker로 종목을 지정하라."
+            )
         if ticker and "ticker" in columns:
             where = "WHERE ticker = ?"
             params.append(ticker)
@@ -1451,8 +1462,8 @@ def run_ensembles(
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="8번 최적화 breadth training 실험")
     parser.add_argument("--db", default=None)
-    parser.add_argument("--table", default="btc_15m_advance")
-    parser.add_argument("--ticker", default=None)
+    parser.add_argument("--table", default="upbit_krw_candle")
+    parser.add_argument("--ticker", default="KRW-BTC")
     parser.add_argument("--profile", default="school_4090_15gb")
     parser.add_argument("--device", default=None, choices=["cpu", "cuda"])
     parser.add_argument(

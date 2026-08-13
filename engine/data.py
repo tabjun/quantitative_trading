@@ -56,13 +56,38 @@ def resolve_db_path(db_arg: str | None) -> Path:
     )
 
 
-def load_price_data(db_path: Path, table: str, ticker: str | None, max_rows: int | None) -> pd.DataFrame:
+def load_price_data(
+    db_path: Path,
+    table: str,
+    ticker: str | None,
+    max_rows: int | None,
+    allow_mixed_tickers: bool = False,
+) -> pd.DataFrame:
+    """단일 종목 가격 데이터를 시간순으로 읽는다.
+
+    **다종목 테이블에서 ticker를 지정하지 않으면 예외를 낸다**(2026-08-14 신설 가드).
+    `upbit_krw_candle`처럼 ticker 컬럼이 있는 테이블을 ticker 없이 읽으면 269종목이
+    timestamp 순으로 섞여 나오고, 그 위에서 `make_features`의 `log_close.diff()`가
+    **서로 다른 코인 사이의 차분**을 계산한다(예: KRW-ELF 366원 → KRW-HBAR 66원 =
+    "-171% 수익률"). 에러 없이 조용히 쓰레기가 나오므로 여기서 막는다.
+
+    집계 목적으로 전체 행이 필요하면 `allow_mixed_tickers=True`를 명시한다 —
+    그 경우 호출자가 종목별 groupby를 책임진다.
+    """
+
     import duckdb
 
     where = ""
     params: list[object] = []
     with duckdb.connect(str(db_path), read_only=True) as con:
         columns = [row[1] for row in con.execute(f"PRAGMA table_info('{table}')").fetchall()]
+        if "ticker" in columns and not ticker and not allow_mixed_tickers:
+            raise ValueError(
+                f"'{table}'은 ticker 컬럼을 가진 다종목 테이블인데 ticker가 지정되지 않았다. "
+                "이대로 읽으면 종목이 섞인 채 시간순 정렬되어 종목 경계에서 차분이 오염된다. "
+                "--ticker KRW-BTC 처럼 종목을 지정하거나, 종목별 루프를 돌려라"
+                "(집계 목적이면 allow_mixed_tickers=True를 명시)."
+            )
         if ticker and "ticker" in columns:
             where = "WHERE ticker = ?"
             params.append(ticker)

@@ -1018,8 +1018,8 @@ def build_inline_report(args: argparse.Namespace, summary: pd.DataFrame) -> str:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="10번 objective·ensemble 본실험")
     parser.add_argument("--db", default=None)
-    parser.add_argument("--table", default="btc_15m_advance")
-    parser.add_argument("--ticker", default=None)
+    parser.add_argument("--table", default="upbit_krw_candle")
+    parser.add_argument("--ticker", default="KRW-BTC")
     parser.add_argument("--profile", default="school_4090_15gb")
     parser.add_argument("--device", choices=["cpu", "cuda"], default=None)
     parser.add_argument(

@@ -228,8 +228,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         choices=["t1_horizon", "t2_objective", "t3_nonstationarity", "t4_feature", "t5_gate_fusion",
                                  "t6_signal_boost", "t7_amplitude", "t8_multiasset", "t9_bridge"])
     parser.add_argument("--db", default=None)
-    parser.add_argument("--table", default="btc_15m_advance")
-    parser.add_argument("--ticker", default=None)
+    parser.add_argument("--table", default="upbit_krw_candle")
+    parser.add_argument("--ticker", default="KRW-BTC")
     parser.add_argument("--profile", default="school_4090_15gb")
     parser.add_argument("--device", choices=["cpu", "cuda"], default=None)
     parser.add_argument("--num-workers", type=int, default=0, help="13번 shm crash 교훈: 기본 0")

@@ -74,8 +74,8 @@ DEFAULT_SEEDS = "42"
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="14번 교정 fusion 재실행 (engine 기반)")
     parser.add_argument("--db", default=None)
-    parser.add_argument("--table", default="btc_15m_advance")
-    parser.add_argument("--ticker", default=None)
+    parser.add_argument("--table", default="upbit_krw_candle")
+    parser.add_argument("--ticker", default="KRW-BTC")
     parser.add_argument("--profile", default="school_4090_15gb")
     parser.add_argument("--device", choices=["cpu", "cuda"], default=None)
     parser.add_argument("--feature-groups", default=DEFAULT_FEATURE_GROUPS)
