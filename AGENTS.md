@@ -193,6 +193,38 @@
 - **파라미터로 모델을 판정하지 않는다**: GARCH 지속성·반감기는 이 데이터에서 표본에 따라
   55배 요동해 식별되지 않는다. 판정은 **target horizon의 표본외 성능**으로 한다.
 
+### 2.9d 성능 지표는 축과 함께 보고한다 (2026-08-19 신설)
+
+**배경**: "R²가 유효하지 않다"고만 알려져 있었는데, 실측하니 문제는 지표가 아니라 축이었다.
+레벨축에서는 11개 지표 전부가 무모델과 실모델을 구별하지 못하고(분리도 0.0~0.2%), 차분축에서는
+R²가 가장 민감한 분리자(112%)다. 근거: `test/results/18f_metric_validity_20260819/`.
+
+**규칙**: 모델 성능을 보고할 때 아래를 **함께** 낸다. 지표 하나만 쓰면 판별이 불가능하다.
+
+```
+차분축 필수:  R² · MAE · MASE · DA · DA(큰변동) · variance_ratio
+변동성 실험:  QLIKE · MAE · MASE · corr(√예측, |r|)
+항상 병기:    무모델(naive) 값과 **어느 축에서 쟀는지**
+```
+
+- **읽기 쉬운 지표와 판별하는 지표를 구분한다**: MAE·MAPE는 크기 감각(직관), 차분축 R²·
+  variance_ratio는 판별, MASE·copy_risk는 무모델 대비. MASE는 축 불변이지만 분리도는 낮다.
+- **레벨축 성적은 보고하지 않는다**(원단위 감각이 필요하면 naive 대비 비율로만).
+
+### 2.9e 데이터 준비는 코드가 확인한다 (2026-08-19 신설)
+
+DB는 `.gitignore`의 `*.db*`로 제외돼 `git pull`로 오지 않는다. 실험 드라이버는 시작 시
+`engine/preflight.py`의 `ensure_data()`를 호출해 DB·테이블·종목·행수를 점검하고, 부족하면
+수집하고, 수집 후에도 부족하면 **예외로 중단**한다(조용한 실패 금지).
+
+```python
+from engine import preflight
+preflight.ensure_data(table="upbit_krw_candle", tickers=["KRW-BTC"])   # 필요한 종목만
+preflight.ensure_data(table="upbit_krw_candle", tickers="all")          # 전 종목
+```
+
+장시간 수집이 곤란한 세션은 `QT_NO_AUTOBUILD=1`로 점검만 한다.
+
 ### 2.9c 다종목 테이블은 ticker 없이 읽지 않는다 (2026-08-14 신설)
 
 `upbit_krw_candle`처럼 `ticker` 컬럼이 있는 테이블을 ticker 지정 없이 읽으면 269종목이
