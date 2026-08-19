@@ -219,9 +219,16 @@ DB는 `.gitignore`의 `*.db*`로 제외돼 `git pull`로 오지 않는다. 실�
 
 ```python
 from engine import preflight
-preflight.ensure_data(table="upbit_krw_candle", tickers=["KRW-BTC"])   # 필요한 종목만
-preflight.ensure_data(table="upbit_krw_candle", tickers="all")          # 전 종목
+preflight.ensure_data(table="upbit_krw_candle", tickers=["KRW-BTC"])   # 단일종목 심층분석(GARCH 등)용
+preflight.ensure_data(table="upbit_krw_candle", tickers="all")          # 전종목 실험은 반드시 이쪽
 ```
+
+**`tickers=["KRW-BTC"]`는 "BTC만 있으면 된다"는 뜻이 아니라 "이 실험이 원래 그 종목만 쓴다"는
+뜻이다** — 인자에 실제로 필요한 종목을 넣는 것이지, 예시가 BTC라고 항상 BTC만 확인하는 게
+아니다. 전종목/다종목 실험(횡단면 비교, 모델 선택 등)은 `tickers="all"` 또는 유동성 상위
+목록을 넘긴다. 개념 설명·단일종목 심층분석(GARCH 적합, EDA 등)만 대표 종목 하나로 충분하다
+(2026-08-14 데이터 축 교정 사고와 같은 함정 — 대표 종목 하나로 시작해 그게 전체 실험의
+기본값으로 굳어지지 않도록, 다종목이 필요한 실험은 코드에서 `tickers="all"`을 명시한다).
 
 장시간 수집이 곤란한 세션은 `QT_NO_AUTOBUILD=1`로 점검만 한다.
 
