@@ -320,6 +320,16 @@ n8n/Cron/CI/Docker/Kubernetes 설계, 학교 서버 커널 실행 절차·파라
 | :--- | :--- | :--- | :--- |
 | `arxiv` (stdio) | `.mcp.json`(Claude Code) + `.codex/config.toml`(Codex) | 논문 검색·초록·BibTeX·인용그래프 | 불필요 |
 | `huggingface` (http) | `.mcp.json` | 모델·데이터셋·Space 검색(`hub_repo_search` 등) | 익명 가능, `HF_TOKEN` 있으면 rate limit 완화 |
+| `gmail` (stdio, `@gongrzhe/server-gmail-autoauth-mcp`) | `.mcp.json` | 메일 읽기·검색·라벨·첨부·답장(Gmail API 전 기능) | Google OAuth, 최초 1회 브라우저 인증 필요(2026-08-21 등록) |
+
+**Gmail MCP 최초 설정(사람이 브라우저에서 해야 하는 부분, AI가 대신할 수 없음)**:
+1. Google Cloud Console에서 프로젝트 생성 → Gmail API 활성화 → OAuth 클라이언트(Desktop app) 생성
+2. 다운로드한 JSON을 `gcp-oauth.keys.json`으로 이름 바꿔 `~/.gmail-mcp/`에 둔다
+3. `npx @gongrzhe/server-gmail-autoauth-mcp auth` 실행 → 브라우저에서 구글 로그인·동의
+4. 인증 완료 시 `~/.gmail-mcp/credentials.json`에 토큰 저장(이후 세션에서 자동 사용)
+
+발송 전용은 `test/scripts/send_email.py`(SMTP, `MAIL_PROVIDER=naver|gmail`)를 계속 쓴다 — 이건
+읽기·검색까지 필요할 때만 이 MCP로 넘어간다.
 
 **논문 검색은 arxiv MCP를 쓴다.** 인용은 `search_papers` → `get_abstract`로 **초록까지 대조**한
 것만 쓰고, 대조 못 한 인용은 보고서에 "미검증 인용"으로 명시한다. HF MCP에는 논문 검색 툴이

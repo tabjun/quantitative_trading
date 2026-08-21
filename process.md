@@ -779,3 +779,8 @@
 - [x] `send_email.py`를 프로바이더 선택형으로 일반화(`MAIL_PROVIDER=naver|gmail`, 기본값
       naver로 하위호환). Gmail 앱 비밀번호 발급 후 `.env`에 `GMAIL_EMAIL_ID`·`GMAIL_APP_PASSWORD`·
       `MAIL_PROVIDER=gmail` 세 줄만 추가하면 전환. 회귀 테스트로 기본 동작(네이버) 불변 확인.
+
+- [x] Gmail MCP 서버(`@gongrzhe/server-gmail-autoauth-mcp`) `.mcp.json`에 등록. `npx --help`로
+      패키지 정상 다운로드·실행 확인(OAuth 키 없음 오류는 예상된 것). 최초 인증은 브라우저가
+      필요해 사용자가 직접 진행(구글 콘솔 OAuth 클라이언트 생성 → `auth` 명령 → 브라우저 동의).
+      `AGENTS.md` 5절에 서버 등록 + 설정 절차 4단계 명시. 발송 전용은 여전히 send_email.py(SMTP).
