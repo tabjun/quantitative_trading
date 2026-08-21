@@ -39,30 +39,45 @@ https://stat5.kmu.ac.kr:9500/user/std_jun99120/proxy/9999/
 ## 방법 2: VS Code Remote Tunnels (로컬 VS Code Desktop 직결)
 
 MS 공식 기능. 서버가 아웃바운드로 Microsoft 릴레이에 붙기 때문에 인바운드 22번이 막혀 있어도 동작.
+로컬 PC 쪽 확장 설치·로그인 같은 최초 1회 설정은 맨 아래 "로컬 PC 최초 1회 설정" 참고 (이미 해뒀으면 매번 다시 할 필요 없음).
 
-### 서버에서 상태 확인
+### 매번 쓰는 흐름 (서버 터미널에서)
 
+**1. 터널 시작 (백그라운드)**
+```bash
+mkdir -p ~/.local/share/code-server-web/logs
+nohup ~/.local/bin/code tunnel --accept-server-license-terms --name stat5-quant \
+  > ~/.local/share/code-server-web/logs/vscode-tunnel.log 2>&1 &
+disown
+```
+- 로그인 토큰은 캐시되므로(`~/.vscode/cli`), 재시작해도 보통 GitHub 재인증 불필요.
+- 로그에 `https://github.com/login/device`와 코드가 새로 뜨면 그때만 재인증 필요.
+
+**2. 실행 확인 (서버 쪽)**
 ```bash
 ~/.local/bin/code tunnel status
 ```
+`"tunnel":{"tunnel":"Connected", ...}` 이면 정상. 터널 이름: `stat5-quant`
 
-`"tunnel":"Connected"` 이면 정상. 터널 이름: `stat5-quant`
+**3. 로컬 VS Code에서 연결 확인**
+왼쪽 사이드바 **원격 탐색기(Remote Explorer)** → `원격(터널/SSH)` → `Tunnels` → `stat5-quant` 옆에 초록 체크 + "연결됨"이 뜨면 정상. 안 보이면 옆의 새로고침(⟳) 클릭.
 
-### 서버에서 시작 / 종료 / 재시작
+**4. 작업**
+`stat5-quant` 더블클릭(또는 우클릭 → Connect in New Window)해서 원격 폴더 열고 작업.
+
+**5. 다 쓰면 종료 (서버 쪽)**
+```bash
+~/.local/bin/code tunnel kill
+```
+이걸 실행하면 로컬 VS Code 연결과 브라우저(vscode.dev) 접속이 둘 다 끊긴다 — 같은 터널 하나를 공유하는 두 접속 경로라 따로 끄는 방법은 없음.
+
+### 상태 확인 / 재시작 (참고용)
 
 ```bash
-# 종료
-~/.local/bin/code tunnel kill
-
-# 시작 (백그라운드)
-nohup ~/.local/bin/code tunnel --accept-server-license-terms --name stat5-quant \
-  > ~/.local/share/code-server-web/logs/vscode-tunnel.log 2>&1 &
-
-# 재시작
-~/.local/bin/code tunnel restart
+~/.local/bin/code tunnel status    # 상태만 확인
+~/.local/bin/code tunnel restart   # 재시작
 ```
 
-- 로그인 토큰은 캐시되므로(`~/.vscode/cli`), 재시작해도 보통 GitHub 재인증 불필요. 로그에 `https://github.com/login/device`와 코드가 다시 뜨면 그때만 재인증.
 - 로그: `~/.local/share/code-server-web/logs/vscode-tunnel.log`
 - 실제 VS Code 서버 본체(확장/설정 저장 위치): `~/.vscode-server/`
 
@@ -103,7 +118,7 @@ disown
 
 **왜 멈추나 (+ 노트북 껐다 켠 것과는 상관없음)**: tunnel은 로컬 노트북이 아니라 서버 자체에서 독립적으로 도는 백그라운드 프로세스라, 클라이언트 접속 여부와 무관하게 서버가 알아서 주기적으로 자체 업데이트를 체크한다. 이번 것도 노트북을 껐다 켠 것과는 무관하고, 서버 쪽에서 자동 업데이트가 진행되다가 중간에 (네트워크 순간 끊김 등으로 추정) 멈춘 것으로 보인다. 재현되면 위 절차 그대로 반복하면 된다.
 
-### 로컬 PC에서 연결
+### 로컬 PC 최초 1회 설정 (한 번 해두면 이후엔 "매번 쓰는 흐름"만 반복)
 
 1. VS Code Desktop에 확장 설치: **Remote - Tunnels** (extension id: `ms-vscode.remote-server`)
 2. `Ctrl+Shift+P` → `Remote Tunnels: Connect to Tunnel`
@@ -113,11 +128,15 @@ disown
 4. 서버에서 device code 인증할 때 쓴 것과 **같은 GitHub 계정**으로 로그인
 5. 터널 목록에서 `stat5-quant` 선택 → 연결
 
-### 설치 없이 브라우저만 쓰고 싶으면
+로그인은 한 번 하면 로컬에 캐시되므로, 다음부터는 "매번 쓰는 흐름"의 3번(원격 탐색기에서 `stat5-quant` 클릭)만 하면 된다.
+
+### (참고) 브라우저로도 열린다 — 별도 기능 아님
 
 ```
 https://vscode.dev/tunnel/stat5-quant/home/std_jun99120/personal_ai_project
 ```
+
+`code tunnel`은 정의상 "vscode.dev에서 접속 가능한 터널"이라, 터널이 켜져 있으면 이 URL로 브라우저 접속도 항상 같이 열려 있다 (GitHub 인증 필요). 로컬 VS Code Desktop 접속과 이 브라우저 접속은 **같은 터널 하나를 공유하는 두 경로**일 뿐, 하나만 켜고 하나만 끄는 옵션은 없다 — 완전히 막고 싶으면 위 5번(`code tunnel kill`)으로 터널 자체를 꺼야 하고, 그러면 둘 다 끊긴다.
 
 ---
 
