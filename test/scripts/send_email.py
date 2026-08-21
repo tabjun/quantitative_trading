@@ -41,10 +41,33 @@ def load_env() -> None:
             os.environ.setdefault(key.strip(), value.strip())
 
 
-def normalize_sender(sender: str) -> str:
+# 2026-08-21: 네이버 전용이던 발송부를 프로바이더 선택형으로 일반화했다. MAIL_PROVIDER
+# 환경변수로 naver/gmail을 고른다(기본값 naver, 기존 .env와 하위호환). Gmail 앱 비밀번호를
+# 발급받기 전까지는 그냥 두면 되고, 발급 후 .env에 세 줄만 추가하면 전환된다(아래 SMTP_CONFIG).
+SMTP_CONFIG = {
+    "naver": {
+        "host": "smtp.naver.com", "port": 465, "domain": "naver.com",
+        "id_key": "NAVER_EMAIL_ID", "password_key": "NAVER_APP_PASSWORD",
+    },
+    "gmail": {
+        "host": "smtp.gmail.com", "port": 465, "domain": "gmail.com",
+        "id_key": "GMAIL_EMAIL_ID", "password_key": "GMAIL_APP_PASSWORD",
+    },
+}
+
+
+def current_provider() -> str:
+    provider = os.environ.get("MAIL_PROVIDER", "naver").strip().lower()
+    if provider not in SMTP_CONFIG:
+        raise SystemExit(f"MAIL_PROVIDER='{provider}' 미지원 — {sorted(SMTP_CONFIG)} 중 하나로 설정하라.")
+    return provider
+
+
+def normalize_sender(sender: str, provider: str = "naver") -> str:
     sender = sender.strip()
+    domain = SMTP_CONFIG[provider]["domain"]
     if sender and "@" not in sender:
-        return f"{sender}@naver.com"
+        return f"{sender}@{domain}"
     return sender
 
 
@@ -1183,19 +1206,24 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     load_env()
-    sender = normalize_sender(os.environ.get("NAVER_EMAIL_ID", ""))
-    password = os.environ.get("NAVER_APP_PASSWORD", "").strip()
+    provider = current_provider()
+    config = SMTP_CONFIG[provider]
+    sender = normalize_sender(os.environ.get(config["id_key"], ""), provider)
+    password = os.environ.get(config["password_key"], "").strip()
     receiver = os.environ.get("RECEIVER_EMAIL", "").strip()
     if not sender or not password or not receiver:
-        raise SystemExit("Missing NAVER_EMAIL_ID, NAVER_APP_PASSWORD, or RECEIVER_EMAIL")
+        raise SystemExit(
+            f"Missing {config['id_key']}, {config['password_key']}, or RECEIVER_EMAIL "
+            f"(MAIL_PROVIDER={provider})"
+        )
 
     msg, attachments = build_message(args.preset, sender, receiver)
     attach_files(msg, attachments)
 
-    with smtplib.SMTP_SSL("smtp.naver.com", 465, timeout=30) as server:
+    with smtplib.SMTP_SSL(config["host"], config["port"], timeout=30) as server:
         server.login(sender, password)
         server.send_message(msg)
-    print(f"Sent preset '{args.preset}' email to {receiver}")
+    print(f"Sent preset '{args.preset}' email via {provider} to {receiver}")
 
 
 if __name__ == "__main__":

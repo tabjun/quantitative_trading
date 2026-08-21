@@ -775,3 +775,7 @@
 - [x] `test/scripts/send_email.py`에 `volatility_direction_followup` 프리셋 추가(3-tuple: 제목/본문/
       무첨부, .md 원본 미첨부 규칙 준수). 사용자가 확정한 본문 그대로 반영, 드라이런으로 발신·수신·링크·
       본문 확인 후 발송 완료(2026-08-21, nhson@ms.kmu.ac.kr).
+
+- [x] `send_email.py`를 프로바이더 선택형으로 일반화(`MAIL_PROVIDER=naver|gmail`, 기본값
+      naver로 하위호환). Gmail 앱 비밀번호 발급 후 `.env`에 `GMAIL_EMAIL_ID`·`GMAIL_APP_PASSWORD`·
+      `MAIL_PROVIDER=gmail` 세 줄만 추가하면 전환. 회귀 테스트로 기본 동작(네이버) 불변 확인.
