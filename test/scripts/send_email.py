@@ -1063,6 +1063,45 @@ horizon으로, C는 분수차분으로 각각 후속 확인이 가능한 상태�
     return subject, plain_body, html_body, attachments, inline_images
 
 
+def volatility_direction_followup_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    """2026-08-21: 7월 브리프(professor_publication_brief)의 후속 — 문헌 10편 근거 보강.
+
+    7월에 이미 전달한 A(방향)/B(변동성) 결정 요청과 차분 사실은 재탕하지 않는다. "지금
+    알고리즘 선정을 멈추고 EDA로 돌아간 이유(=7월 결정 요청이 아직 유효함)"를 먼저 밝히고,
+    "문헌을 찾아보니"로 이번에 새로 보강한 내용만 제시하는 톤으로 사용자가 직접 확정했다.
+    """
+    report_path = "test/results/professor_direction_recommendation_20260821.md"
+    report_url = github_blob(report_path)
+
+    body = f"""교수님, 안녕하세요.
+
+지금 1단계(실시간 시계열 분석)의 본격적인 알고리즘 선정 작업을 잠시 멈추고, 다시 초반의
+EDA 단계로 돌아와 점검하고 있습니다.
+
+이유는 이전에 말씀드렸던 것처럼, 예측 대상을 방향(A)으로 할지 변동성(B)으로 할지가 아직
+결정되지 않은 상태이기 때문입니다. 그 결정이 나기 전에 한쪽 갈래의 세부 모델까지 계속
+파고드는 건 순서가 맞지 않다고 판단해서, 결정이 나올 때까지는 세부 모델링을 멈추고
+재점검·문헌 보강만 하고 있습니다.
+
+그런데 문헌을 찾아보니, 이전에 데이터로 확인해 말씀드린 결과(방향은 예측 어렵고 변동성은
+예측 가능하다는 것)가 금융계량경제학에서 이미 정설로 굳어진 현상과 정확히 일치한다는 걸
+확인했습니다. 고전 이론과 최신 실증 연구 10편을 찾아 근거를 정리했습니다.
+
+그래서 예측 대상을 변동성(B)으로 잡는 게 더 맞는 방향인 것 같고, 저희 연구 목표가
+(a) 비정상성 자체를 다루는 연구와 (b) 트레이딩 보조 도구 두 갈래로 쓰일 수 있다는 걸
+생각하면, "변동성 예측"으로 목표를 잡는 게 이 둘 모두에 맞을 것 같습니다.
+
+이 방향으로 결정해 주실 수 있을지, 혹은 다른 고려하실 부분이 있으실지 여쭙고 싶습니다.
+새로 보강한 문헌 근거는 아래 링크에 정리했습니다.
+
+{report_url}
+
+감사합니다."""
+
+    subject = "[연구] 방향 제안 후속 — 변동성(B) 방향 문헌 근거"
+    return subject, body, []
+
+
 PRESETS = {
     "simulation": simulation_email,
     "professor_publication_brief": professor_publication_brief_email,
@@ -1080,6 +1119,7 @@ PRESETS = {
     "feature_guardrail_transition": feature_guardrail_transition_email,
     "feature_guardrail_results": feature_guardrail_results_email,
     "feature_algorithm_resource": feature_algorithm_resource_email,
+    "volatility_direction_followup": volatility_direction_followup_email,
 }
 
 
