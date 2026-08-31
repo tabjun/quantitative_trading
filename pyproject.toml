@@ -33,5 +33,16 @@ dependencies = [
     # 불일치로 NVML 자체가 막혀 있어 실제 값은 재부팅 후에 나온다. 이 패키지가 없어도
     # test/scripts/gpu_status.py는 메모리 조회까지 정상 동작한다(드라이버 API 경로).
     "nvidia-ml-py",
+    # Hugging Face 연구 스택(문헌·임베딩·모델 실험용). 서버 리셋으로 홈이 초기화되면
+    # venv가 날아가므로 pyproject에 명시해 uv sync로 복원되게 둔다(2026-08-31 재추가).
+    "huggingface-hub",
+    "transformers",
+    "datasets",
+    "sentence-transformers",
+    "accelerate",
+    "peft",
+    "trl",
+    "evaluate",
+    "hf-transfer",
 ]
 
