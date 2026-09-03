@@ -1138,16 +1138,18 @@ def gmail_mcp_reauth_reminder_email(commit_hash: str) -> tuple[str, str, list[Pa
 구글의 "테스트 중(Testing)" 앱 정책상, 지금 발급된 지메일 연동 인증(refresh token)은
 발급 후 약 7일이 지나면 만료됩니다. 만료되기 전에 아래 순서로 다시 인증해주세요.
 
-1. Claude Code 세션을 엽니다 (VS Code 접속).
-2. 아래 URL을 브라우저에서 엽니다:
-{auth_url}
+1. 로컬(윈도우 PC) Claude Code 세션을 엽니다 — claude-in-chrome이 연결된 그 창
+   (`claude --chrome`으로 실행한 세션).
+2. ~/.gmail-mcp/reauth_local_prompt.md 에 저장해둔 프롬프트를 그 세션에 그대로
+   붙여넣습니다. (브라우저로 인증 URL을 열고, 로그인/허용까지 진행한 뒤, 구글
+   토큰 엔드포인트와 직접 교환해서 최종 JSON을 출력하도록 구성된 프롬프트입니다.)
+3. 로컬 세션이 출력한 JSON을 그대로 복사해서, 서버 쪽(원격) Claude Code 세션에
+   붙여넣고 "이 JSON으로 지메일 credentials.json 갱신해줘"라고 요청합니다.
+4. Claude Code 세션을 재시작하면 (껐다가 다시 켜기) 지메일 MCP가 새 인증으로
+   다시 붙습니다.
 
-3. 구글 로그인 → 계정 선택 → 허용을 누릅니다.
-4. "사이트에 연결할 수 없음 / ERR_CONNECTION_REFUSED" 화면이 뜨는 게 정상입니다.
-5. 그 화면 주소창에 있는 전체 URL(코드값 code=... 포함)을 통째로 복사합니다.
-6. Claude Code 대화창에 그 URL을 붙여넣고 "이 코드로 지메일 재인증해줘"라고 요청합니다.
-7. Claude가 구글에 직접 토큰 교환을 해서 ~/.gmail-mcp/credentials.json을 갱신합니다.
-8. Claude Code 세션을 재시작하면 (껐다가 다시 켜기) 지메일 MCP가 새 인증으로 다시 붙습니다.
+참고용 인증 URL (프롬프트 파일에도 동일하게 포함되어 있습니다):
+{auth_url}
 
 이 알림은 서버 crontab에 등록된 자동 발송이며, 지메일 MCP 연동을 더 이상 쓰지 않으실 경우
 Claude에게 "지메일 재인증 알림 크론잡 삭제해줘"라고 요청하면 해제됩니다.
