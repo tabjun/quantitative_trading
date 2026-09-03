@@ -1158,6 +1158,48 @@ Claude에게 "지메일 재인증 알림 크론잡 삭제해줘"라고 요청하
     return subject, body, []
 
 
+def project_direction_eli5_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    """2026-09-04: 프로젝트 방향(변동성 기준) 정리 + 근거 보고서 링크 2종.
+
+    본문은 우리 방향(수익률 아닌 변동성, 방향은 보조로 봤으나 현재 고려 대상 아님)을 설명하고,
+    맨 아래 비고로 Claude Code eli5 활용 팁을 따로 뺀다(사용자 확정 문안).
+    """
+    eli5_url = "https://claude.ai/code/artifact/bdbddd9f-ebc0-4678-a664-eb8e70e62b13"
+    report_path = "test/results/20_direction_vs_volatility_predictability_report_20260903.md"
+    report_url = github_blob(report_path)
+
+    body = f"""교수님, 안녕하세요.
+
+지난번에 여쭈었던 예측 대상(방향 vs 변동성) 결정과 관련하여, 저희 연구 방향을 정리해 공유드립니다.
+
+저희는 예측 대상을 수익률(방향)이 아니라 변동성(부호를 뺀 움직임의 크기)을 기준으로 잡았습니다. 방향(수익률의 부호)도 보조 지표로 함께 고려해 보았지만, 같은 데이터로 확인한 결과 방향은 학습을 해도 예측이 되지 않아(사실상 동전 던지기 수준) 지금 주력으로 고려할 만한 요소는 아니라고 판단했습니다. 반면 변동성은 표본외에서 실제로 예측이 되기 때문에, 변동성을 먼저 확립하고 방향은 이후 단계로 미루는 순서로 진행하려 합니다.
+
+관련 내용을 두 가지 문서로 정리했습니다.
+
+■ 프로젝트 방향성에 대한 정리 보고서 (쉽게 도식화한 설명):
+{eli5_url}
+
+■ 위 보고서의 근거가 되는 분석 내용 정리 보고서 (렌더링 링크):
+{report_url}
+
+감사합니다.
+
+
+─────────────────────────────────────────────
+*** 클로드 코드 꿀팁 사용 ***
+
+위 '프로젝트 방향성 정리 보고서'는 Claude Code의 eli5 기능으로 만든 것입니다. 저희 프로젝트의 코드와 연구 목적 문서를 Claude Code에 읽힌 뒤, 그 내용을 이해하기 쉽게 도식과 함께 정리해 달라고 요청해서 생성했습니다.
+
+이 방법은 민경이에게도 공유해 두었는데, 단순히 보고서 문구 작성에만 쓰이는 것이 아니라 원래 Claude Code가 프로젝트의 코드를 직접 읽고 그 구조를 이해하기 쉽게 도식화해 주는 기능이라, 요즘 많이 활용되고 있습니다.
+
+특히 기존 프로젝트를 이어받아 진행할 때 유용합니다. 예를 들어 biopsy 관련 프로젝트처럼 처음부터 코드를 그대로 넘겨받으면 파악이 쉽지 않은데, eli5 플러그인으로 연구 목적 문서와 코드를 먼저 읽힌 다음 '이해할 수 있게 보고서를 써 달라'고 요청하면, 후배들과 팀을 이끄는 소현 선배가 연구를 진행할 때 큰 도움이 될 것 같습니다. SAS를 포함한 다른 프로젝트에도 동일하게 적용됩니다.
+
+다들 Claude Code를 잘 활용해서 연구 수행의 피로를 덜 수 있도록, 실제로 사용해 생성한 이 보고서를 함께 전해 드립니다. 교수님께서 만들어 주신 Claude 워크스페이스에 멤버로 추가된 분들은 모두 열람할 수 있도록 권한을 설정해 두었으니, 다들 보실 수 있게 공유해 주셔도 좋을 것 같습니다."""
+
+    subject = "[연구] 프로젝트 방향 정리 — 변동성 기준 (+ Claude Code eli5 활용 공유)"
+    return subject, body, []
+
+
 PRESETS = {
     "simulation": simulation_email,
     "professor_publication_brief": professor_publication_brief_email,
@@ -1177,6 +1219,7 @@ PRESETS = {
     "feature_algorithm_resource": feature_algorithm_resource_email,
     "volatility_direction_followup": volatility_direction_followup_email,
     "gmail_mcp_reauth_reminder": gmail_mcp_reauth_reminder_email,
+    "project_direction_eli5": project_direction_eli5_email,
 }
 
 
