@@ -232,6 +232,13 @@ preflight.ensure_data(table="upbit_krw_candle", tickers="all")          # 전종
 
 장시간 수집이 곤란한 세션은 `QT_NO_AUTOBUILD=1`로 점검만 한다.
 
+### 2.9f 데이터 사전을 참조·누적한다 (2026-09-04 신설)
+
+모델링·EDA가 들어간 보고서는 `test/results/DATA_DICTIONARY.md`(살아있는 문서)를 참조한다.
+RAW에서 시작해 파생변수가 생길 때마다 여기에 **정의/공식 · 무엇으로부터 · 독립(X)/종속(y) ·
+근거 유형(관례/가정/EDA/방법) · 추가 시점**을 누적 등록한다. "미사용"은 *배제 결정*이 아니라
+*아직 분석 안 한 것*과 구분해 표기한다(EDA에서는 RAW 전 열을 본다). 근거: 21번 EDA 보고서.
+
 ### 2.9c 다종목 테이블은 ticker 없이 읽지 않는다 (2026-08-14 신설)
 
 `upbit_krw_candle`처럼 `ticker` 컬럼이 있는 테이블을 ticker 지정 없이 읽으면 269종목이
