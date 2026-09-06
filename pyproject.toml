@@ -44,5 +44,8 @@ dependencies = [
     "trl",
     "evaluate",
     "hf-transfer",
+    "xgboost>=3.2.0",
+    "lightgbm>=4.7.0",
+    "arch>=8.0.0",
 ]
 
