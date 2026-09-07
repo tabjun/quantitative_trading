@@ -1200,6 +1200,49 @@ def project_direction_eli5_email(commit_hash: str) -> tuple[str, str, list[Path]
     return subject, body, []
 
 
+def assumption_diagnosis_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    """2026-09-07: 가정 진단 결과 + 앞선 GARCH 누설 버그 정정.
+
+    규칙(2026-09-04 확정): 결과 보고서 링크 + ELI5 설명 링크를 세트로 보낸다.
+    """
+    eli5_url = "https://claude.ai/code/artifact/73a9530f-53f5-46c1-accb-3ac6d3998b47"
+    report_path = "test/results/assumption_diagnosis_report_20260907.md"
+    report_url = github_blob(report_path)
+
+    body = f"""교수님, 안녕하세요.
+
+지난번에 말씀드린 정정 건에 대해 원인을 더 자세히 확인하고, 근본적인 부분부터 다시 점검한 결과를 공유드립니다.
+
+먼저 정정드릴 부분입니다. GARCH가 긴 구간에서 성능이 좋게 나왔던 것은 코드 버그 때문이었습니다. 예측 구간 안의 실제 미래 수익률을 모델이 미리 참조하고 있었고, 바로잡으니 결과가 반대로 나왔습니다(구간이 길어질수록 오히려 나빠짐). 다만 "짧은 구간에서는 트리 계열이 우수하고 딥러닝은 전반적으로 부진하다"는 부분은 재검증 후에도 유지됩니다.
+
+이 일을 계기로 성능 비교를 잠시 멈추고, 통계 모델을 쓰기 위한 가정이 실제로 충족되는지부터 검정했습니다. 결과를 요약드리면 다음과 같습니다.
+
+첫째, 데이터의 분포가 매우 극단적입니다. 좌우는 거의 대칭인데(왜도 0.004) 양쪽 꼬리가 모두 매우 두껍습니다. 초과첨도가 107이고(정규분포는 0), 4시그마를 넘는 급변이 정규분포 예상보다 약 100배, 6시그마는 약 87만배 자주 발생합니다. 최대 급변은 47시그마였습니다.
+
+둘째, 처리(주기 제거, 점프 분리, EWMA 표준화, 극단값 절단, asinh 압축 등)와 모델(GARCH 차수 변형, GJR, EGARCH, APARCH, FIGARCH, HARCH 및 t/skew-t 분포)을 전부 교차해 756개 조합을 적합하고 검정했습니다. 그 결과 네 가지 가정(잔차 정규성, 잔여 ARCH 없음, 자기상관 없음, 파라미터 안정성)을 동시에 만족하는 조합이 하나도 없었습니다. 가장 큰 병목은 잔여 ARCH로 6.9%만 통과했습니다.
+
+셋째, 원인은 상충 구조에 있습니다. 꼬리를 잡는 처리를 하면 오차의 자기상관이 드러나고, 자기상관을 잡으면 꼬리가 남습니다. 이를 피하려고 분위수 정규화 등을 추가해 294개 조합을 더 탐색했으나 결과는 같았습니다.
+
+다만 의미 있는 부분도 있었습니다. 저희 데이터에 장기기억이 있다는 EDA 결과와 부합하게, 장기기억을 직접 다루는 FIGARCH가 상위 14위를 모두 차지했습니다. 데이터 특성과 모델 구조가 맞을수록 결과가 좋아진다는 방향성은 확인된 셈입니다.
+
+또한 선형성 검정(RESET, BDS)이 모두 기각되어, 선형 모델을 쓸 통계적 근거가 없다는 것도 확인했습니다. 앞으로는 비선형 및 커널 계열을 쓰는 것이 맞다고 판단하고 있습니다.
+
+다음 단계로는 통계 모델 단독의 한계를 보완하기 위해, GARCH 계열이 산출한 조건부분산을 머신러닝 및 딥러닝의 입력으로 결합하는 하이브리드 방식을 시도해보려 합니다.
+
+관련 자료는 두 가지로 정리했습니다.
+
+■ 상세 분석 보고서 (검정 결과와 그래프 전체):
+{report_url}
+
+■ 쉬운 설명 자료 (도식 중심 요약):
+{eli5_url}
+
+감사합니다."""
+
+    subject = "[연구] 변동성 모델 가정 진단 결과 및 이전 결과 정정"
+    return subject, body, []
+
+
 PRESETS = {
     "simulation": simulation_email,
     "professor_publication_brief": professor_publication_brief_email,
@@ -1220,6 +1263,7 @@ PRESETS = {
     "volatility_direction_followup": volatility_direction_followup_email,
     "gmail_mcp_reauth_reminder": gmail_mcp_reauth_reminder_email,
     "project_direction_eli5": project_direction_eli5_email,
+    "assumption_diagnosis": assumption_diagnosis_email,
 }
 
 
