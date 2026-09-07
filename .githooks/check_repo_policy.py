@@ -33,6 +33,7 @@ TEST_SCRIPTS_ALLOWED = {
     "gpu_status.py",          # NVML 깨진 환경용 GPU 상태 조회(학습 중 감시)
     "run_t8_multiseed.sh",    # t8 다중 시드 실행기(잡음 정량화) — 재현 명령 보존
     "report_header.py",       # 보고서 표준 헤더 생성기(자기완결성) — AGENTS.md 2.9g
+    "quick_look.py",          # DB 적재 데이터 빠른 조회·시각화 확인 도구
 }
 
 
