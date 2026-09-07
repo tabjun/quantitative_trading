@@ -48,8 +48,8 @@ def num(v, d: int = 4) -> str:
     return "n/a" if not np.isfinite(f) else f"{f:,.{d}f}"
 
 
-def top_tickers(n: int = 20, min_rows: int = MIN_ROWS_FOR_TOP) -> list[str]:
-    """변동성 × 거래대금 상위 n종목(긴 이력 한정). 20번·21번과 동일 기준."""
+def _ticker_stats(min_rows: int = MIN_ROWS_FOR_TOP) -> pd.DataFrame:
+    """종목별 이력·변동성·거래대금 집계(선정 함수들의 공통 기반)."""
     con = _con()
     df = con.execute(f"""
         with r as (
@@ -63,8 +63,47 @@ def top_tickers(n: int = 20, min_rows: int = MIN_ROWS_FOR_TOP) -> list[str]:
         group by ticker having count(lr) >= {int(min_rows)}
     """).df()
     con.close()
+    return df
+
+
+def top_tickers(n: int = 20, min_rows: int = MIN_ROWS_FOR_TOP) -> list[str]:
+    """변동성 × 거래대금 결합 점수 상위 n종목(긴 이력 한정). 20번·21번 기준(구버전)."""
+    df = _ticker_stats(min_rows)
     df["score"] = df["vol"] * np.log(df["sv"].clip(lower=1))
     return df.sort_values("score", ascending=False).head(n)["ticker"].tolist()
+
+
+def study_universe(n_volume: int = 10, n_vol: int = 10, include_btc: bool = True,
+                   min_rows: int = MIN_ROWS_FOR_TOP) -> tuple[list[str], pd.DataFrame]:
+    """연구 표본(2026-09-07 확정) — 거래대금 상위 + 변동성 상위 + BTC.
+
+    단일 결합 점수(변동성×거래대금)는 변동성이 지배해 신규·소형 종목만 뽑히고 시장
+    대표성이 약했다. 두 축을 분리해 뽑으면 목적이 명확해진다.
+      - 거래대금 상위 n_volume : 실제로 거래되는 주요 종목(시장 대표성)
+      - 변동성 상위   n_vol    : 변동성 연구 목적에 직접 부합
+      - BTC                    : 기준 자산, 기존 연구와의 연결점(저변동이라 두 축 모두에 안 뽑힘)
+
+    반환: (종목 리스트, 선정 근거 표)
+    """
+    df = _ticker_stats(min_rows)
+    by_value = df.sort_values("sv", ascending=False).head(n_volume)["ticker"].tolist()
+    rest = df[~df["ticker"].isin(by_value)]
+    by_vol = rest.sort_values("vol", ascending=False).head(n_vol)["ticker"].tolist()
+    tickers = by_value + by_vol
+    if include_btc and "KRW-BTC" not in tickers:
+        tickers = ["KRW-BTC"] + tickers
+    reason = []
+    for t in tickers:
+        row = df[df["ticker"] == t]
+        grp = ("기준자산(BTC)" if t == "KRW-BTC" and t not in by_value + by_vol
+               else "거래대금 상위" if t in by_value else "변동성 상위")
+        reason.append({
+            "종목": t, "선정 근거": grp,
+            "총 거래대금": float(row["sv"].iloc[0]) if len(row) else np.nan,
+            "로그수익률 표준편차": float(row["vol"].iloc[0]) if len(row) else np.nan,
+            "봉 수": int(row["n"].iloc[0]) if len(row) else 0,
+        })
+    return tickers, pd.DataFrame(reason)
 
 
 def ticker_profile(tickers: list[str]) -> pd.DataFrame:
@@ -162,9 +201,15 @@ def render_standard_header(
     transforms: list[tuple[str, str]] | None = None,
     transformed_series: dict[str, np.ndarray] | None = None,
     rows_used: int | None = None,
+    analyzed_tickers: list[str] | None = None,
+    selection_reason: pd.DataFrame | None = None,
 ) -> str:
     """AGENTS.md 2.9g 표준 헤더 6항목을 마크다운으로 생성.
 
+    tickers             : 연구의 분석 대상 모집단(보통 상위 20종목)
+    analyzed_tickers    : **이번 회차에서 실제로 돌린 종목**. tickers와 다르면 경고를 싣는다.
+                          (2026-09-07 사고: 상위 20종목이 대상인데 BTC 하나로만 돌리고
+                           그 사실을 보고서에 명시하지 않아 혼선이 생겼다.)
     transforms          : [(처리명, 적용 이유)] — 이번 회차에 새로 적용한 처리
     transformed_series  : {"원계열": r, "처리후": x} — 변환 전후 통계 재확인용
     rows_used           : 비용 제한으로 일부만 썼다면 그 행 수
@@ -173,6 +218,23 @@ def render_standard_header(
     prof = ticker_profile(tickers)
     q = data_quality(rep_ticker)
     sp = split_ranges(rep_ticker, train_frac)
+
+    # 0. 이번 회차 실제 분석 범위 — 가장 먼저, 눈에 띄게
+    actual = analyzed_tickers if analyzed_tickers is not None else tickers
+    L.append("### 0. 이번 회차 실제 분석 범위 ⚠")
+    L.append("")
+    L.append(f"- **연구 대상(모집단)**: 상위 {len(tickers)}종목 (아래 1절 목록)")
+    if set(actual) == set(tickers):
+        L.append(f"- **이번 회차 실제 분석**: 대상 전체 {len(actual)}종목 ✅")
+    else:
+        L.append(f"- **이번 회차 실제 분석**: `{', '.join(actual)}` "
+                 f"(**{len(actual)}종목만** — 대상 전체가 아님)")
+        missing = [t for t in actual if t not in tickers]
+        if missing:
+            L.append(f"- ⚠ **주의**: `{', '.join(missing)}`은(는) 상위 {len(tickers)} 목록에 "
+                     f"포함되지 않은 종목이다. 이 회차 결과를 연구 대상 전체로 일반화할 수 없다.")
+        L.append(f"- ⚠ **한계**: 전 종목 확대 검증이 완료되기 전까지 이 결과는 잠정이다.")
+    L.append("")
 
     L.append("## 분석 조건 (표준 헤더)")
     L.append("")
@@ -186,15 +248,24 @@ def render_standard_header(
     L.append(f"- **DB / 테이블**: `data/upbit_data.db` (DuckDB) / `{SOURCE_TABLE}`")
     L.append(f"- **봉 간격**: 15분봉 (하루 {BARS_PER_DAY}봉)")
     L.append(f"- **원본 컬럼**: timestamp, open, high, low, close, volume, value")
-    L.append(f"- **분석 종목 {len(tickers)}개** (변동성 × 거래대금 상위, 이력 {MIN_ROWS_FOR_TOP:,}봉 이상):")
-    if rep_ticker not in tickers:
-        L.append(f"- **대표 종목은 `{rep_ticker}`** — 저변동 대형 종목이라 변동성 상위 목록에는 들지 "
-                 f"않지만, 기존 연구와의 연결·심층 진단을 위해 별도로 사용한다(총 {len(tickers)+1}종목).")
+    L.append(f"- **분석 종목 {len(tickers)}개** — 이력 {MIN_ROWS_FOR_TOP:,}봉(약 2.5년) 이상 종목 중 선정:")
+    if selection_reason is not None:
+        counts = selection_reason["선정 근거"].value_counts().to_dict()
+        L.append("  " + " · ".join(f"{k} {v}개" for k, v in counts.items()))
+        L.append("")
+        L.append("  선정 기준을 두 축으로 나눈 이유: 단일 결합 점수(변동성×거래대금)는 변동성이 "
+                 "지배해 신규·소형 종목만 뽑혀 시장 대표성이 약했다. **거래대금 축은 실제로 거래되는 "
+                 "주요 종목**을, **변동성 축은 연구 목적(변동성 예측)에 직접 부합하는 종목**을 담당한다. "
+                 "BTC는 저변동 대형 종목이라 두 축 모두에 들지 않지만 기준 자산으로 포함한다.")
     L.append("")
-    L.append("| # | 종목 | 봉 수 | 기간 | 표준편차 | 왜도 | 초과첨도 |")
-    L.append("| ---: | :--- | ---: | :--- | ---: | ---: | ---: |")
+    reason_map = {}
+    if selection_reason is not None:
+        reason_map = dict(zip(selection_reason["종목"], selection_reason["선정 근거"]))
+    L.append("| # | 종목 | 선정 근거 | 봉 수 | 기간 | 표준편차 | 왜도 | 초과첨도 |")
+    L.append("| ---: | :--- | :--- | ---: | :--- | ---: | ---: | ---: |")
     for i, r in prof.iterrows():
-        L.append(f"| {i+1} | {r['종목']} | {int(r['봉수']):,} | {r['시작'][:10]}~{r['종료'][:10]} | "
+        L.append(f"| {i+1} | {r['종목']} | {reason_map.get(r['종목'], '-')} | {int(r['봉수']):,} | "
+                 f"{r['시작'][:10]}~{r['종료'][:10]} | "
                  f"{num(r['표준편차'],6)} | {num(r['왜도'])} | {num(r['초과첨도'],2)} |")
     L.append("")
 
