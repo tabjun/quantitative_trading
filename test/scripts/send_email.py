@@ -1243,6 +1243,47 @@ def assumption_diagnosis_email(commit_hash: str) -> tuple[str, str, list[Path]]:
     return subject, body, []
 
 
+def pipeline_plan_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    """2026-09-08: 거시 EDA 결과 + 앞으로의 모델 비교 계획.
+
+    규칙(2026-09-04 확정): 결과 보고서 링크 + ELI5 설명 링크를 세트로 보낸다.
+    """
+    eli5_url = "https://claude.ai/code/artifact/89570142-5683-488e-88c8-1ce88ace8da9"
+    report_path = "test/results/pipeline_plan_report_20260908.md"
+    report_url = github_blob(report_path)
+
+    body = f"""교수님, 안녕하세요.
+
+분봉 관련해서 말씀드린 뒤로, 방법론을 한 가지 바로잡고 거시적인 데이터 탐색부터 다시 진행했습니다. 그 결과와 앞으로의 계획을 정리해 공유드립니다.
+
+먼저 방법론입니다. 그동안 통계 검정 결과 수치만 확인하고 다음 단계로 넘어가다 보니, 앞에서 한 분석이 뒤 단계와 잘 이어지지 않는 문제가 있었습니다. 그래서 데이터를 처리할 때마다 무엇이 어떻게 바뀌는지 매번 그림으로 확인하는 방식으로 바꿨습니다.
+
+이렇게 하니 두 가지가 구분됐습니다. 20종목을 한눈에 보면 큰 흐름이 서로 닮아 있는데(2025년 하반기 고점 이후 중앙값 기준 88% 하락), 확인해보니 이것은 계절성이 아니라 시장 전체가 함께 움직이는 연동 현상이었습니다. 종목 간 평균 상관이 0.376이고 첫 주성분이 전체 변동의 42%를 설명합니다. 다만 절대적이지는 않아서 나머지 58%는 종목별 고유 움직임이고, 종목별 모델링도 의미가 있는 것으로 보입니다.
+
+그와 별개로 진짜 주기도 존재했습니다. 스펙트럼을 보니 반나절 주기가 가장 강했고(기준 대비 232배), 시간대별로는 오전 9시가 새벽 4시보다 1.83배 크게 움직였습니다. 아시아와 미국 거래 시간이 교대되는 패턴으로 보입니다.
+
+처리 단계를 따라가면서 확인한 내용도 정리했습니다. 원본 로그가격은 추세가 있어 비정상이고(ADF p=0.89), 차분하면 정상이 됩니다(p=0.000). 그 상태에서 자기상관을 보면 방향은 0에 붙어 있고 크기는 0.36에서 천천히 감소하는데, 저희 연구의 전제가 한 그림에 담겨 있습니다.
+
+주기를 제거하니 시간대별 차이가 1.82배에서 1.00배로 사라졌고, 부수적으로 첨도도 107에서 29.7로 3.6배 줄었습니다. 다만 변동성 군집(자기상관 0.32)은 그대로 남았는데, 이것이 실제로 예측해야 할 부분입니다.
+
+앞으로는 모델군마다 요구하는 가정이 다르므로 입력을 각각 다르게 준비해 공정하게 비교하려 합니다. GARCH 계열은 원 수익률에 t분포를, HAR은 로그축을, 트리 계열은 원 스케일에 시간구조 정보를, 딥러닝은 구간별 정규화를 적용합니다. 주기 제거 전후 두 조건을 모두 돌리고, 평가는 이 분야 표준인 QLIKE를 주 지표로 쓰며 HAR-RV를 벤치마크로 삼겠습니다.
+
+꼬리 문제는 말씀하신 대로 t분포로 이론적 보완만 하고, 완전한 처리는 후속 연구로 제안하는 방향으로 정리했습니다.
+
+관련 자료는 두 가지로 정리했습니다.
+
+■ 상세 보고서 (거시 EDA 결과와 실험 계획, 그래프 포함):
+{report_url}
+
+■ 쉬운 설명 자료 (도식 중심 요약):
+{eli5_url}
+
+감사합니다."""
+
+    subject = "[연구] 거시 EDA 결과 및 변동성 모델 비교 계획"
+    return subject, body, []
+
+
 PRESETS = {
     "simulation": simulation_email,
     "professor_publication_brief": professor_publication_brief_email,
@@ -1264,6 +1305,7 @@ PRESETS = {
     "gmail_mcp_reauth_reminder": gmail_mcp_reauth_reminder_email,
     "project_direction_eli5": project_direction_eli5_email,
     "assumption_diagnosis": assumption_diagnosis_email,
+    "pipeline_plan": pipeline_plan_email,
 }
 
 
