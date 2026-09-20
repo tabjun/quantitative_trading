@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 P="/tmp/claude-1002/-home-std-jun99120-personal-ai-project-tools-vscode/fc52cb5c-495a-4a72-a905-2a961a95d970/scratchpad/poster"
 d=pd.read_csv(f"{P}/regime.csv")
 LABS=["Q1","Q2","Q3","Q4","Q5"]
-XT=["1시간 뒤 ±0.3%\n이내(가장 잔잔)","±0.3~0.4%","±0.4~0.6%\n(보통)","±0.6~0.9%",
-    "±0.9% 이상\n(급등락, 최대 22%)"]
+XT=["1시간 뒤 ±0.35%\n이내(가장 잔잔)","±0.35~0.53%","±0.53~0.74%\n(보통)","±0.74~1.09%",
+    "±1.09% 이상\n(급등락, 최대 27%)"]
 ORDER=["GARCH-t","LSTM","GRU","LightGBM","HAR-RV","naive"]
 COL={"GARCH-t":"#2C7BB6","LSTM":"#D95F02","GRU":"#E8A33D","LightGBM":"#7B68EE",
      "HAR-RV":"#B8860B","naive":"#C85A3E"}
@@ -34,7 +34,7 @@ a.annotate(f"급변 구간에서 실제의 {pv.loc['HAR-RV','Q5']*100:.0f}%만 �
 a.set_xticks(range(5)); a.set_xticklabels(XT,fontsize=11)
 a.set_ylabel("포착률 = 예측 평균 ÷ 실제 평균",fontsize=13)
 a.set_xlabel("1시간 뒤 실제 변동성 크기 구간(20%씩)",fontsize=13)
-a.set_title("(R-1) 모든 모델이 평균으로 수축한다\n변동이 작을 땐 부풀리고, 변동이 클 땐 절반만 잡는다",
+a.set_title("모든 모델이 평균으로 수축한다\n변동이 작을 땐 부풀리고, 변동이 클 땐 절반만 잡는다",
             fontsize=14,weight="bold",pad=12)
 a.legend(fontsize=11,ncol=2,frameon=False,loc="upper right")
 a.grid(alpha=.25); a.set_ylim(0.4,2.75)
@@ -52,12 +52,12 @@ for j,c in enumerate(LABS):
 a.set_xticks(range(5)); a.set_xticklabels(XT,fontsize=11)
 a.set_ylabel("상대오차 (낮을수록 좋음)",fontsize=13)
 a.set_xlabel("1시간 뒤 실제 변동성 크기 구간(20%씩)",fontsize=13)
-a.set_title("(R-2) 구간마다 최우수 모델이 다르다\n단일 승자는 없다",fontsize=14,weight="bold",pad=12)
+a.set_title("구간마다 최우수 모델이 다르다\n단일 승자는 없다",fontsize=14,weight="bold",pad=12)
 a.legend(fontsize=10,ncol=3,frameon=False,loc="upper left")
 a.grid(alpha=.25,axis="y"); a.set_ylim(0,pe.values.max()*1.33)
 for s in ("top","right"): a.spines[s].set_visible(False)
 
-fig.suptitle("그림 R. 왜 단일 승자가 없는가 — 변동성 구간별 성능 분해 (8종목)",
+fig.suptitle("그림 2. 왜 단일 승자가 없는가 — 변동성 구간별 성능 분해 (20종목)",
              fontsize=16,weight="bold",y=1.005)
 fig.tight_layout()
 fig.savefig(f"{P}/fig_regime.png",dpi=150,bbox_inches="tight",facecolor="white")
