@@ -129,8 +129,11 @@ git 저장소도 uv venv도 없는 상태), 아래 순서를 처음부터 끝까
 
 평소 연구 실행은 새 env를 만들지 않고 서버에 이미 있는 uv venv 두 개를 그대로 재사용한다.
 
-- `quantitative_trading/.venvs/quant_uv_py312_20260614_045930` -> Python 3.12 (**기본 정합성 기준**, 단일 실험은 이것으로 통일)
-- `quantitative_trading/.venvs/quant_uv_py313_20260614_040356` -> Python 3.13
+- `quantitative_trading/.venvs/` 아래 `quant_uv_py312_*` -> Python 3.12 (**기본 정합성 기준**, 단일 실험은 이것으로 통일)
+- `quantitative_trading/.venvs/` 아래 `quant_uv_py313_*` -> Python 3.13
+
+(날짜 접미사가 붙은 디렉터리명은 재구축 때마다 바뀐다 — 고정 경로를 여기 박아두지 않는다.
+`ls .venvs/`로 실제 존재하는 디렉터리를 확인해 쓴다. `AGENTS.md` 2.10 참조.)
 - 두 env는 동명 Jupyter 커널로 등록되어 있어 노트북에서 바로 선택할 수 있다.
 - `11_` vs `12_`처럼 상반되는 두 실험을 **동시에 비교 실행**할 때만 3.12 + 3.13을 병렬로 쓴다(한쪽 312, 한쪽 313).
 - 평소에는 아래 bootstrap 스크립트를 돌리지 않는다. 기존 env를 `source .venvs/<env>/bin/activate`로 활성화해 쓰면 된다.
@@ -340,7 +343,7 @@ kill "$(cat logs/bootstrap_uv_312.pid)"
 
 ## 7. 참고 문서
 
-- [루트 README](/c:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/README.md)
-- [AGENTS.md](/c:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/AGENTS.md)
-- [process.md](/c:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/process.md)
-- [history.md](/c:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/history.md)
+- [루트 README](../README.md)
+- [AGENTS.md](../AGENTS.md)
+- [process.md](../process.md)
+- [history.md](../history.md)

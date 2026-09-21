@@ -1,7 +1,7 @@
 # 알려진 함정 (실행 코드 짜기 직전 이 파일만 대조 — 20줄 이내 유지)
 
 > 원칙: 반복 재발한 함정만 1줄씩. 새 함정은 여기 1줄 추가(다른 문서에 문단 추가 금지).
-> 근거·사례는 `test/results/governance_drift_rootcause_20260719.md`. 상위 규칙은 CLAUDE.md 2.12.
+> 근거·사례는 `test/results/governance_drift_rootcause_20260719.md`. 상위 규칙은 AGENTS.md 2.12.
 
 | # | 함정 | 탐지 신호 | 자동 대응(코드 게이트) |
 |---|---|---|---|

@@ -22,7 +22,7 @@
 
 ## 3. 도메인 지식 자료
 
-프로젝트의 도메인 지식 베이스는 [WikiDocs: Cherry Quant](https://wikidocs.net/148475)를 정리한 [materials/quant_and_stock.md](/c:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/materials/quant_and_stock.md)입니다.
+프로젝트의 도메인 지식 베이스는 [WikiDocs: Cherry Quant](https://wikidocs.net/148475)를 정리한 [materials/quant_and_stock.md](materials/quant_and_stock.md)입니다.
 
 이 문서는 다음 역할을 합니다.
 
@@ -39,12 +39,15 @@
 
 ## 5. 문서 역할
 
-- [AGENTS.md](/c:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/AGENTS.md): 세션마다 반드시 지켜야 하는 강제 규칙
-- `CLAUDE.md`: Claude Code용 강제 규칙(§2.11 코드 작성 루프·§4 분석 설계 원칙 포함, `AGENTS.md`와 동기)
-- [history.md](/c:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/history.md): 누적 작업 이력
-- [process.md](/c:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/process.md): 현재 단계와 다음 단계
-- `conversation_l2_cache.md`: 사용자 요청 원문 보존 캐시(요약은 process/history가 담당)
-- [test/README.md](/c:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/test/README.md): 연구 실험 공간 사용 가이드
+문서별 역할의 완전한 표는 `AGENTS.md`("문서별 역할" 절)가 source of truth다. 요약만 두면:
+
+- [AGENTS.md](AGENTS.md): 세션마다 반드시 지켜야 하는 강제 규칙
+- `CLAUDE.md`: Claude Code 전용 진입 스텁(규칙 본문은 없음, `AGENTS.md`를 가리킴)
+- [process.md](process.md): 연구 단계별 할 일(Phase/실험 단위 To-Do)
+- `state.md`: 요청 단위로 "실행됐는지 아닌지"만 체크
+- [history.md](history.md): 완료된 작업의 이력
+- `conversation_l2_cache.md`: 사용자 요청 원문 보존 캐시(최근 20개)
+- [test/README.md](test/README.md): 연구 실험 공간 사용 가이드
 
 ## 6. 디렉토리 구조
 
@@ -141,7 +144,7 @@ Historical flow mart는 단순한 과거 캔들 저장소가 아닙니다. 다�
 - 로컬 금지: 장시간 학습, 백테스트, 노트북 결과 산출, 대규모 시계열 분석
 - 실제 연구 실행: 학교 서버 커널, CI, 스케줄러, 승인된 원격 환경
 
-이 정책은 [AGENTS.md](/c:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/AGENTS.md)에 더 엄격하게 정리되어 있습니다.
+이 정책은 [AGENTS.md](AGENTS.md)에 더 엄격하게 정리되어 있습니다(Codex/Claude Code 공통).
 
 ## 9. 환경 설정 및 실행 방법
 
@@ -161,11 +164,12 @@ uv sync
 
 ### 9.3 문서/도메인 컨텍스트 주입
 
-필요할 때 [materials/research_overview.docx](/c:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/materials/research_overview.docx)와 [materials/quant_and_stock.md](/c:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/materials/quant_and_stock.md)를 함께 참고해 프로젝트 목적과 도메인 기준을 맞춥니다.
+필요할 때 [materials/quant_and_stock.md](materials/quant_and_stock.md)를 참고해 프로젝트 목적과 도메인 기준을 맞춥니다.
+<!-- 2026-09-21 가지치기: materials/research_overview.docx 링크는 저장소에 파일 자체가 없어 제거함(죽은 링크). 필요하면 파일을 다시 추가하고 링크를 복원한다. -->
 
 ## 10. 연구 워크플로우
 
-1. 세션 시작 시 `AGENTS.md -> process.md -> history.md -> conversation_l2_cache.md -> test/README.md` 순서로 읽습니다.
+1. 세션 시작 시 `AGENTS.md`(§ 목적, 상단)에 적힌 읽기 순서를 그대로 따릅니다(여기 다시 옮겨 적지 않습니다 — AGENTS.md만 바뀌었을 때 이 문서가 뒤처지는 걸 막기 위함입니다).
 2. 기존 실험, 문서, 파이프라인을 먼저 검색한 뒤 새 파일이 정말 필요한지 판단합니다.
 3. 연구 실험은 `test/models/*.ipynb`를 먼저 만들고 같은 이름의 `.py` 미러를 유지합니다.
 4. 공통으로 재사용할 가치가 있는 로직은 루트 패키지(`analysis/`, `contexts/`, `marts/`, `pipelines/`)에 캡슐화합니다.

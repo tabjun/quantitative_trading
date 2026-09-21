@@ -5,8 +5,8 @@
 `AGENTS.md`와 규칙을 물리적으로 두 곳에 중복 관리하지 않기 위해 2026-08-09부터 이 방식으로
 합쳤다(참고: https://yozm.wishket.com/magazine/detail/3874/ 의 `AGENTS.md` 단일화 패턴).
 
-새 세션이 시작되면 이 파일 대신 `AGENTS.md` → `process.md` → `history.md` 최근 섹션 →
-`conversation_l2_cache.md` 최근 항목 → `test/known_pitfalls.md` → `test/README.md` 순으로 읽는다.
+새 세션이 시작되면 `AGENTS.md`(§ 목적, 상단)에 적힌 읽기 순서를 그대로 따른다 — 순서를
+여기 다시 옮겨 적지 않는다(옮겨 적으면 AGENTS.md만 바뀌었을 때 이 파일이 뒤처진다).
 
 Claude Code 전용 차이점(Codex와 다른 점)은 다음 두 가지뿐이며, 나머지는 전부 `AGENTS.md`를 따른다.
 
