@@ -47,5 +47,6 @@ dependencies = [
     "xgboost>=3.2.0",
     "lightgbm>=4.7.0",
     "arch>=8.0.0",
+    "python-pptx>=1.0.2",
 ]
 
