@@ -153,6 +153,12 @@ class PatchTSTLike(nn.Module):
         self.patch_len = patch_len
         self.n_patches = max(1, seq_len // patch_len)
         self.proj = nn.Linear(n_features * patch_len, hidden)
+        # 패치 순서 정보 — 셀프어텐션은 순서에 무감각해서 이게 없으면 "최근 패치일수록
+        # 더 중요하다"는 정보 자체가 모델에 전달되지 않는다(원 PatchTST 논문도 위치 임베딩을
+        # 쓴다). 24번 예비 진단에서 학습손실은 꾸준히 내려가는데 검증손실은 개선 추세 없이
+        # 요동만 치는 패턴을 확인했는데, 위치 임베딩을 더하니 검증손실이 단조 개선으로
+        # 바뀌었다 — 그래디언트 소실이 아니라 이 결손이 원인이었다.
+        self.pos = nn.Parameter(torch.zeros(1, self.n_patches, hidden))
         layer = nn.TransformerEncoderLayer(hidden, heads, hidden * 2, batch_first=True, dropout=0.1)
         self.encoder = nn.TransformerEncoder(layer, num_layers=2)
         self.head = nn.Linear(hidden, 1)
@@ -161,7 +167,7 @@ class PatchTSTLike(nn.Module):
         b, t, f = x.shape
         usable = self.n_patches * self.patch_len
         z = x[:, -usable:].reshape(b, self.n_patches, f * self.patch_len)
-        z = self.encoder(self.proj(z))
+        z = self.encoder(self.proj(z) + self.pos)
         return self.head(z.mean(dim=1)).squeeze(-1)
 
 
