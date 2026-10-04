@@ -9,6 +9,12 @@
   TAR-GARCH — 관측 가능한 임계변수가 문턱값을 넘는지로 국면이 즉시 결정된다. 필터링이 없다.
 
 둘 다 국면별 조건부밀도는 t분포를 쓴다(GARCH-t와 같은 계열로 맞춰 비교 가능하게 한다).
+
+**주의(2026-10-05 확인)**: 두 필터의 t 밀도는 척도 σ² = h(ν-2)²/ν²로 쓰여 있어, 재귀 변수 h는
+조건부 분산이 아니다. 실제 조건부 분산은 κ·h(κ = (ν-2)/ν)다(수치 적분으로 확인). 반환 dict의
+`h_pred`는 이 척도 변수이고, 분산 예측은 `var_pred`(= κ·h_pred)를 쓴다. 24·25번은 `h_pred`를
+분산으로 써서 분산을 약 1/κ배(ν≈5.7에서 1.5배) 과대예측했다. 같은 모형족의 재매개화라 우도 추정
+자체는 유효하다(ω' = κω, α' = κα로 표준 t-GARCH와 1:1 대응).
 """
 
 from __future__ import annotations
@@ -108,7 +114,8 @@ def ms_filter(eps_signed, theta, loglik_upto=None):
             xi1, xi2 = (w1 / s, w2 / s) if (math.isfinite(s) and s > 0) else (xi1_pred, xi2_pred)
         h_agg_state = xi1 * h1 + xi2 * h2
         prev_eps2 = x2
-    return loglik, dict(h_pred=h_pred_path, xi_pred=xi_pred_path,
+    kappa = (nu - 2) / nu
+    return loglik, dict(h_pred=h_pred_path, var_pred=kappa * h_pred_path, kappa=kappa, xi_pred=xi_pred_path,
                         omega=(o1, o2), alpha=(a1, a2), beta=(b1, b2), p11=p11, p22=p22, nu=nu)
 
 
@@ -192,7 +199,9 @@ def tar_filter(eps_signed, switch_lagged, tau, theta, loglik_upto=None):
                 return -1e10, None
             loglik += lf
         prev_eps2 = x2
-    return loglik, dict(h_pred=h_path, omega=(o1, o2), alpha=(a1, a2), beta=(b1, b2), nu=nu, tau=tau)
+    kappa = (nu - 2) / nu
+    return loglik, dict(h_pred=h_path, var_pred=kappa * h_path, kappa=kappa,
+                        omega=(o1, o2), alpha=(a1, a2), beta=(b1, b2), nu=nu, tau=tau)
 
 
 def fit_tar_garch(r_pct, switch_lagged, split_idx, tau_candidates, n_restarts=2, maxiter=500):
