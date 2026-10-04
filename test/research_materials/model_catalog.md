@@ -1,14 +1,14 @@
 # 모델 카탈로그 — 아키텍처 특징과 문헌 근거
 
-이 문서는 **모델 자체의 특징과 문헌 근거만** 기록한다. 어느 실험(N번)이 이 모델을 실제로
-채택했는지, 어떤 환경에서 돌렸는지, 왜 포함·제외했는지는 여기 적지 않는다 — 그건 각
-실험의 `test/experiment_specs/{N}_*.md`(계획)와 `test/results/{N}_*/`(결과 보고서)가 다룬다.
-이 문서는 실험 번호와 무관하게 누적되는 참조용 카탈로그라 번호를 붙이지 않는다(`test/
-research_materials/`의 비번호 문서 관례 — `forecasting_methodology_literature_review_
-20260613.md` 등과 같은 층위).
+이 문서는 모델의 **특징·문헌 근거와 현재 채택 상태를 한 항목에 함께** 적는다. 각 모델
+항목 끝의 **비고**가 상태(기존 유지/공식 구현 교체/신규 도입/미채택)와 적용 연구 번호를
+담당한다 — 모델이 바뀔 때마다 새 문서를 만들지 않고 이 비고만 갱신한다. 실제로 그 연구가
+무엇을 했는지(실행 결과)는 `test/results/{N}_*/`에 남는다. 실험 번호와 무관하게 누적되는
+참조용 카탈로그라 이 문서 자체엔 번호를 붙이지 않는다(`test/research_materials/`의 비번호
+문서 관례 — `forecasting_methodology_literature_review_20260613.md` 등과 같은 층위).
 
-새 모델을 조사할 때마다 이 문서에 섹션을 추가한다. 기존 섹션은 내용이 틀렸을 때만 고치고,
-"이번에 어디서 썼다" 같은 실험 서술은 넣지 않는다.
+새 모델을 조사할 때마다 이 문서에 섹션을 추가한다. 기존 섹션은 내용이 틀렸거나 상태(비고)가
+바뀌었을 때만 고친다.
 
 ---
 
@@ -23,6 +23,7 @@ research_materials/`의 비번호 문서 관례 — `forecasting_methodology_lit
   위험이 거의 없고, 변동성 예측 문헌에서 "이기기 어려운 표준 벤치마크"로 쓰인다.
 - 구현: 선형회귀(자체 특성 생성 + `sklearn.linear_model.LinearRegression`) — 모델 자체가
   단순 선형식이라 자체 구현이 곧 공식 사양이다.
+- 비고: 기존 유지 · 적용 연구 24, 25
 
 ### GARCH-t (Bollerslev 1986/1987)
 - 문헌: Bollerslev(1986), *Generalized Autoregressive Conditional Heteroskedasticity*,
@@ -30,6 +31,7 @@ research_materials/`의 비번호 문서 관례 — `forecasting_methodology_lit
 - 특징: 조건부분산이 과거 조건부분산과 과거 제곱잔차의 선형결합으로 재귀적으로 갱신된다.
   조건부 분포를 정규분포 대신 **t분포**로 둬 금융수익률의 두꺼운 꼬리(fat tail)를 반영한다.
 - 구현: `arch` 패키지(공식 유지보수 중인 GARCH 추정 라이브러리).
+- 비고: 기존 유지 · 적용 연구 24, 25
 
 ### MS-GARCH (Markov-Switching GARCH)
 - 문헌: Hamilton(1989), *A New Approach to the Economic Analysis of Nonstationary Time
@@ -40,6 +42,7 @@ research_materials/`의 비번호 문서 관례 — `forecasting_methodology_lit
   조건부밀도는 t분포(GARCH-t와 비교 가능하게).
 - 구현: `engine/regime_garch.py`(자체 구현 — 경로 축약 근사 자체가 논문의 수식이라 패키지
   없이 직접 구현하는 것이 표준적인 방식).
+- 비고: 기존 유지 · 적용 연구 24, 25
 
 ### TAR-GARCH (Threshold/SETAR-GARCH)
 - 문헌: 임계값 자기회귀(SETAR, Threshold Autoregression) 전통을 GARCH 조건부분산에 적용한
@@ -48,21 +51,22 @@ research_materials/`의 비번호 문서 관례 — `forecasting_methodology_lit
   문턱값을 넘는지로 **즉시·결정론적으로** 전환된다. 필터링이 필요 없어 MS-GARCH보다
   계산이 단순하고 해석이 직관적이다.
 - 구현: `engine/regime_garch.py`(자체 구현).
+- 비고: 기존 유지 · 적용 연구 24, 25
 
 ---
 
 ## 2. 선형·커널·트리 기반 지도학습
 
-| 모델 | 핵심 아이디어 | 구현 |
-| :--- | :--- | :--- |
-| Linear / Ridge | 표준 (정규화) 선형회귀 | `sklearn.linear_model` |
-| KernelRidge-RBF | RBF 커널로 비선형 관계를 커널 릿지로 학습 | `sklearn.kernel_ridge.KernelRidge` |
-| SVR-RBF | RBF 커널 서포트벡터회귀 | `sklearn.svm.SVR`(libsvm) |
-| Nystroem+Ridge | Nystroem 커널근사로 대표본에서 커널릿지를 선형 비용으로 근사 | `sklearn.kernel_approximation.Nystroem` + `Ridge` |
-| LightGBM | 히스토그램 기반 그래디언트 부스팅(leaf-wise 성장) | 공식 `lightgbm` 패키지(Microsoft) |
-| XGBoost | 그래디언트 부스팅(level-wise 성장 + 정교한 정규화) | 공식 `xgboost` 패키지 |
-| HistGBM | 히스토그램 기반 그래디언트 부스팅(sklearn 내장) | `sklearn.ensemble.HistGradientBoostingRegressor` |
-| GARCH+LightGBM | GARCH 조건부분산을 트리 특성으로 투입하는 하이브리드 | 위 두 구현의 조합(자체 결합 로직) |
+| 모델 | 핵심 아이디어 | 구현 | 비고 |
+| :--- | :--- | :--- | :--- |
+| Linear / Ridge | 표준 (정규화) 선형회귀 | `sklearn.linear_model` | 기존 유지 · 적용 연구 24, 25 |
+| KernelRidge-RBF | RBF 커널로 비선형 관계를 커널 릿지로 학습 | `sklearn.kernel_ridge.KernelRidge` | 기존 유지 · 적용 연구 24, 25 |
+| SVR-RBF | RBF 커널 서포트벡터회귀 | `sklearn.svm.SVR`(libsvm) | 기존 유지 · 적용 연구 24, 25 |
+| Nystroem+Ridge | Nystroem 커널근사로 대표본에서 커널릿지를 선형 비용으로 근사 | `sklearn.kernel_approximation.Nystroem` + `Ridge` | 기존 유지 · 적용 연구 24, 25 |
+| LightGBM | 히스토그램 기반 그래디언트 부스팅(leaf-wise 성장) | 공식 `lightgbm` 패키지(Microsoft) | 기존 유지 · 적용 연구 24, 25 |
+| XGBoost | 그래디언트 부스팅(level-wise 성장 + 정교한 정규화) | 공식 `xgboost` 패키지 | 기존 유지 · 적용 연구 24, 25 |
+| HistGBM | 히스토그램 기반 그래디언트 부스팅(sklearn 내장) | `sklearn.ensemble.HistGradientBoostingRegressor` | 기존 유지 · 적용 연구 24, 25 |
+| GARCH+LightGBM | GARCH 조건부분산을 트리 특성으로 투입하는 하이브리드 | 위 두 구현의 조합(자체 결합 로직) | 기존 유지 · 적용 연구 24, 25 |
 
 이 계열은 아키텍처 자체가 잘 정립된 표준 알고리즘이라 원 논문 재현 이슈가 없다 — 전부
 유지보수 중인 공식 패키지를 그대로 쓴다.
@@ -77,12 +81,14 @@ research_materials/`의 비번호 문서 관례 — `forecasting_methodology_lit
 - 특징: LSTM보다 게이트 수가 적은(리셋·업데이트 게이트 2개) 경량 순환 구조. 장기 의존성을
   학습하면서도 파라미터가 LSTM보다 적다.
 - 구현: `torch.nn.GRU`(PyTorch 공식 내장) 위에 우리 쪽 입출력 헤드를 얹은 구조.
+- 비고: 기존 유지 · 적용 연구 24, 25
 
 ### LSTM (Long Short-Term Memory)
 - 문헌: Hochreiter & Schmidhuber(1997), *Long Short-Term Memory*, *Neural Computation* 9(8).
 - 특징: 입력·망각·출력 3게이트와 별도의 cell state로 장기 의존성의 그래디언트 소실 문제를
   완화한 순환 구조. 시계열·언어모델링의 고전적 표준.
 - 구현: `torch.nn.LSTM`(PyTorch 공식 내장).
+- 비고: 기존 유지 · 적용 연구 24, 25
 
 ---
 
@@ -99,6 +105,8 @@ AGENTS.md 2.13(모델명 Like 금지 — 검증된 구현 사용 의무)의 계�
 - 특징: 시계열을 겹치는 패치로 나눠 토큰화하고(어텐션 연산량을 줄임), **채널독립
   (channel-independence)** — 다변량의 각 채널을 완전히 별도로 처리해 채널 간 거짓 상관을
   학습하지 않게 한다. 이 채널독립이 원 논문의 핵심 설계다.
+- 비고: 폐기된 자체구현(PatchTSTLike, 채널혼합 오류)을 공식 구현으로 교체 · 적용 연구
+  24(자체구현판, 제외됨) → 26(공식판, 예정)
 
 ### iTransformer
 - 문헌: Liu 외(2024), *iTransformer: Inverted Transformers Are Effective for Time Series
@@ -106,36 +114,55 @@ AGENTS.md 2.13(모델명 Like 금지 — 검증된 구현 사용 의무)의 계�
 - 특징: 어텐션의 토큰 축을 "시간"이 아니라 "변수(채널)"로 뒤집는다 — 각 변수의 전체
   시계열을 하나의 토큰으로 취급해, 어텐션이 변수 간 관계를 학습하고 피드포워드가 시간
   축을 처리하게 한다.
+- 비고: 폐기된 자체구현(ITransformerLike)을 공식 구현으로 교체 · 적용 연구
+  24(자체구현판, 제외됨) → 26(공식판, 예정)
 
 ### TCN (Temporal Convolutional Network)
 - 문헌: Bai, Kolter & Koltun(2018), *An Empirical Evaluation of Generic Convolutional and
   Recurrent Networks for Sequence Modeling*, arXiv:1803.01271.
 - 특징: 인과적(causal) 팽창 합성곱(dilated convolution)을 쌓아 수용영역을 지수적으로
   넓힌다. RNN의 순차 처리 병목 없이 병렬화가 가능하다.
+- 비고: 신규 도입(`engine/models.py`의 자체구현 TCNForecaster가 미사용으로 남아 있던 것을
+  공식 구현으로 대체) · 적용 연구 26(예정)
 
 ### DLinear / NLinear
 - 문헌: Zeng 외(2023), *Are Transformers Effective for Time Series Forecasting?*, AAAI 2023.
 - 특징: "복잡한 Transformer가 단순 선형모델을 못 이긴다"는 문제의식에서 나온 대조군.
   DLinear는 추세·계절 성분으로 분해 후 각각 선형층으로 예측, NLinear는 입력 마지막 값을
   빼는 정규화 후 선형층으로 예측(분포 shift에 강건).
+- 비고: 둘 다 신규 도입(`engine/models.py`의 자체구현 DLinearLike·NLinearLike가 미사용으로
+  남아 있던 것을 공식 구현으로 대체) · 적용 연구 26(예정)
 
 ### Autoformer
 - 문헌: Wu 외(2021), *Autoformer: Decomposition Transformers with Auto-Correlation for
   Long-Term Series Forecasting*, NeurIPS 2021.
 - 특징: 어텐션 대신 **자기상관(auto-correlation)** 메커니즘으로 주기적 의존성을 직접 찾고,
   내부에 추세-계절 분해 블록을 반복적으로 넣어 장기예측에서 분해와 예측을 함께 학습한다.
+- 비고: 신규 도입(`engine/models.py`의 자체구현 AutoformerLike가 미사용으로 남아 있던 것을
+  공식 구현으로 대체) · 적용 연구 26(예정)
 
 ### TimesNet
 - 문헌: Wu 외(2023), *TimesNet: Temporal 2D-Variation Modeling for General Time Series
   Analysis*, ICLR 2023.
 - 특징: 1차원 시계열을 FFT로 찾은 주요 주기에 맞춰 2차원(주기×주기 내 위치) 텐서로 접어
   2D 합성곱으로 시간 내·시간 간 변동을 함께 포착한다.
+- 비고: 신규 도입(`engine/models.py`의 자체구현 TimesNetLike가 미사용으로 남아 있던 것을
+  공식 구현으로 대체) · 적용 연구 26(예정)
 
 ### TimeXer
 - 문헌: Wang 외(2024), *TimeXer: Empowering Transformers for Time Series Forecasting with
   Exogenous Variables*, NeurIPS 2024.
 - 특징: 내생(예측 대상) 변수와 외생 변수를 별도 임베딩 경로로 분리해 처리한 뒤 교차
   어텐션으로 결합 — 외생변수가 있는 예측 문제에 특화됐다.
+- 비고: 신규 도입(`engine/models.py`의 자체구현 TimeXerLike가 미사용으로 남아 있던 것을
+  공식 구현으로 대체) · 적용 연구 26(예정)
+
+### VanillaTransformer
+- 문헌: Vaswani 외(2017), *Attention Is All You Need*, NeurIPS 2017 — 원형 인코더-디코더
+  Transformer를 그대로 시계열에 적용한 기본형.
+- 특징: 패치·분해·역전치 등 시계열 특화 설계 없이 표준 어텐션 인코더-디코더를 그대로 쓴다.
+- 비고: `neuralforecast.models.VanillaTransformer`로 공식 구현은 있으나 미채택 — GRU·LSTM·
+  PatchTST가 이미 순환·어텐션 계열을 대표하고 있어 중복 비교 가치가 낮다고 판단
 
 ---
 
@@ -147,6 +174,8 @@ AGENTS.md 2.13(모델명 Like 금지 — 검증된 구현 사용 의무)의 계�
 - 특징: 어텐션 없이 순수 합성곱만으로 Transformer급 성능을 노린 구조. depthwise separable
   합성곱으로 시간·변수·특징 세 축을 독립적으로 확장(ConvNeXt의 시계열판에 가깝다).
 - 공식 구현: `github.com/luodhhh/ModernTCN`(저자 공식, pip 패키지 없음).
+- 비고: 신규 도입(`engine/models.py`의 자체구현 ModernTCNLike를 공식 구현으로 대체, 어댑터
+  작성 필요) · 적용 연구 26(예정)
 
 ### Mamba / S-Mamba (시계열 적용)
 - 원형 문헌: Gu & Dao(2023), *Mamba: Linear-Time Sequence Modeling with Selective State
@@ -159,6 +188,8 @@ AGENTS.md 2.13(모델명 Like 금지 — 검증된 구현 사용 의무)의 계�
   장기 의존성(변동성 지속성 등)을 포착하는 데 강점이 있다 — 단, MS-GARCH·TAR-GARCH처럼
   국면전환을 명시적으로 모델링하는 구조는 아니다.
 - 공식 구현: `github.com/wzhwzhwzh0921/S-D-Mamba`(저자 공식, pip 패키지 없음).
+- 비고: 신규 도입(`engine/models.py`의 자체구현 MambaLike를 공식 구현으로 대체, 어댑터
+  작성 필요) · 적용 연구 26(예정)
 
 ---
 
@@ -174,6 +205,7 @@ AGENTS.md 2.13(모델명 Like 금지 — 검증된 구현 사용 의무)의 계�
   스텝씩 자기회귀 생성했던 것과 달리, Bolt는 패치 단위 인코더 입력 + 디코더가 **다중
   스텝을 한 번에 직접 회귀**하는 구조라 원조보다 수십 배 빠르다.
 - 공식 구현: `huggingface.co/amazon/chronos-bolt-*`, pip `chronos-forecasting`.
+- 비고: 신규 도입 · 실행 환경 메인 venv · 적용 연구 26(예정)
 
 ### TimesFM
 - 문헌: Das 외(2024), *A decoder-only foundation model for time-series forecasting*,
@@ -182,6 +214,7 @@ AGENTS.md 2.13(모델명 Like 금지 — 검증된 구현 사용 의무)의 계�
   **긴 출력 패치**(예: 128스텝)를 한 번에 낸다. 입력도 패치 토큰화해 가변 길이 입력·
   가변 예측 구간을 하나의 모델로 처리한다.
 - 공식 구현: `github.com/google-research/timesfm`, pip `timesfm`.
+- 비고: 신규 도입 · 실행 환경 메인 venv · 적용 연구 26(예정)
 
 ### TTM (Tiny Time Mixers)
 - 문헌: Ekambaram 외(2024), *Tiny Time Mixers (TTMs): Fast Pretrained Models for Enterprise
@@ -189,6 +222,7 @@ AGENTS.md 2.13(모델명 Like 금지 — 검증된 구현 사용 의무)의 계�
 - 특징: 어텐션을 쓰지 않는 경량 MLP-Mixer 계열. 채널 간·패치 간 혼합을 전부 완전연결층
   으로 처리해 파라미터 수가 다른 파운데이션 모델 대비 수백 분의 1이고 추론이 빠르다.
 - 공식 구현: `github.com/ibm-granite/granite-tsfm`, pip `granite-tsfm`.
+- 비고: 신규 도입 · 실행 환경 메인 venv · 적용 연구 26(예정)
 
 ### Moirai / Moirai-2.0
 - 문헌: Woo 외(2024), *Unified Training of Universal Time Series Forecasting Transformers*,
@@ -198,6 +232,8 @@ AGENTS.md 2.13(모델명 Like 금지 — 검증된 구현 사용 의무)의 계�
   샘플링 주기가 다른 데이터를 함께 사전학습했다.
 - 공식 구현: `github.com/SalesforceAIResearch/uni2ts`, pip `uni2ts`. torch 2.4.1+cu121을
   요구(최신 torch와 호환성 확인 필요).
+- 비고: 신규 도입 · 실행 환경 격리 venv `.venvs/moirai_py312_20261004_192438` · 적용 연구
+  26(예정)
 
 ### Sundial
 - 문헌: *Sundial: A Family of Highly Capable Time Series Foundation Models*(Tsinghua
@@ -207,6 +243,8 @@ AGENTS.md 2.13(모델명 Like 금지 — 검증된 구현 사용 의무)의 계�
   예측(여러 미래 경로 샘플링) 지원.
 - 공식 구현: `github.com/thuml/Sundial`. `transformers==4.40.1` 고정 요구(최신 transformers와
   `DynamicCache` 인터페이스 비호환).
+- 비고: 신규 도입 · 실행 환경 격리 venv `.venvs/legacy_hf_py312_20261004` · 적용 연구
+  26(예정)
 
 ### Time-MoE
 - 문헌: *Time-MoE: Billion-Scale Time Series Foundation Models with Mixture of Experts*
@@ -215,6 +253,8 @@ AGENTS.md 2.13(모델명 Like 금지 — 검증된 구현 사용 의무)의 계�
   전체 파라미터 중 일부만 활성화하면서도 모델 총 용량은 키울 수 있게 했다.
 - 공식 구현: `github.com/Time-MoE/Time-MoE`. Sundial과 같은 이유로 `transformers==4.40.1`
   고정 요구.
+- 비고: 신규 도입 · 실행 환경 격리 venv `.venvs/legacy_hf_py312_20261004`(Sundial과 공유) ·
+  적용 연구 26(예정)
 
 ### Lag-Llama
 - 문헌: Rasul 외(2024), *Lag-Llama: Towards Foundation Models for Probabilistic Time Series
@@ -226,23 +266,25 @@ AGENTS.md 2.13(모델명 Like 금지 — 검증된 구현 사용 의무)의 계�
   훨씬 낮다(구조적 특성이지 결함이 아니다).
 - 공식 구현: `github.com/time-series-foundation-models/lag-llama`. GluonTS(`gluonts<=0.14.4`)
   의존, `pytorch_lightning` 경유로 구버전 `setuptools`(`pkg_resources` 포함 버전) 요구.
+- 비고: 신규 도입 · 실행 환경 격리 venv `.venvs/lagllama_py312_20261004` · 적용 연구
+  26(예정)
 
 ---
 
 ## 7. 조사했으나 공식 구현 미확정 — 참고만 해 둔다
 
-| 모델 | 비고 |
+| 모델 | 비고(상태 · 근거) |
 | :--- | :--- |
-| GDN(Gated DeltaNet) | Yang·Kautz·Hatamizadeh, *Gated Delta Networks: Improving Mamba2 with Delta Rule*, ICLR 2025. 공식 구현(`github.com/NVlabs/GatedDeltaNet`)은 언어모델용 선형어텐션 빌딩블록이지, 시계열 예측 전용 공식 구현은 아직 없다 |
-| TSMamba | *A Mamba Foundation Model for Time Series Forecasting*(arXiv:2411.02941). 유지보수 중인 공식 저장소를 특정하지 못함 |
-| TimeFound | 조사 당시(2026-10) 공식 저장소를 특정하지 못함 |
-| MOMENT | 조사 당시(2026-10) 공식 저장소를 특정하지 못함(후속 재조사 필요) |
+| GDN(Gated DeltaNet) | 미채택 · Yang·Kautz·Hatamizadeh, *Gated Delta Networks: Improving Mamba2 with Delta Rule*, ICLR 2025. 공식 구현(`github.com/NVlabs/GatedDeltaNet`)은 언어모델용 선형어텐션 빌딩블록이지, 시계열 예측 전용 공식 구현은 아직 없다 |
+| TSMamba | 미채택 · *A Mamba Foundation Model for Time Series Forecasting*(arXiv:2411.02941). 유지보수 중인 공식 저장소를 특정하지 못함 |
+| TimeFound | 미채택 · 조사 당시(2026-10) 공식 저장소를 특정하지 못함 |
+| MOMENT | 미채택 · 조사 당시(2026-10) 공식 저장소를 특정하지 못함(후속 재조사 필요) |
 
 ---
 
 ## 8. 계정·시스템 요구사항 때문에 실행이 막히는 모델
 
-| 모델 | 요구사항 | 비고 |
+| 모델 | 요구사항 | 비고(상태 · 근거) |
 | :--- | :--- | :--- |
-| TimeGPT(Nixtla) | API 계정/키 필요 | 공개 가중치 없음 — 공식 API 호출 전제 |
-| xLSTM | CUDA 커널을 import 시점에 JIT 컴파일, `nvcc`(CUDA 컴파일러) 필요 | 서버에 `nvcc` 미설치(시스템 레벨 설치라 `sudo` 필요) |
+| TimeGPT(Nixtla) | API 계정/키 필요 | 미채택 · 공개 가중치 없음, 공식 API 호출 전제 |
+| xLSTM | CUDA 커널을 import 시점에 JIT 컴파일, `nvcc`(CUDA 컴파일러) 필요 | 미채택 · 서버에 `nvcc` 미설치(시스템 레벨 설치라 `sudo` 필요), 메인 venv를 깨뜨린 사고 있었음(`uv remove xlstm`으로 복구) |

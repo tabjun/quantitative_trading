@@ -183,10 +183,10 @@ process=Phase/실험 단위 To-Do, history=완료 이력), 실제로는 Phase 1~
       합리적**이다. 근거 문헌: Zhong(2026) `arXiv:2604.10402`(라우팅으로 고변동 손실 24% 감소).
 - [ ] **26번(모델 로스터 확대) — 조사·결정 완료, 드라이버 작성 전**: 위 공백(파운데이션 모델
       0종, `engine/models.py` 미사용 모델 8종)에 대한 조사와 결정을 전부 마쳤다. 모델별
-      특징·논문 근거는 `test/research_materials/model_catalog.md`(번호 없는 평시 카탈로그),
-      모델별 현재 채택 상태는 `test/experiment_specs/used_models.md`(번호 없는 평시
-      트래커)에 있다 — 둘 다 실험 번호와 무관하게 누적되므로 여기 내용을 중복해 적지 않는다.
-      다음 단계는 26번 드라이버 코드 작성(`test/models/26_model_expansion_test.py`, 아직
+      특징·논문 근거·현재 채택 상태(비고 칸)는 전부 `test/research_materials/
+      model_catalog.md`(번호 없는 평시 카탈로그, 실험 번호와 무관하게 누적) 한 곳에
+      있다 — 여기 내용을 중복해 적지 않는다. 다음 단계는 26번 드라이버 코드 작성
+      (`test/models/26_model_expansion_test.py`, 아직
       미착수)이며, 선행 과제 4가지가 남아 있다.
       - neuralforecast 입력 오염 버그 해결책(결측 시점을 학습구간 평균으로 채우고
         `available_mask=0`으로 손실만 제외) 반영 — 검증은 끝났으나 드라이버 미반영.
