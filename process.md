@@ -182,12 +182,13 @@ process=Phase/실험 단위 To-Do, history=완료 이력), 실제로는 Phase 1~
       결정 불가로 나왔으므로 **라우팅 대상은 Q1·Q2(GRU계열)와 Q5(레짐전환)로 좁히는 것이
       합리적**이다. 근거 문헌: Zhong(2026) `arXiv:2604.10402`(라우팅으로 고변동 손실 24% 감소).
 - [ ] **26번(모델 로스터 확대) — 계획 완료, 드라이버 작성 전**: 위 공백(파운데이션 모델
-      0종, `engine/models.py` 미사용 모델 8종)에 대한 조사와 결정을 전부 마쳤다. 연구 환경·
-      전체 모델 로스터·교체/제외 결정·미해결 설계 과제는
-      `test/experiment_specs/26_model_expansion_plan_20261004.md`(단일 출처)에 정리했고,
-      파운데이션 모델 7종(Chronos-Bolt·TimesFM·TTM·Moirai-2.0·Sundial·Time-MoE·Lag-Llama)의
-      상세 근거는 `test/results/26_fm_catalog_20261004/26_fm_catalog_report.md`에 있다.
-      다음 단계는 26번 드라이버 코드 작성(`test/models/26_model_expansion_test.py`, 아직
+      0종, `engine/models.py` 미사용 모델 8종)에 대한 조사와 결정을 전부 마쳤다. 문서 역할을
+      세 갈래로 분리했다 — 모델 자체의 특징·논문 근거는 `test/research_materials/
+      model_catalog.md`(번호 없는 평시 카탈로그, 실험과 무관하게 누적), 26번이 실제로 무엇을
+      쓰기로 했는지는 `test/experiment_specs/26_model_expansion_plan_20261004.md`(단일 출처),
+      환경 구축 중 버전 충돌·속도 실측 로그는 `test/results/26_fm_env_log_20261004/
+      26_fm_env_log_report.md`. 다음 단계는 26번 드라이버 코드 작성(`test/models/
+      26_model_expansion_test.py`, 아직
       미착수) — neuralforecast 입력 오염 버그 해결책 반영, ModernTCN·S-Mamba 어댑터 작성,
       격리 venv 3종 결과 통합 설계가 선행 과제로 남아 있다.
 - [ ] **영수익률 비율을 모형 특성으로 승격(#19)**: Bandi 외(2020)·Slim 외(2023) 근거로
