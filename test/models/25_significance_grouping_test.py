@@ -231,18 +231,25 @@ def dm_test(la: np.ndarray, lb: np.ndarray, lag: int | None = None) -> tuple[flo
 
 
 def run_mcs(L: pd.DataFrame, block: int = BLOCK_SIZE, reps: int = MCS_REPS,
-            size: float = MCS_SIZE) -> list[str]:
-    """생존 모델 목록. 표본이 너무 짧거나 수렴 실패면 빈 목록을 돌려준다(조용히 넘기지 않는다)."""
+            size: float = MCS_SIZE) -> tuple[list[str], list[str]]:
+    """(생존 모델, 결측으로 제외된 모델) 목록.
+
+    `dropna`가 결측 모델을 조용히 빼면 구간별 MCS의 비교 대상 집합이 종목마다 달라질 수
+    있는데(fork 점검 2026-10-04 지적), 그걸 기록하지 않으면 "이 종목은 왜 그 모델이
+    순위에 없는지" 추적할 수 없다. 표본이 너무 짧거나 수렴 실패면 생존 목록만 비운다
+    (조용히 넘기지 않는다).
+    """
+    dropped = sorted(L.columns[L.isna().any()])
     L = L.dropna(axis=1, how="any")
     if L.shape[0] < block * 5 or L.shape[1] < 2:
-        return []
+        return [], dropped
     try:
         m = MCS(L, size=size, reps=reps, block_size=block, method="R", seed=0)
         m.compute()
-        return list(m.included)
+        return list(m.included), dropped
     except Exception as e:
         print(f"    ! MCS 실패 — {type(e).__name__}: {str(e)[:100]}", flush=True)
-        return []
+        return [], dropped
 
 
 # %% [markdown]
@@ -349,11 +356,12 @@ def main(argv=None) -> None:
         for d in conds:
             if (tk, d) not in losses:
                 continue
-            inc = run_mcs(losses[(tk, d)], reps=reps)
+            inc, dropped = run_mcs(losses[(tk, d)], reps=reps)
             for m in inc:
                 surv[m][d] += 1
             mcs_detail.append({"종목": tk, "주기제거": d, "생존수": len(inc),
-                               "생존모델": ";".join(sorted(inc))})
+                               "생존모델": ";".join(sorted(inc)),
+                               "결측제외모델": ";".join(dropped)})
         print(f"  [MCS {i}/{len(tickers)}] {tk}", flush=True)
     pd.DataFrame(mcs_detail).to_csv(RES / f"{STEM}_mcs_by_ticker.csv", index=False)
 
@@ -373,6 +381,16 @@ def main(argv=None) -> None:
     if zero:
         emit(f"- 양 조건 모두 생존 0인 모델: {', '.join(f'**{m}**' for m in zero)} — "
              "**어느 종목에서도 최우수 후보가 아니다.**")
+    dropped_cells = [d for d in mcs_detail if d["결측제외모델"]]
+    if dropped_cells:
+        uniq_dropped = sorted({m for d in dropped_cells for m in d["결측제외모델"].split(";") if m})
+        emit(f"- **투명성 메모**(fork 점검 2026-10-04 지적): {len(dropped_cells)}개 종목·조건 "
+             f"셀에서 일부 모델이 결측으로 MCS 비교에서 빠졌다({', '.join(uniq_dropped)}). "
+             "비교 대상 집합이 셀마다 달라질 수 있다는 뜻이며, 어느 셀에서 무엇이 빠졌는지는 "
+             "`mcs_by_ticker.csv`의 `결측제외모델` 열에 전량 기록했다.")
+    else:
+        emit("- 결측으로 MCS 비교에서 빠진 모델은 없다 — 전 종목·조건에서 17개 모델 전부가 "
+             "비교 대상에 포함됐다.")
     emit()
 
     # 블록 길이 민감도
@@ -383,7 +401,8 @@ def main(argv=None) -> None:
     for b in BLOCK_SENSITIVITY:
         cnt = {m: 0 for m in models}
         for tk in probe:
-            for m in run_mcs(losses[(tk, REF)], block=b, reps=reps):
+            inc, _ = run_mcs(losses[(tk, REF)], block=b, reps=reps)
+            for m in inc:
                 cnt[m] += 1
         sens.append({"블록": b, **cnt})
     sd = pd.DataFrame(sens).set_index("블록")
@@ -423,12 +442,13 @@ def main(argv=None) -> None:
             m_ = bucket == qi
             if m_.sum() < 200:
                 continue
-            inc = run_mcs(losses[(tk, REF)].loc[m_].reset_index(drop=True),
-                          block=10, reps=reps)
+            inc, dropped = run_mcs(losses[(tk, REF)].loc[m_].reset_index(drop=True),
+                                   block=10, reps=reps)
             for m in inc:
                 qsurv[q][m] += 1
             qdetail.append({"종목": tk, "구간": q, "n": int(m_.sum()),
-                            "생존수": len(inc), "생존모델": ";".join(sorted(inc))})
+                            "생존수": len(inc), "생존모델": ";".join(sorted(inc)),
+                            "결측제외모델": ";".join(dropped)})
     pd.DataFrame(qdetail).to_csv(RES / f"{STEM}_mcs_by_quantile.csv", index=False)
 
     emit(f"**구간별 생존 종목수**(주기제거 후, 전체 {n_tk}종목 중 · 신뢰수준 "
