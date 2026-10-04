@@ -1,8 +1,8 @@
 # 26번 — 파운데이션 모델 환경 구축·속도 실측 로그 (2026-10-04)
 
 > 모델 자체의 특징·논문 근거는 `test/research_materials/model_catalog.md`(번호 없는 평시
-> 카탈로그, 전체 모델 공통)를 본다. 전체 모델 로스터·채택 결정·미채택 사유는
-> `test/experiment_specs/26_model_expansion_plan_20261004.md`(단일 출처)를 본다. 이 문서는
+> 카탈로그, 전체 모델 공통)를 본다. 모델별 현재 채택 상태·적용 연구 번호는
+> `test/experiment_specs/used_models.md`(번호 없는 평시 트래커)를 본다. 이 문서는
 > **격리 venv 3종을 실제로 구축하면서 겪은 버전 충돌과 그 해결 순서, KRW-BTC 단일 종목
 > 속도 실측값만** 남긴다 — 재현용 실행 로그다.
 

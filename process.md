@@ -181,16 +181,23 @@ process=Phase/실험 단위 To-Do, history=완료 이력), 실제로는 Phase 1~
       바꿔 끼우는 체계가 단일 최고 모델(GARCH-t)을 이기는지 검증한다. 25번에서 Q3·Q4가
       결정 불가로 나왔으므로 **라우팅 대상은 Q1·Q2(GRU계열)와 Q5(레짐전환)로 좁히는 것이
       합리적**이다. 근거 문헌: Zhong(2026) `arXiv:2604.10402`(라우팅으로 고변동 손실 24% 감소).
-- [ ] **26번(모델 로스터 확대) — 계획 완료, 드라이버 작성 전**: 위 공백(파운데이션 모델
-      0종, `engine/models.py` 미사용 모델 8종)에 대한 조사와 결정을 전부 마쳤다. 문서 역할을
-      세 갈래로 분리했다 — 모델 자체의 특징·논문 근거는 `test/research_materials/
-      model_catalog.md`(번호 없는 평시 카탈로그, 실험과 무관하게 누적), 26번이 실제로 무엇을
-      쓰기로 했는지는 `test/experiment_specs/26_model_expansion_plan_20261004.md`(단일 출처),
-      환경 구축 중 버전 충돌·속도 실측 로그는 `test/results/26_fm_env_log_20261004/
-      26_fm_env_log_report.md`. 다음 단계는 26번 드라이버 코드 작성(`test/models/
-      26_model_expansion_test.py`, 아직
-      미착수) — neuralforecast 입력 오염 버그 해결책 반영, ModernTCN·S-Mamba 어댑터 작성,
-      격리 venv 3종 결과 통합 설계가 선행 과제로 남아 있다.
+- [ ] **26번(모델 로스터 확대) — 조사·결정 완료, 드라이버 작성 전**: 위 공백(파운데이션 모델
+      0종, `engine/models.py` 미사용 모델 8종)에 대한 조사와 결정을 전부 마쳤다. 모델별
+      특징·논문 근거는 `test/research_materials/model_catalog.md`(번호 없는 평시 카탈로그),
+      모델별 현재 채택 상태는 `test/experiment_specs/used_models.md`(번호 없는 평시
+      트래커)에 있다 — 둘 다 실험 번호와 무관하게 누적되므로 여기 내용을 중복해 적지 않는다.
+      다음 단계는 26번 드라이버 코드 작성(`test/models/26_model_expansion_test.py`, 아직
+      미착수)이며, 선행 과제 4가지가 남아 있다.
+      - neuralforecast 입력 오염 버그 해결책(결측 시점을 학습구간 평균으로 채우고
+        `available_mask=0`으로 손실만 제외) 반영 — 검증은 끝났으나 드라이버 미반영.
+      - ModernTCN·S-Mamba 어댑터 작성 — 두 모델 다 공식 GitHub 코드가 neuralforecast
+        인터페이스를 쓰지 않아, 우리 `(r, |r|)` 2채널 입력·실현변동성 타깃 형식에 맞춰
+        데이터를 넣고 꺼내는 어댑터를 새로 짜야 한다.
+      - 격리 venv 3종(Moirai·Sundial/Time-MoE·Lag-Llama) 결과 통합 설계 — 메인 드라이버
+        밖에서 서브프로세스로 돌려 예측값을 직렬화(npz/csv)해 받아오는 2단계 구조가 필요.
+      - `hist_exog`(외생변수) 지원 확인 — 교체 대상 TCN·DLinear·NLinear·Autoformer·
+        TimesNet·TimeXer가 `hist_exog_list`를 지원하는지 아직 전수 확인하지 않았다
+        (NHITS·TFT만 지원 확인됨, DLinear·PatchTST·iTransformer·TSMixer·TimeMixer는 미지원).
 - [ ] **영수익률 비율을 모형 특성으로 승격(#19)**: Bandi 외(2020)·Slim 외(2023) 근거로
       영수익률(0봉) 자체를 유동성 신호 특성으로 투입하는 실험은 아직 미착수.
 - [ ] **문서 갱신 규칙 재확인(2026-09-20)**: `history.md`/`conversation_l2_cache.md`/
