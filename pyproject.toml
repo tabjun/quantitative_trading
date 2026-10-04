@@ -50,6 +50,8 @@ dependencies = [
     "python-pptx>=1.0.2",
     "neuralforecast>=3.2.2",
     "chronos-forecasting>=2.3.2",
+    "timesfm>=3.0.2",
+    "granite-tsfm>=0.3.2",
 ]
 
 # torch 버전 pin(위 dependencies의 torch==2.10.0)만으로는 CUDA 빌드까지 고정되지 않는다.
