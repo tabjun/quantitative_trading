@@ -181,12 +181,15 @@ process=Phase/실험 단위 To-Do, history=완료 이력), 실제로는 Phase 1~
       바꿔 끼우는 체계가 단일 최고 모델(GARCH-t)을 이기는지 검증한다. 25번에서 Q3·Q4가
       결정 불가로 나왔으므로 **라우팅 대상은 Q1·Q2(GRU계열)와 Q5(레짐전환)로 좁히는 것이
       합리적**이다. 근거 문헌: Zhong(2026) `arXiv:2604.10402`(라우팅으로 고변동 손실 24% 감소).
-- [ ] **최신 시계열 파운데이션 모델 미검증(2026-10-04 확인)**: 비교군 17개에 Chronos·TimesFM·
-      Moirai·TTM 등 **사전학습 파운데이션 모델이 하나도 없다**(패키지도 미설치). 우리가 쓴
-      "최신" 모델은 PatchTSTLike·ITransformerLike 둘뿐인데 **원 논문 구현이 아닌 자체 간이
-      구현**이고 둘 다 학습 실패로 제외됐다. `engine/models.py`에 구현만 해두고 24번이 쓰지
-      않은 모델도 10개(TCN·DLinear·NLinear·Autoformer·ModernTCN·Mamba·TimesNet·TimeXer 등)
-      있다. 학회·논문에서 지적받을 수 있는 공백이다.
+- [ ] **26번(모델 로스터 확대) — 계획 완료, 드라이버 작성 전**: 위 공백(파운데이션 모델
+      0종, `engine/models.py` 미사용 모델 8종)에 대한 조사와 결정을 전부 마쳤다. 연구 환경·
+      전체 모델 로스터·교체/제외 결정·미해결 설계 과제는
+      `test/experiment_specs/26_model_expansion_plan_20261004.md`(단일 출처)에 정리했고,
+      파운데이션 모델 7종(Chronos-Bolt·TimesFM·TTM·Moirai-2.0·Sundial·Time-MoE·Lag-Llama)의
+      상세 근거는 `test/results/26_fm_catalog_20261004/26_fm_catalog_report.md`에 있다.
+      다음 단계는 26번 드라이버 코드 작성(`test/models/26_model_expansion_test.py`, 아직
+      미착수) — neuralforecast 입력 오염 버그 해결책 반영, ModernTCN·S-Mamba 어댑터 작성,
+      격리 venv 3종 결과 통합 설계가 선행 과제로 남아 있다.
 - [ ] **영수익률 비율을 모형 특성으로 승격(#19)**: Bandi 외(2020)·Slim 외(2023) 근거로
       영수익률(0봉) 자체를 유동성 신호 특성으로 투입하는 실험은 아직 미착수.
 - [ ] **문서 갱신 규칙 재확인(2026-09-20)**: `history.md`/`conversation_l2_cache.md`/
