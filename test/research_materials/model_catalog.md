@@ -114,3 +114,32 @@ AGENTS.md 2.13(모델명 Like 금지 — 검증된 구현 사용 의무)의 계�
 | :--- | :--- | :--- |
 | TimeGPT(Nixtla) | API 계정/키 필요 | 미채택 · 공개 가중치 없음, 공식 API 호출 전제 |
 | xLSTM | CUDA 커널을 import 시점에 JIT 컴파일, `nvcc`(CUDA 컴파일러) 필요 | 미채택 · 서버에 `nvcc` 미설치(시스템 레벨 설치라 `sudo` 필요), 메인 venv를 깨뜨린 사고 있었음(`uv remove xlstm`으로 복구) |
+
+---
+
+## 9. 초기 실험(1~20번, 방향예측 계열) 전용 — 현재 미사용
+
+17번 이후 연구가 방향예측에서 변동성예측으로 전환되며 쓰이지 않게 된 모델들이다. 1~3번은
+원 논문 이름을 그대로 딴 토이(toy) 구현이 많아, 원 아키텍처의 핵심 설계(아래 참고)를 거의
+반영하지 않는다 — 코드 주석에도 "컨셉 간소화"·"not a full implementation"이라고 스스로
+명시돼 있다. 재도입할 거라면 이 표의 "원 설계" 칸에 적힌 공식 구현을 새로 가져와야 한다
+(자체 재구현 금지 원칙, AGENTS.md 2.13).
+
+| 모델 | 원 논문(참고용) | 원 설계 | 이 저장소에서 실제로 한 것 | 비고 |
+| :--- | :--- | :--- | :--- | :--- |
+| ODE-RNN | Rubanova, Chen & Duvenaud(2019), *Latent ODEs for Irregularly-Sampled Time Series*, NeurIPS 2019 | 은닉 상태가 관측 사이 구간에서 신경 미분방정식(Neural ODE)을 따라 연속적으로 진화 — 적응형 ODE 솔버로 적분 | `ODERNNModel`(1·2·3번): GRUCell + 2층 MLP를 "0.1 스텝 Euler 적분"이라 부른 것 — 적응형 솔버 없음 | 미채택 · 1~3번 이후 미사용 |
+| mTAND | Shukla & Marlin(2021), *Multi-Time Attention Networks for Irregularly Sampled Time Series*, ICLR 2021 | 연속시간 임베딩을 여러 개의 시간-어텐션 커널로 학습해 불규칙 샘플링 시계열을 고정 격자로 재구성 | `mTANDModel`(2·3번): `nn.MultiheadAttention` 한 층 + 선형 시간 임베딩 | 미채택 · 2~3번 이후 미사용 |
+| Informer | Zhou 외(2021), *Informer: Beyond Efficient Transformer for Long Sequence Time-Series Forecasting*, AAAI 2021(Outstanding Paper) | ProbSparse self-attention으로 어텐션 복잡도를 O(L log L)로 줄이고, 증류(distilling)로 입력 길이를 단계적으로 압축 | `InformerModel`(2·3번): `TransformerModel`과 동일 코드에 dropout만 추가 — ProbSparse 어텐션 없음 | 미채택 · 2~3번 이후 미사용 |
+| Non-stationary Transformer | Liu 외(2022), *Non-stationary Transformers: Exploring the Stationarity in Time Series Forecasting*, NeurIPS 2022 | Series Stationarization(정규화) + De-stationary Attention(정규화로 지워진 고유 통계량을 어텐션에 다시 주입)의 두 모듈 조합 | `NonStatTFModel`(2·3번): 평균을 빼고 표준 Transformer를 태운 뒤 평균을 다시 더하는 것뿐 — De-stationary Attention 없음 | 미채택 · 2~3번 이후 미사용 |
+| N-BEATS(토이) | Oreshkin 외(2020), *N-BEATS: Neural Basis Expansion Analysis for Interpretable Time Series Forecasting*, ICLR 2020 | 이중 잔차(doubly residual) 스택 + 다항식/푸리에 기저 확장으로 추세·계절을 해석 가능하게 분해 | `NBeatsModel`(2·3번): 2층 MLP(`Linear→ReLU→Linear`) — 기저 확장·잔차 스택 없음 | 미채택 · 재도입 시 공식 구현(`neuralforecast.models.NBEATS`/`NBEATSx`) 사용 |
+| DeepAR(토이) | Salinas 외(2020), *DeepAR: Probabilistic Forecasting with Autoregressive Recurrent Networks*, *International Journal of Forecasting* 36(3) | LSTM이 매 스텝 확률분포(보통 음이항·정규)의 모수를 출력, 학습 시엔 teacher forcing, 추론 시엔 샘플을 다시 입력으로 먹여 자기회귀 생성 | `DeepARModel`(2·3번): `LSTMModel`과 코드가 완전히 동일 — 확률분포 출력도 자기회귀 샘플링도 없음 | 미채택 · 재도입 시 공식 구현(`neuralforecast.models.DeepAR`) 사용 |
+| LinearDecomp | — (DLinear의 개념적 전신, 별도 논문 없음) | 추세·잔차로 분해 후 각각 선형층으로 예측 | `LinearDecompModel`(2·3번): 입력을 그대로 두 선형층에 각각 통과시켜 합산 — 실제 분해(이동평균 등) 없음 | 미채택 · 이후 DLinear(§4, Zeng 외 2023)로 정식 대체 |
+| LogisticRegression(방향 분류) | 표준 로지스틱 회귀 | 이진 분류 표준 모델 | `sklearn.linear_model.LogisticRegression`(20번): 방향(상승/하락) 분류 1회성 비교 | 미채택 · 20번 이후 연구가 변동성예측(회귀)으로 전환되며 미사용. 유일하게 분류 문제였던 사례 |
+
+같은 이름을 쓰는 TCN·Transformer(→VanillaTransformer)·PatchTST·Mamba·Autoformer도 1~3번에
+토이 버전이 있었다(`ModelZoo` 클래스 내부, 2~3번) — 이것들은 새 행이 아니라 §4·§5의 해당
+모델 행에 전신으로만 기록한다. 4번(텍스트-독립변수 분석)에도 LSTM·Transformer·Mamba·
+TimeXer·iTransformer의 축소 프로토타입(`*Representative`/`*Lite`, 코드 자체가 "proxy, not
+a full implementation"이라고 명시)이, 11번에는 Linear·PatchTST의 분포출력 버전
+(`DistributionalLinear`/`DistributionalPatchTST`)이 있었다 — 전부 §2·§4의 해당 모델 변형이라
+별도 행을 만들지 않는다.
