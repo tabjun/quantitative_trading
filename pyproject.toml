@@ -52,3 +52,17 @@ dependencies = [
     "chronos-forecasting>=2.3.2",
 ]
 
+# torch 버전 pin(위 dependencies의 torch==2.10.0)만으로는 CUDA 빌드까지 고정되지 않는다.
+# PyPI 공식 배포는 한 버전에 CUDA 빌드를 하나만 올리므로(현재 cu128), uv가 lock/sync할 때마다
+# 그쪽으로 재해결되어 실제 서버에 깔린 cu126과 조용히 어긋난다 — 2026-10-04에 이 괴리로
+# neuralforecast 설치 중 torch가 실제로 2.12.0+cu130까지 밀렸던 사고가 있었다(uv.lock에는
+# 이미 전부터 2.12.0이 기록돼 있었는데 실제 .venv만 2.10.0+cu126으로 따로 떨어져 있었음).
+# PyTorch 전용 인덱스를 torch에만 명시적으로 고정해 이 괴리를 구조적으로 막는다.
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+
