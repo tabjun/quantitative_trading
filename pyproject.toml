@@ -20,7 +20,7 @@ dependencies = [
     "scipy",
     "duckdb",
     "pandas",
-    "torch",
+    "torch==2.10.0",
     "optuna",
     "statsmodels",
     "pyupbit",
@@ -48,5 +48,7 @@ dependencies = [
     "lightgbm>=4.7.0",
     "arch>=8.0.0",
     "python-pptx>=1.0.2",
+    "neuralforecast>=3.2.2",
+    "chronos-forecasting>=2.3.2",
 ]
 
