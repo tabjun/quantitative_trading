@@ -1,0 +1,4 @@
+블록,GARCH-t,TAR-GARCH,MS-GARCH,GRU,LSTM,XGBoost,LightGBM,GARCH+LightGBM,Nystroem+Ridge,HistGBM,KernelRidge-RBF,SVR-RBF,Linear,Ridge,HAR-RV,ITransformerLike,naive
+20,5,3,1,2,3,1,1,1,1,2,1,1,1,1,0,0,1
+40,5,3,1,2,3,1,1,1,1,2,1,1,1,1,0,0,1
+80,5,3,2,2,3,1,1,1,1,2,1,1,1,1,0,0,1

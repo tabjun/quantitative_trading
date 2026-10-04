@@ -1,0 +1,6 @@
+구간,평균 QLIKE 1위
+Q1,GRU
+Q2,GRU
+Q3,KernelRidge-RBF
+Q4,GARCH-t
+Q5,TAR-GARCH
