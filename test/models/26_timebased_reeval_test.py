@@ -73,6 +73,11 @@ for _p in (ROOT, ROOT / "test" / "scripts"):
 
 TAG = "26_timebased_reeval_20261005"
 STEM = "26_timebased_reeval"
+# 시드 반복 실행: RUN26_SEED>0이면 무작위성이 있는 모델만 다시 학습하고 산출물 접두사에 시드를 붙인다.
+# 무작위성이 없는 모델은 결정성 확인용으로 GARCH-t·HAR-RV·Linear·Ridge만 함께 돌린다.
+SEED = int(os.environ.get("RUN26_SEED", "0"))
+RUN_STEM = STEM if SEED == 0 else f"{STEM}_seed{SEED}"
+SEED_SKIP = ("MS-GARCH", "TAR-GARCH", "KernelRidge-RBF", "SVR-RBF")
 IMG = ROOT / "test" / "images" / TAG
 RES = ROOT / "test" / "results" / TAG
 
@@ -523,6 +528,7 @@ def run_cpu_job(ticker: str, quick: bool) -> dict:
     fails, timings, meta, results = [], {}, {"종목": ticker}, []
 
     G = ms_info = tar_info = None
+    seed_mode = SEED != 0
     t = time.time()
     try:
         G = garch_t_fit(dc, split_c)
@@ -532,6 +538,8 @@ def run_cpu_job(ticker: str, quick: bool) -> dict:
     timings["GARCH-t"] = time.time() - t
     t = time.time()
     try:
+        if seed_mode:
+            raise LookupError("seed-skip")
         _, _, ms_info = rg.fit_ms_garch(dc * 100, split_c, n_restarts=MS_RESTARTS if not quick else 1,
                                         maxiter=MS_MAXITER if not quick else 120,
                                         max_fit_n=MS_FIT_N if not quick else 8000)
@@ -540,10 +548,13 @@ def run_cpu_job(ticker: str, quick: bool) -> dict:
         meta.update(ms_p11=ms_info["p11"], ms_p22=ms_info["p22"])
     except Exception as e:
         ms_info = None
-        fails.append(("MS-GARCH", "*", type(e).__name__, str(e)[:160]))
+        if str(e) != "seed-skip":
+            fails.append(("MS-GARCH", "*", type(e).__name__, str(e)[:160]))
     timings["MS-GARCH"] = time.time() - t
     t = time.time()
     try:
+        if seed_mode:
+            raise LookupError("seed-skip")
         sw = tar_switch(dc)
         taus = np.quantile(sw[TAR_SWITCH_BARS:split_c], list(TAR_TAU_Q))
         _, tau, _, tar_info = rg.fit_tar_garch(dc * 100, sw, split_c, taus,
@@ -554,7 +565,8 @@ def run_cpu_job(ticker: str, quick: bool) -> dict:
         meta["tar_tau"] = float(tau)
     except Exception as e:
         tar_info = None
-        fails.append(("TAR-GARCH", "*", type(e).__name__, str(e)[:160]))
+        if str(e) != "seed-skip":
+            fails.append(("TAR-GARCH", "*", type(e).__name__, str(e)[:160]))
     timings["TAR-GARCH"] = time.time() - t
 
     for H in HORIZONS_H:
@@ -595,6 +607,8 @@ def run_cpu_job(ticker: str, quick: bool) -> dict:
             적합한 모델에서 낸다(GARCH 계열이 학습 구간 전체를 쓰는 것과 맞춘다).
             """
             t_ = time.time()
+            if seed_mode and name in SEED_SKIP:
+                return
             try:
                 pv, pt = fit_fn()
                 c = S.calib(S.to_raw(pv, va))
@@ -687,14 +701,14 @@ def run_cpu_job(ticker: str, quick: bool) -> dict:
             nc = NYSTROEM_COMPONENTS if not quick else 256
             best = None
             for a in RIDGE_ALPHAS:
-                mdl = make_pipeline(Nystroem(kernel="rbf", n_components=nc, random_state=0),
+                mdl = make_pipeline(Nystroem(kernel="rbf", n_components=nc, random_state=SEED),
                                     Ridge(alpha=a)).fit(Zi, yi_s)
                 pv = mdl.predict(Zv) * ysi + ymi
                 q = S.select_score(S.to_raw(pv, va))
                 if best is None or q < best[0]:
                     best = (q, a, pv)
             meta[f"nys_alpha_h{H}"] = best[1]
-            mdl2 = make_pipeline(Nystroem(kernel="rbf", n_components=nc, random_state=0),
+            mdl2 = make_pipeline(Nystroem(kernel="rbf", n_components=nc, random_state=SEED),
                                  Ridge(alpha=best[1])).fit(Zf, yf_s)
             return best[2], mdl2.predict(Zt) * ysf + ymf
         fit_log_model("Nystroem+Ridge", fit_nys)
@@ -705,7 +719,7 @@ def run_cpu_job(ticker: str, quick: bool) -> dict:
         def lgb_params(n_est):
             return dict(n_estimators=n_est, learning_rate=TREE_LR, max_depth=8, num_leaves=127,
                         subsample=0.8, subsample_freq=1, colsample_bytree=0.8, min_child_samples=40,
-                        n_jobs=TREE_THREADS, verbosity=-1, random_state=0)
+                        n_jobs=TREE_THREADS, verbosity=-1, random_state=SEED)
 
         def lgb_on(Xt_, key):
             """Xt_: 예측 시점 전체 행의 트리 특성(내부용 열, 재적합용 열을 같은 행에 맞춘 배열 쌍)."""
@@ -723,7 +737,7 @@ def run_cpu_job(ticker: str, quick: bool) -> dict:
         def fit_xgb():
             kw = dict(learning_rate=TREE_LR, max_depth=8, subsample=0.8, colsample_bytree=0.8,
                       min_child_weight=10, tree_method="hist", device="cpu", n_jobs=TREE_THREADS,
-                      verbosity=0, random_state=0)
+                      verbosity=0, random_state=SEED)
             Tx = X["tree"]
             mdl = xgb.XGBRegressor(n_estimators=rounds, early_stopping_rounds=esr, **kw)
             mdl.fit(Tx[tr_in], y[tr_in], eval_set=[(Tx[tr_val], y[tr_val])], verbose=False)
@@ -739,7 +753,7 @@ def run_cpu_job(ticker: str, quick: bool) -> dict:
             best_loss, best_it, pat, best_pv = np.inf, 0, 0, None
             step = max(50, rounds // 20)
             kw = dict(learning_rate=TREE_LR, max_depth=8, max_leaf_nodes=127, min_samples_leaf=40,
-                      early_stopping=False, random_state=0)
+                      early_stopping=False, random_state=SEED)
             mdl = HistGradientBoostingRegressor(max_iter=step, warm_start=True, **kw)
             for it in range(step, rounds + 1, step):
                 mdl.set_params(max_iter=it)
@@ -884,7 +898,7 @@ def run_gpu_job(ticker: str, H: int, quick: bool, dev: str) -> dict:
             for lr in grid_lr:
                 pv, pt, vl, info = train_dl_once(
                     nm, Xs[tr_in], (y[tr_in] - ymu) / ysd, Xs[tr_val], (y[tr_val] - ymu) / ysd, Xs[va], Xs[te],
-                    dev, DL_MAX_EPOCHS if not quick else 3, DL_PATIENCE if not quick else 2, DL_BATCH, lr)
+                    dev, DL_MAX_EPOCHS if not quick else 3, DL_PATIENCE if not quick else 2, DL_BATCH, lr, seed=SEED)
                 if best is None or vl < best[2]:
                     best = (pv, pt, vl, info)
             pv, _, _, info = best
@@ -893,7 +907,7 @@ def run_gpu_job(ticker: str, H: int, quick: bool, dev: str) -> dict:
             ep = max(1, info["best_epoch"])
             _, pt, _, _ = train_dl_once(nm, Xs[tf], (y[tf] - ymu) / ysd, None, None, None, Xs[te],
                                         dev, ep, ep + 1, DL_BATCH, info["lr"],
-                                        tmax=DL_MAX_EPOCHS if not quick else 3)
+                                        tmax=DL_MAX_EPOCHS if not quick else 3, seed=SEED)
             S.score(nm, S.to_raw(pt * ysd + ymu, te), c=c,
                     note=f"lr {info['lr']:g} · {info['best_epoch']}/{info['epochs_run']}에폭 · 전체 재적합")
             meta.update({f"{nm}_lr": info["lr"], f"{nm}_epoch": info["best_epoch"], f"{nm}_calib": c})
@@ -1576,11 +1590,16 @@ def main(argv=None) -> None:
                     help="저장된 결과에 GARCH 계열 보정(내부학습 재적합)만 추가하고 보고서를 다시 쓴다")
     ap.add_argument("--elapsed-min", type=float, default=0.0, help="본 실행 소요(분), 보고서 기록용")
     ap.add_argument("--report-only", action="store_true", help="저장된 결과로 보고서만 다시 쓴다")
+    ap.add_argument("--seed", type=int, default=0, help="0보다 크면 시드 반복 실행(무작위성 있는 모델만, 보고서 없음)")
     a = ap.parse_args(argv)
 
     selftest()
     if a.selftest:
         return
+    global SEED, RUN_STEM
+    if a.seed:
+        os.environ["RUN26_SEED"] = str(a.seed)
+        SEED, RUN_STEM = a.seed, f"{STEM}_seed{a.seed}"
     if a.garch_calib:
         run_garch_calib(a.quick, a.workers or 5, a.elapsed_min)
         return
@@ -1649,9 +1668,8 @@ def main(argv=None) -> None:
                 S.update(act=R["act"], nai=R["nai"], T=R["T"], nai_tr=R["nai_tr"])
                 heda.append({"종목": tk, "H": R["H"], **R["eda"]})
             print(f"  [CPU {k}/{len(tickers)}] {tk} ({res['elapsed']:.0f}s)", flush=True)
-            pd.DataFrame(rows).to_csv(RES / f"{STEM}_model_comparison_partial.csv", index=False)
+            pd.DataFrame(rows).to_csv(RES / f"{RUN_STEM}_model_comparison_partial.csv", index=False)
 
-    rd = pd.DataFrame(rows)
     orphan = [k for k, v in store.items() if "act" not in v]
     if orphan:
         print(f"[경고] CPU 작업이 없어 예측 저장에서 빠진 (종목, H): {orphan}", flush=True)
@@ -1660,10 +1678,23 @@ def main(argv=None) -> None:
     if len(rows):
         keep = set(store)
         rows = [r_ for r_ in rows if (r_["종목"], r_["H"]) in keep]
+    rd = pd.DataFrame(rows)
     for (tk, H), S in store.items():
         for mname, p in S["preds"].items():
             if len(p) != len(S["act"]):
                 raise AssertionError(f"{tk} H={H} {mname} 예측 길이 불일치")
+    if SEED:
+        rd.to_csv(RES / f"{RUN_STEM}_model_comparison.csv", index=False)
+        pd.DataFrame(fails, columns=["종목", "모델", "H", "예외", "메시지"]).to_csv(
+            RES / f"{RUN_STEM}_fit_failures.csv", index=False)
+        pd.DataFrame(metas).to_csv(RES / f"{RUN_STEM}_chosen_hyperparams.csv", index=False)
+        arrs = {f"{tk}|{H}|{mname}": p for (tk, H), S_ in store.items() for mname, p in S_["preds"].items()}
+        np.savez_compressed(RES / f"{RUN_STEM}_test_predictions.npz", **arrs)
+        pp = RES / f"{RUN_STEM}_model_comparison_partial.csv"
+        if pp.exists():
+            pp.unlink()
+        print(f"[시드 {SEED} 완료] {(time.time() - t_start) / 60:.1f}분 · {len(rd)}행 · 실패 {len(fails)}", flush=True)
+        return
     rd.to_csv(RES / f"{STEM}_model_comparison.csv", index=False)
     fails_df = pd.DataFrame(fails, columns=["종목", "모델", "H", "예외", "메시지"])
     fails_df.to_csv(RES / f"{STEM}_fit_failures.csv", index=False)
