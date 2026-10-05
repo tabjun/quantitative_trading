@@ -13,6 +13,9 @@
 # 3. **유의성 검정**: 26번은 전 종목이 같은 정시 시각을 공유하므로, 시각마다 종목 평균 손실차를 만들면 종목 간
 #    상관이 그 시계열에 그대로 담긴다. 이 시계열에 DM 검정(Newey-West HAC)을 하고 다중비교를 Holm으로 보정하며,
 #    종목 평균 손실로 MCS를 돌린다. 사전 구간별로는 구간 최선 모델 대비 열세가 유의한지를 같은 방식으로 본다.
+#
+# 입력 회차는 환경변수 `RUN26B_SRC`로 고른다: `26`(기본, 26번) 또는 `26c`(최신 3년 창·두 부분 모형). 26c이면
+# 두 부분 모형과 단일 처리의 차이를 같은 DM 검정으로 보는 절이 더해진다.
 
 # %%
 from __future__ import annotations
@@ -48,16 +51,19 @@ for _p in (ROOT, ROOT / "test" / "scripts"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-TAG = "26b_robust_signif_20261005"
-STEM = "26b_robust_signif"
+SRC_KEY = os.environ.get("RUN26B_SRC", "26")
+_SRCS = {"26": ("26_timebased_reeval_20261005", "26_timebased_reeval", "26_timebased_reeval_test.py", "26번", ""),
+         "26c": ("26c_recent_twopart_20261005", "26c_recent_twopart", "26c_recent_twopart_test.py", "26c번", "_26c")}
+_src_tag, SRC_STEM, _src_py, SRC_LABEL, _sfx = _SRCS[SRC_KEY]
+TAG = f"26b_robust_signif{_sfx}_20261005"
+STEM = f"26b_robust_signif{_sfx}"
 IMG = ROOT / "test" / "images" / TAG
 RES = ROOT / "test" / "results" / TAG
-SRC = ROOT / "test" / "results" / "26_timebased_reeval_20261005"
-SRC_STEM = "26_timebased_reeval"
+SRC = ROOT / "test" / "results" / _src_tag
 
 
 def _load_m26():
-    spec = importlib.util.spec_from_file_location("m26_for26b", ROOT / "test" / "models" / "26_timebased_reeval_test.py")
+    spec = importlib.util.spec_from_file_location("m26_for26b", ROOT / "test" / "models" / _src_py)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -116,7 +122,7 @@ def load_main() -> tuple[pd.DataFrame, dict]:
     rd = pd.read_csv(SRC / f"{SRC_STEM}_model_comparison.csv")
     z = np.load(SRC / f"{SRC_STEM}_test_predictions.npz")
     store: dict = {}
-    names = {"실제": "act", "naive_입력": "nai", "시각": "T", "학습naive": "nai_tr"}
+    names = {"실제": "act", "naive_입력": "nai", "시각": "T", "학습naive": "nai_tr", "정지확률": "pi"}
     for k in z.files:
         tk, H, nm = k.split("|")
         S = store.setdefault((tk, int(H)), {"preds": {}})
@@ -170,7 +176,7 @@ def seed_section(rd: pd.DataFrame, store: dict) -> pd.DataFrame:
         if r is not None:
             runs[s] = r
     got = sorted(runs)
-    emit(f"읽은 시드: {got}. 시드 0은 26번 본 실행이다.")
+    emit(f"읽은 시드: {got}. 시드 0은 {SRC_LABEL} 본 실행이다.")
     emit()
     # 결정성 확인
     rows = []
@@ -566,12 +572,66 @@ def linearity_section() -> pd.DataFrame:
              f"{int((g['RESET_p'] < 0.05).sum())}/{len(g)} | {int((g['BDS_p'] < 0.05).sum())}/{len(g)} | "
              f"{tree:.3f} |")
     emit()
-    emit("읽는 법: 격차는 그 구간 최선 모델 대비 QLIKE 차(26번 보정후, 종목 평균)다. 선형 R²가 예측 구간과 함께 커지면 "
+    emit(f"읽는 법: 격차는 그 구간 최선 모델 대비 QLIKE 차({SRC_LABEL} 보정후, 종목 평균)다. 선형 R²가 예측 구간과 함께 커지면 "
          "긴 구간에서 선형 근사로 충분해진다는 뜻이다(변동성을 길게 합산할수록 잡음이 평균으로 줄어든다). 비선형 항 증분이 "
          "작아도 짧은 구간에서 트리가 선형보다 크게 앞서면, 그 비선형은 RESET이 보는 거듭제곱 형태가 아니라 문턱·상호작용 "
          "형태라는 뜻이다. BDS는 잔차의 독립성 위반 전반(이분산 포함)을 잡으므로 선형성만의 검정이 아니다.")
     emit()
     return d
+
+
+def twopart_section(store: dict, models: list[str]) -> pd.DataFrame:
+    """26c 전용: 로그 타깃 모델마다 두 부분 모형 − 단일 처리 손실차의 DM 검정(시각별 종목 평균, HAC, Holm)."""
+    p1 = SRC / f"{SRC_STEM}_onepart_predictions.npz"
+    if not p1.exists():
+        return pd.DataFrame()
+    z = np.load(p1)
+    one: dict = {}
+    for k in z.files:
+        tk, H, nm = k.split("|")
+        one.setdefault((tk, int(H)), {})[nm] = z[k]
+    emit("## 6. 두 부분 모형 대 단일 처리(같은 모델, 마지막 결합만 다름)")
+    emit()
+    emit("시각마다 종목 평균 (두 부분 − 단일) QLIKE 차를 만들고 HAC 검정을 한다(음수면 두 부분 모형이 낫다). Holm 보정은 "
+         "구간×모델 전체에 한 번 적용한다. 정지가 거의 없는 4·12시간은 두 처리가 같아 검정에서 뺀다.")
+    emit()
+    logm = [m for m in models if m in M26.LOG_TARGET_MODELS]
+    rows = []
+    for H in M26.HORIZONS_H:
+        L2 = loss_frame(store, H, logm)
+        L1 = loss_frame(store, H, logm, preds_override=one)
+        for nm in logm:
+            if nm not in L2 or nm not in L1:
+                continue
+            d = (L2[nm] - L1[nm]).mean(axis=1)
+            if np.nanmax(np.abs(d.to_numpy())) < 1e-12:
+                continue
+            mu, se, pv = hac_mean_test(d.to_numpy())
+            rows.append({"H": H, "모델": nm, "평균차": mu, "표준오차": se, "p": pv, "시각수": int(d.notna().sum())})
+    t = pd.DataFrame(rows)
+    if not len(t):
+        emit("검정할 칸이 없다.")
+        emit()
+        return t
+    t["p_Holm"] = holm(t["p"].to_numpy())
+    t.to_csv(RES / f"{STEM}_twopart_dm.csv", index=False)
+    hs = sorted(t["H"].unique())
+    emit("셀은 `평균차 (Holm 보정 p)`이다. 굵은 글씨는 보정 p < 0.05다.")
+    emit()
+    emit("| 모델 | " + " | ".join(M26.hlabel(int(h)) for h in hs) + " |")
+    emit("| :--- | " + " | ".join([":---"] * len(hs)) + " |")
+    for nm in logm:
+        cells = []
+        for h in hs:
+            g = t[(t["H"] == h) & (t["모델"] == nm)]
+            if not len(g):
+                cells.append("-"); continue
+            x = g.iloc[0]
+            c = f"{x['평균차']:+.4f} ({x['p_Holm']:.3g})"
+            cells.append(f"**{c}**" if x["p_Holm"] < ALPHA else c)
+        emit(f"| {nm} | " + " | ".join(cells) + " |")
+    emit()
+    return t
 
 
 # %% [markdown]
@@ -590,9 +650,9 @@ def main(argv=None) -> None:
             S["preds"].pop(nm, None)
     models = [m for m in M26.ALL_MODELS if m in set(rd["모델"])]
     tickers = sorted(rd["종목"].unique())
-    emit("# 26b번: 26번 결과의 견고성·구분 불가 진단·유의성 검정")
+    emit(f"# 26b번: {SRC_LABEL} 결과의 견고성·구분 불가 진단·유의성 검정")
     emit()
-    emit(f"입력: `{SRC.relative_to(ROOT)}`(26번, {len(tickers)}종목 × {len(M26.HORIZONS_H)}구간 × {len(models)}모델, "
+    emit(f"입력: `{SRC.relative_to(ROOT)}`({SRC_LABEL}, {len(tickers)}종목 × {len(M26.HORIZONS_H)}구간 × {len(models)}모델, "
          f"{len(rd)}행). 재적합 없이 저장된 평가 예측만 쓴다. 데이터 정의와 결측 처리는 "
          "`test/research_materials/data_definition.md`, 모델 정의는 `test/research_materials/model_catalog.md`를 본다.")
     emit()
@@ -605,6 +665,8 @@ def main(argv=None) -> None:
         seed_mcs_frequency(store, models)
     agreement_section(mcs, rg)
     linearity_section()
+    if SRC_KEY == "26c":
+        twopart_section(store, models)
     fig = plot_tie_map(mcs, rg, models)
     emit(f"![통계적 동률 지도]({os.path.relpath(fig, RES)})")
     emit()

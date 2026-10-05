@@ -33,6 +33,24 @@ BARS_PER_DAY = 96
 MIN_ROWS_FOR_TOP = 90_000  # 약 2.5년 이상 이력(신규 상장·생존편의 배제)
 
 
+_DEFAULT_DB = DB_PATH
+_WINDOW: tuple | None = None   # (시작, 끝) — 라벨 시작 이상, 끝 미만
+
+
+def use_source(db_path: Path | None = None, start=None, end=None) -> None:
+    """표준 헤더가 읽을 DB와 기간을 바꾼다(연장 DB·기간 창을 쓰는 회차용). 인자 없이 부르면 기본값으로 되돌린다.
+
+    종목 선정(`study_universe`)도 같은 DB를 읽으므로, 선정은 이 함수를 부르기 전에 끝내야 한다.
+    """
+    global DB_PATH, _WINDOW
+    DB_PATH = Path(db_path) if db_path is not None else _DEFAULT_DB
+    _WINDOW = (pd.Timestamp(start).to_pydatetime(), pd.Timestamp(end).to_pydatetime()) if start is not None else None
+
+
+def _win() -> tuple[str, list]:
+    return (" and timestamp>=? and timestamp<?", list(_WINDOW)) if _WINDOW else ("", [])
+
+
 def _con():
     if not DB_PATH.exists():
         raise SystemExit(f"DB가 없다: {DB_PATH}")
@@ -111,8 +129,9 @@ def ticker_profile(tickers: list[str]) -> pd.DataFrame:
     con = _con()
     rows = []
     for t in tickers:
+        w, wp = _win()
         d = con.execute(
-            f"select timestamp, close from {SOURCE_TABLE} where ticker=? order by timestamp", [t]
+            f"select timestamp, close from {SOURCE_TABLE} where ticker=?{w} order by timestamp", [t, *wp]
         ).df()
         if len(d) < 100:
             continue
@@ -135,9 +154,10 @@ def ticker_profile(tickers: list[str]) -> pd.DataFrame:
 def data_quality(ticker: str) -> dict:
     """연속성·결측 점검(15분 간격 위반 건수)."""
     con = _con()
+    w, wp = _win()
     d = con.execute(
         f"select timestamp, open, high, low, close, volume from {SOURCE_TABLE} "
-        f"where ticker=? order by timestamp", [ticker]
+        f"where ticker=?{w} order by timestamp", [ticker, *wp]
     ).df()
     con.close()
     dt = d["timestamp"].diff().dt.total_seconds().div(60).dropna()
@@ -154,8 +174,9 @@ def data_quality(ticker: str) -> dict:
 def split_ranges(ticker: str, train_frac: float) -> dict:
     """시간순 분할의 실제 날짜 구간."""
     con = _con()
+    w, wp = _win()
     d = con.execute(
-        f"select timestamp from {SOURCE_TABLE} where ticker=? order by timestamp", [ticker]
+        f"select timestamp from {SOURCE_TABLE} where ticker=?{w} order by timestamp", [ticker, *wp]
     ).df()
     con.close()
     n = len(d)
@@ -245,7 +266,9 @@ def render_standard_header(
     # 1. 데이터 출처·형식
     L.append("### 1. 데이터 출처·형식")
     L.append("")
-    L.append(f"- **DB / 테이블**: `data/upbit_data.db` (DuckDB) / `{SOURCE_TABLE}`")
+    _rel = DB_PATH.relative_to(ROOT) if DB_PATH.is_relative_to(ROOT) else DB_PATH
+    _wtxt = f" · 기간 창 {_WINDOW[0]} ~ {_WINDOW[1]}(끝 미포함)" if _WINDOW else ""
+    L.append(f"- **DB / 테이블**: `{_rel}` (DuckDB) / `{SOURCE_TABLE}`{_wtxt}")
     L.append(f"- **봉 간격**: 15분봉 (하루 {BARS_PER_DAY}봉)")
     L.append(f"- **원본 컬럼**: timestamp, open, high, low, close, volume, value")
     L.append(f"- **분석 종목 {len(tickers)}개** — 이력 {MIN_ROWS_FOR_TOP:,}봉(약 2.5년) 이상 종목 중 선정:")
