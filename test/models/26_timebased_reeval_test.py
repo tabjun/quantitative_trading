@@ -1115,34 +1115,43 @@ def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h
     emit("종목마다 QLIKE 순위를 매겨 평균했다(작을수록 좋음). ΔQLIKE는 naive 대비 차이의 종목 평균으로, "
          "스케일에 불변이라 종목을 가로질러 평균할 수 있다(음수일수록 naive보다 좋음).")
     emit()
+    emit("**주 결과는 전원 보정이다.** 모든 모델(naive 제외)이 같은 절차로 분산 배율 c를 받는다. 로그 타깃 모델은 "
+         "내부학습 모델의 내부검증 정시 예측으로, GARCH 3종은 내부학습 구간까지로 다시 적합한 모형의 같은 시점 "
+         "예측으로 c를 추정한다. 이 보정은 로그 역변환 편향을 고치는 동시에 최근 수준에 맞춘 조정 효과도 내므로, "
+         "한 계열에만 적용하면 순위가 통째로 바뀐다(초기 실행에서 확인). 그래서 **전원 미보정 순위**를 민감도 "
+         "분석으로 함께 싣는다. 두 순위가 어긋나는 모델은 수준 맞춤의 영향을 크게 받는 모델이다.")
+    emit()
     rd = rd.copy()
     rd["rank"] = rd.groupby(["종목", "H"])["QLIKE"].rank()
     nq = rd[rd["모델"] == "naive"][["종목", "H", "QLIKE"]].rename(columns={"QLIKE": "QLIKE_naive"})
     rd = rd.merge(nq, on=["종목", "H"], how="left")
     rd["dQLIKE"] = rd["QLIKE"] - rd["QLIKE_naive"]
-    tab = rd.groupby(["H", "모델"]).agg(종목수=("종목", "nunique"), 순위=("rank", "mean"), dQ=("dQLIKE", "mean"),
+    rd["rank_raw"] = rd.groupby(["종목", "H"])["QLIKE_보정전"].rank()
+    tab = rd.groupby(["H", "모델"]).agg(종목수=("종목", "nunique"), 순위=("rank", "mean"), 순위_미보정=("rank_raw", "mean"),
+                                       dQ=("dQLIKE", "mean"),
                                        MASE=("MASE", "median"), 보정=("보정계수", "median"),
                                        보정전=("QLIKE_보정전", "mean"), 보정후=("QLIKE", "mean")).reset_index()
     for H in HORIZONS_H:
         t = tab[tab["H"] == H].sort_values("순위")
         emit(f"### {H}시간")
         emit()
-        emit("| 순위 | 모델 | 처리 방식 | 종목 수 | 평균 순위 | ΔQLIKE(naive 대비) | MASE 중앙 | 보정계수 중앙 |")
-        emit("| ---: | :--- | :--- | ---: | ---: | ---: | ---: | ---: |")
+        emit("| 순위 | 모델 | 처리 방식 | 종목 수 | 평균 순위 | 평균 순위(전원 미보정) | ΔQLIKE(naive 대비) | MASE 중앙 | 보정계수 중앙 |")
+        emit("| ---: | :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |")
         for i, (_, x) in enumerate(t.iterrows(), 1):
             emit(f"| {i} | {x['모델']} | {PROCESS[x['모델']]} | {int(x['종목수'])} | {x['순위']:.1f} | "
-                 f"{x['dQ']:+.4f} | {x['MASE']:.3f} | {x['보정']:.2f} |")
+                 f"{x['순위_미보정']:.1f} | {x['dQ']:+.4f} | {x['MASE']:.3f} | {x['보정']:.2f} |")
         emit()
     tab.to_csv(RES / f"{STEM}_overall_ranks.csv", index=False)
 
     emit("### 역변환 보정의 효과")
     emit()
     emit("로그 타깃 모델은 exp 역변환이 조건부 평균이 아닌 기하평균을 내서 체계적으로 낮게 예측한다. "
-         "보정계수(분산 배율)가 1보다 크면 과소예측이었다는 뜻이다. 보정 전 QLIKE와 함께 보인다.")
+         "보정계수(분산 배율)가 1보다 크면 과소예측이었다는 뜻이다. GARCH 계열의 보정계수는 역변환 편향이 아니라 "
+         "수준 맞춤만 반영한다. 보정 전 QLIKE와 함께 보인다.")
     emit()
     emit("| H | 모델 | 보정계수 중앙 | QLIKE 보정 전(종목 평균) | 보정 후 |")
     emit("| ---: | :--- | ---: | ---: | ---: |")
-    for _, x in tab[tab["모델"].isin(LOG_TARGET_MODELS)].iterrows():
+    for _, x in tab[tab["모델"] != "naive"].iterrows():
         emit(f"| {x['H']} | {x['모델']} | {x['보정']:.2f} | {x['보정전']:.4f} | {x['보정후']:.4f} |")
     emit()
 
@@ -1163,11 +1172,12 @@ def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h
         emit("| 모델 | " + " | ".join(pv.columns) + " |")
         emit("| :--- | " + " | ".join(["---:"] * len(pv.columns)) + " |")
         emit("| *구간 실현RV(종목 중앙값 대비)* | " + " | ".join(f"*{sz.get(c, np.nan):.2f}배*" for c in pv.columns) + " |")
+        colbest = pv.idxmin()
         for mname, x in pv.iterrows():
-            best = x.idxmin()
-            emit(f"| {mname} | " + " | ".join((f"**{v:.1f}**" if c == best else f"{v:.1f}") for c, v in x.items()) + " |")
+            emit(f"| {mname} | " + " | ".join((f"**{v:.1f}**" if colbest[c] == mname else f"{v:.1f}")
+                                             for c, v in x.items()) + " |")
         emit()
-        emit("구간별 1위: " + ", ".join(f"{c}={pv[c].idxmin()}" for c in pv.columns))
+        emit("굵은 글씨는 그 구간(열)의 1위다. 구간별 1위: " + ", ".join(f"{c}={pv[c].idxmin()}" for c in pv.columns))
         emit()
 
     emit("## 5. 달력 분기별 순위(평가 구간)")
@@ -1186,7 +1196,21 @@ def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h
             emit(f"| {mname} | " + " | ".join(f"{v:.1f}" for v in x.values) + " |")
         emit()
 
-    emit("## 6. 남은 일")
+    emit("## 6. 모형 불안정 사례")
+    emit()
+    unstable = rd[rd["모델"].isin(VAR_MODELS) & ((rd["보정계수"] < 0.3) | (rd["보정계수"] > 3.0))]
+    if len(unstable):
+        emit("GARCH 계열의 보정 상수는 내부학습 구간까지로 다시 적합한 모형에서 추정한다. 이 상수가 극단적이면 "
+             "추정 구간에 따라 모수가 크게 달라진다는 뜻이다(평가 예측은 학습 구간 전체 모형에서 나온다).")
+        emit()
+        emit("| 종목 | H | 모델 | 보정계수 | QLIKE 보정 전 | 보정 후 |")
+        emit("| :--- | ---: | :--- | ---: | ---: | ---: |")
+        for _, x in unstable.iterrows():
+            emit(f"| {x['종목']} | {x['H']} | {x['모델']} | {x['보정계수']:.3f} | {x['QLIKE_보정전']:.3f} | {x['QLIKE']:.3f} |")
+    else:
+        emit("보정 상수가 극단적인(0.3 미만 또는 3 초과) GARCH 계열 사례는 없다.")
+    emit()
+    emit("## 7. 남은 일")
     emit()
     emit("- 유의성 검정(DM·MCS)을 이 예측값으로 다시 한다: 종목×구간×모델쌍 다중비교 보정, 종목 간 상관 반영, "
          "구간 효과는 조건부 예측 능력 검정.")
@@ -1194,6 +1218,137 @@ def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h
          "변동성이 부풀었을 수 있다. 종목군은 비교를 위해 그대로 두었다.")
     emit("- TAR-GARCH 다단계 예측의 국면 결정은 대입 근사다.")
     (RES / f"{STEM}_report.md").write_text("\n".join(_LINES), encoding="utf-8")
+
+
+
+# %% [markdown]
+# ## GARCH 계열에도 같은 보정을 적용한다
+#
+# 로그 타깃 모델의 보정 상수 c는 내부학습 구간으로 적합한 모델의 내부검증 정시 예측에서 추정한다.
+# 이 절차는 역변환 편향뿐 아니라 최근 수준에 맞춘 조정 효과도 내므로, GARCH 계열에만 빠지면
+# 비교가 불공정하다. GARCH 3종도 **내부학습 구간까지로 다시 적합**해 같은 시점에서 c를 추정하고,
+# 평가 예측(학습 구간 전체 적합)에 곱한다. 순서는 다른 모델과 같다(필터 → 배율).
+
+# %%
+def garch_calib_job(ticker: str, quick: bool) -> dict:
+    from engine import regime_garch as rg
+    t0 = time.time()
+    D = build_data(ticker)
+    comp, dc, _ = _compact(D)
+    HDs = {H: horizon_data(D, H) for H in HORIZONS_H}
+    fits: dict = {}
+    fails: list = []
+    for inner in sorted({HD["inner"] for HD in HDs.values()}):
+        ic = int(np.searchsorted(D["grid"][comp], inner))
+        f = {}
+        try:
+            f["GARCH-t"] = garch_t_fit(dc, ic)
+        except Exception as e:
+            fails.append(("GARCH-t", "calib", type(e).__name__, str(e)[:160]))
+        try:
+            _, _, info = rg.fit_ms_garch(dc * 100, ic, n_restarts=MS_RESTARTS if not quick else 1,
+                                         maxiter=MS_MAXITER if not quick else 120,
+                                         max_fit_n=MS_FIT_N if not quick else 8000)
+            if info is None:
+                raise RuntimeError("최종 필터가 발산(info=None)")
+            f["MS-GARCH"] = info
+        except Exception as e:
+            fails.append(("MS-GARCH", "calib", type(e).__name__, str(e)[:160]))
+        try:
+            sw = tar_switch(dc)
+            taus = np.quantile(sw[TAR_SWITCH_BARS:ic], list(TAR_TAU_Q))
+            _, _, _, info = rg.fit_tar_garch(dc * 100, sw, ic, taus,
+                                             n_restarts=TAR_RESTARTS if not quick else 1,
+                                             maxiter=TAR_MAXITER if not quick else 100)
+            if info is None:
+                raise RuntimeError("최종 필터가 발산(info=None)")
+            f["TAR-GARCH"] = info
+        except Exception as e:
+            fails.append(("TAR-GARCH", "calib", type(e).__name__, str(e)[:160]))
+        fits[inner] = f
+    calib = {}
+    for H, HD in HDs.items():
+        S = Scorer(ticker, HD)
+        jv = HD["j"][HD["va"]]
+        pos = _origin_pos(comp, jv, HD["m"])
+        for nm, info in fits[HD["inner"]].items():
+            hp = (garch_multistep(info, pos, HD["m"]) if nm == "GARCH-t" else
+                  ms_multistep(info, pos, HD["m"]) if nm == "MS-GARCH" else tar_multistep(info, dc, pos, HD["m"]))
+            raw, _ = var_to_rv(hp, D["cfac"], jv)
+            calib[(H, nm)] = S.calib(raw)
+    return dict(ticker=ticker, calib=calib, fails=fails, elapsed=time.time() - t0)
+
+
+def apply_calib(rd: pd.DataFrame, store: dict, calib: dict) -> pd.DataFrame:
+    """저장된 GARCH 계열 평가 예측(c=1, 필터 적용)에 c를 곱하고 지표를 다시 계산한다."""
+    rd = rd.copy()
+    for (tk, H, nm), c in calib.items():
+        S = store[(tk, H)]
+        p_new = S["preds"][nm].astype(float) * np.sqrt(c)
+        ix = rd.index[(rd["종목"] == tk) & (rd["H"] == H) & (rd["모델"] == nm)]
+        if len(ix) != 1:
+            raise AssertionError(f"{tk} H={H} {nm} 행이 {len(ix)}개")
+        ev = evaluate(S["act"].astype(float), p_new, S["preds"]["naive"].astype(float))
+        for k_, v_ in ev.items():
+            rd.loc[ix, k_] = v_
+        rd.loc[ix, "보정계수"] = c
+        rd.loc[ix, "비고"] = "다단계 예측 · 내부학습 재적합으로 보정"
+        S["preds"][nm] = p_new.astype(np.float32)
+    return rd
+
+
+def load_saved() -> tuple[pd.DataFrame, dict]:
+    rd = pd.read_csv(RES / f"{STEM}_model_comparison.csv")
+    z = np.load(RES / f"{STEM}_test_predictions.npz")
+    store: dict = {}
+    names = {"실제": "act", "naive_입력": "nai", "시각": "T", "학습naive": "nai_tr"}
+    for k in z.files:
+        tk, H, nm = k.split("|")
+        S = store.setdefault((tk, int(H)), {"preds": {}})
+        if nm in names:
+            S[names[nm]] = z[k]
+        else:
+            S["preds"][nm] = z[k]
+    return rd, store
+
+
+def save_preds(store: dict) -> None:
+    arrs = {}
+    for (tk, H), S in store.items():
+        arrs[f"{tk}|{H}|실제"] = S["act"]; arrs[f"{tk}|{H}|naive_입력"] = S["nai"]
+        arrs[f"{tk}|{H}|시각"] = S["T"]; arrs[f"{tk}|{H}|학습naive"] = S["nai_tr"]
+        for mname, p in S["preds"].items():
+            arrs[f"{tk}|{H}|{mname}"] = p
+    np.savez_compressed(RES / f"{STEM}_test_predictions.npz", **arrs)
+
+
+def run_garch_calib(quick: bool, workers: int, elapsed_min: float) -> None:
+    rd, store = load_saved()
+    tickers = sorted(rd["종목"].unique())
+    if "보정계수_GARCH적용" in rd.columns:
+        raise RuntimeError("이미 GARCH 보정이 적용된 결과다. 본 실행부터 다시 돌려라")
+    calib, fails = {}, []
+    t0 = time.time()
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        futs = {pool.submit(garch_calib_job, tk, quick): tk for tk in tickers}
+        for k, fu in enumerate(as_completed(futs), 1):
+            res = fu.result()
+            for (H, nm), c in res["calib"].items():
+                calib[(res["ticker"], H, nm)] = c
+            fails.extend({"종목": res["ticker"], "모델": f[0], "H": f[1], "예외": f[2], "메시지": f[3]}
+                         for f in res["fails"])
+            print(f"  [보정 {k}/{len(tickers)}] {res['ticker']} ({res['elapsed']:.0f}s)", flush=True)
+    rd = apply_calib(rd, store, calib)
+    rd["보정계수_GARCH적용"] = True
+    rd.to_csv(RES / f"{STEM}_model_comparison.csv", index=False)
+    save_preds(store)
+    fdf = pd.read_csv(RES / f"{STEM}_fit_failures.csv")
+    fdf = pd.concat([fdf, pd.DataFrame(fails, columns=fdf.columns)], ignore_index=True)
+    fdf.to_csv(RES / f"{STEM}_fit_failures.csv", index=False)
+    write_report(rd, store, fdf, pd.read_csv(RES / f"{STEM}_data_eda.csv").sort_values("종목"),
+                 pd.read_csv(RES / f"{STEM}_horizon_eda.csv"), tickers, quick,
+                 (elapsed_min + (time.time() - t0) / 60) / 60, [])
+    print(f"[보정 완료] {(time.time() - t0) / 60:.1f}분 · GARCH 보정 {len(calib)}건 · 실패 {len(fails)}", flush=True)
 
 
 # %% [markdown]
@@ -1208,10 +1363,24 @@ def main(argv=None) -> None:
     ap.add_argument("--n-tickers", type=int, default=20)
     ap.add_argument("--workers", type=int, default=0)
     ap.add_argument("--deadline-h", type=float, default=10.0)
+    ap.add_argument("--garch-calib", action="store_true",
+                    help="저장된 결과에 GARCH 계열 보정(내부학습 재적합)만 추가하고 보고서를 다시 쓴다")
+    ap.add_argument("--elapsed-min", type=float, default=0.0, help="본 실행 소요(분), 보고서 기록용")
+    ap.add_argument("--report-only", action="store_true", help="저장된 결과로 보고서만 다시 쓴다")
     a = ap.parse_args(argv)
 
     selftest()
     if a.selftest:
+        return
+    if a.garch_calib:
+        run_garch_calib(a.quick, a.workers or 5, a.elapsed_min)
+        return
+    if a.report_only:
+        rd, store = load_saved()
+        write_report(rd, store, pd.read_csv(RES / f"{STEM}_fit_failures.csv"),
+                     pd.read_csv(RES / f"{STEM}_data_eda.csv").sort_values("종목"),
+                     pd.read_csv(RES / f"{STEM}_horizon_eda.csv"), sorted(rd["종목"].unique()), a.quick,
+                     a.elapsed_min / 60, [])
         return
     IMG.mkdir(parents=True, exist_ok=True)
     RES.mkdir(parents=True, exist_ok=True)
