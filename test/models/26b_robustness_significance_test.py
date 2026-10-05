@@ -66,7 +66,7 @@ def _load_m26():
 M26 = _load_m26()
 SEEDS = (0, 1, 2, 3, 4)
 STOCHASTIC = ("LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM", "Nystroem+Ridge", "GRU", "LSTM")
-DET_CHECK = ("GARCH-t", "HAR-RV", "Linear", "Ridge")
+DET_CHECK = ("GARCH-t", "HAR-RV")
 DET_NOT_RERUN = ("MS-GARCH", "TAR-GARCH", "KernelRidge-RBF", "SVR-RBF")
 ALPHA = 0.05
 TIE = M26.TIE
@@ -480,11 +480,11 @@ def linearity_section() -> pd.DataFrame:
     from statsmodels.stats.diagnostic import linear_reset
     from statsmodels.tsa.stattools import bds
     from report_header import study_universe
-    emit("## 5. 선형 모델의 자리: 가정이 기각된 모델이 긴 구간에서 강한 이유")
+    emit("## 5. 예측 구간별 선형성 재검정(선형 모델 제외 결정의 근거 확인)")
     emit()
-    emit("Linear·Ridge·HAR-RV는 23번에서 RESET·BDS로 선형성이 기각돼 **계수를 해석하지 않는 참고용**으로 남긴 모델이다"
-         "(삭제된 적은 없다, history.md 2026-09-23). 가정 위반은 계수 해석과 추론을 무효로 만들지만, 표본 외 예측 손실의 "
-         "비교는 가정과 무관하다. 다만 결론에 쓰려면 왜 강한지 데이터 근거가 있어야 하므로, 예측 구간마다 선형성을 다시 본다. "
+    emit("2026-09-07 가정 진단에서 선형성 검정(RESET·BDS)이 기각되어 Linear·Ridge는 비선형·커널 계열로 대체하기로 "
+         "결정했다(이 분석의 순위·검정에서 제외). 그 판정은 1시간 타깃 기준이었으므로, 예측 구간마다 같은 판정이 "
+         "유지되는지 다시 본다. 이 결과는 선형 구조를 쓰는 HAR-RV의 해석에도 쓰인다. "
          "표본이 수만 개면 아주 작은 비선형도 기각되므로, 종목마다 학습 표본을 최근 5,000개(긴 구간은 H시간 간격으로 겹침을 "
          "줄여 뽑은 수)로 맞추고 **비선형 항이 늘리는 설명력의 크기**를 함께 본다.")
     emit()
@@ -510,13 +510,13 @@ def linearity_section() -> pd.DataFrame:
     tt = pd.read_csv(SRC / f"{SRC_STEM}_tier_table.csv")
     gap = tt[(tt["기준"] == "보정후") & (tt["구간"] == "전체")].pivot_table(index="H", columns="모델", values="격차")
     emit("| 예측 구간 | 표본(중앙) | 선형 R²(중앙) | 비선형 항 증분 R²(중앙) | RESET 기각 종목 | BDS 기각 종목 | "
-         "Linear 격차 | 트리 최선 격차 |")
+         "HAR-RV 격차 | 트리 최선 격차 |")
     emit("| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
     for H, g in d.groupby("H"):
         tree = min(gap.loc[H, m] for m in ("LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM"))
         emit(f"| {M26.hlabel(int(H))} | {int(g['n'].median()):,} | {g['R2'].median():.3f} | {g['dR2'].median():.4f} | "
              f"{int((g['RESET_p'] < 0.05).sum())}/{len(g)} | {int((g['BDS_p'] < 0.05).sum())}/{len(g)} | "
-             f"{gap.loc[H, 'Linear']:.3f} | {tree:.3f} |")
+             f"{gap.loc[H, 'HAR-RV']:.3f} | {tree:.3f} |")
     emit()
     emit("읽는 법: 격차는 그 구간 최선 모델 대비 QLIKE 차(26번 보정후, 종목 평균)다. 선형 R²가 예측 구간과 함께 커지면 "
          "긴 구간에서 선형 근사로 충분해진다는 뜻이다(변동성을 길게 합산할수록 잡음이 평균으로 줄어든다). 비선형 항 증분이 "
@@ -536,6 +536,10 @@ def main(argv=None) -> None:
     a = ap.parse_args(argv)
     RES.mkdir(parents=True, exist_ok=True)
     rd, store = load_main()
+    rd = rd[~rd["모델"].isin(M26.DECISION_EXCLUDED)].copy()
+    for S in store.values():
+        for nm in M26.DECISION_EXCLUDED:
+            S["preds"].pop(nm, None)
     models = [m for m in M26.ALL_MODELS if m in set(rd["모델"])]
     tickers = sorted(rd["종목"].unique())
     emit("# 26b번: 26번 결과의 견고성·구분 불가 진단·유의성 검정")

@@ -130,6 +130,10 @@ TAR_RESTARTS, TAR_MAXITER = 2, 600
 TAR_TAU_Q = (0.5, 0.65, 0.8, 0.9)
 MIN_FREE_RAM_GB = 3.0
 
+# 2026-09-07 가정 진단 결정: 선형성 검정(RESET·BDS)이 기각되어 선형 모델(Linear·Ridge)은 비선형·커널 계열로
+# 대체한다(assumption_diagnosis_report_20260907.md 8절 3번). 23~26번 구현이 이 결정을 반영하지 않고 두 모델을
+# 계속 적합해 왔으므로, 이미 계산된 값은 기록으로만 두고 순위·동률·검정·결론에서는 뺀다.
+DECISION_EXCLUDED = ("Linear", "Ridge")
 LOG_TARGET_MODELS = ("HAR-RV", "Linear", "Ridge", "KernelRidge-RBF", "SVR-RBF", "Nystroem+Ridge",
                      "LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM", "GRU", "LSTM")
 VAR_MODELS = ("GARCH-t", "MS-GARCH", "TAR-GARCH")
@@ -1153,7 +1157,7 @@ def emit_profile(tt: pd.DataFrame) -> None:
     emit()
     emit("| 계열 | 모델 | " + " | ".join(hlabel(H) for H in hs) + " | 모양 등급(" + "·".join(hlabel(H) for H in hs) + ") |")
     emit("| :--- | :--- | " + " | ".join([":---"] * len(hs)) + " | :--- |")
-    models = [m_ for m_ in ALL_MODELS if m_ != "naive"]
+    models = [m_ for m_ in ALL_MODELS if m_ != "naive" and m_ not in DECISION_EXCLUDED]
     for fam in FAM_ORDER:
         for nm in [m_ for m_ in models if FAMILY[m_] == fam]:
             cells, sh = [], []
@@ -1251,6 +1255,7 @@ def emit_zero_split(store: dict, models: list[str]) -> pd.DataFrame:
 
 def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h, truncated):
     from report_header import render_standard_header
+    rd = rd[~rd["모델"].isin(DECISION_EXCLUDED)].copy()
     models = [m for m in ALL_MODELS if m in set(rd["모델"])]
     rk, size = regime_tables(store, models)
     qt = quarter_table(store, models)
@@ -1274,6 +1279,11 @@ def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h
     emit("24·25번 점검에서 확인된 평가 틀의 결함을 고친 재평가다. 결함과 처리는 드라이버 상단 표에 있다. "
          f"분할 시각은 전 종목 공통 **{SPLIT}**(KST)이고, 예측 시점은 정시, 예측 구간은 15분·30분·1시간·4시간·12시간이다. "
          "24번 수치와 직접 빼서 비교하지 않는다(평가 단위·표본·타깃이 모두 다르다).")
+    emit()
+    emit("**선형 모델(Linear·Ridge) 제외**: 2026-09-07 가정 진단에서 선형성 검정(RESET·BDS)이 기각되어 선형 모델을 "
+         "비선형·커널 계열로 대체하기로 결정했다(`assumption_diagnosis_report_20260907.md` 8절 3번). 23~26번 구현은 이 "
+         "결정을 반영하지 않고 두 모델을 계속 적합해 왔다. 이미 계산된 값은 결과 CSV에 기록으로만 남기고, 이 보고서의 "
+         "순위·동률·검정·결론에서는 모두 뺐다. HAR-RV는 벤치마크로 따로 분류해 왔으므로 일단 남긴다(포함 여부 확인 중).")
     emit()
     emit(f"소요 {elapsed_h:.2f}시간.")
     if truncated:
@@ -1300,7 +1310,7 @@ def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h
 
     emit("## 2. 적합 완결성")
     emit()
-    exp_n = len(tickers) * len(HORIZONS_H) * len(models)
+    exp_n = len(tickers) * len(HORIZONS_H) * len(models)   # 결론에 쓰는 모델 기준(선형 2종 제외)
     emit(f"기대 {len(tickers)}종목 × {len(HORIZONS_H)}구간 × {len(models)}모델 = {exp_n}행, 실제 {len(rd)}행.")
     if len(fails_df):
         emit()
