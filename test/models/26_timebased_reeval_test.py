@@ -1047,6 +1047,76 @@ def quarter_table(store: dict, models: list[str]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+
+SHORT = {"GARCH+LightGBM": "G+LGBM", "LightGBM": "LGBM", "XGBoost": "XGB", "HistGBM": "HGB",
+         "Nystroem+Ridge": "Nys", "KernelRidge-RBF": "KRR", "SVR-RBF": "SVR", "HAR-RV": "HAR"}
+TIE = 0.01      # 동률 폭(QLIKE). GRU 시드 간 표준편차 0.005~0.013(1시간, 4종목 × 5시드)에 근거
+TIE2 = 0.03
+
+
+def cell_losses(rd: pd.DataFrame, store: dict, models: list[str]) -> pd.DataFrame:
+    """(종목, H, 사전구간, 기준, 모델)별 평균 QLIKE. 기준: 보정후·보정전·모양(사후 수준 맞춤, 진단용)."""
+    C = rd.set_index(["종목", "H", "모델"])["보정계수"]
+    out = []
+    for (tk, H), S in store.items():
+        a = S["act"].astype(float)
+        b = np.digitize(S["nai"], np.quantile(S["nai_tr"], [.2, .4, .6, .8]))
+        cells = [("전체", np.ones(len(a), bool))] + [(f"Q{q + 1}", b == q) for q in range(5)]
+        for nm in models:
+            p1 = S["preds"][nm].astype(float)
+            p0 = p1 / np.sqrt(float(C[(tk, H, nm)]))
+            for cell, sel in cells:
+                if sel.sum() < 30:
+                    continue
+                q1 = qlike_vec(a[sel], p1[sel]).mean()
+                q0 = qlike_vec(a[sel], p0[sel]).mean()
+                cs = float(np.mean(a[sel] ** 2 / p0[sel] ** 2))
+                qs = q0 - (cs - np.log(cs) - 1)
+                for ver, v in (("보정후", q1), ("보정전", q0), ("모양", qs)):
+                    out.append((tk, H, cell, ver, nm, v))
+    return pd.DataFrame(out, columns=["종목", "H", "구간", "기준", "모델", "QLIKE"])
+
+
+def tier_table(cl: pd.DataFrame) -> pd.DataFrame:
+    """칸마다 최선 모델 대비 평균 격차(종목 평균)와, 종목별 최선과 TIE 이내인 종목 수."""
+    rows = []
+    for (H, cell, ver), g in cl.groupby(["H", "구간", "기준"]):
+        pv = g.pivot_table(index="종목", columns="모델", values="QLIKE").dropna(axis=1)
+        mean = pv.mean()
+        best = mean.idxmin()
+        gap = (pv.sub(pv[best], axis=0)).mean()
+        near = (pv.sub(pv.min(axis=1), axis=0) <= TIE).sum()
+        for nm in pv.columns:
+            rows.append({"H": H, "구간": cell, "기준": ver, "모델": nm, "격차": float(gap[nm]),
+                         "TIE이내종목": int(near[nm]), "종목수": len(pv),
+                         "등급": "A" if gap[nm] <= TIE else ("B" if gap[nm] <= TIE2 else "C")})
+    return pd.DataFrame(rows)
+
+
+def emit_tiers(tt: pd.DataFrame) -> None:
+    cells = ["전체", "Q1", "Q2", "Q3", "Q4", "Q5"]
+    vers = ["보정후", "보정전", "모양"]
+    for H in HORIZONS_H:
+        emit(f"### {H}시간")
+        emit()
+        emit("| 구간 | " + " | ".join(f"{v} A등급(최선 대비 ≤{TIE})" for v in vers) + " |")
+        emit("| :--- | " + " | ".join([":---"] * len(vers)) + " |")
+        for cell in cells:
+            parts = []
+            for v in vers:
+                g = tt[(tt.H == H) & (tt["구간"] == cell) & (tt["기준"] == v) & (tt["등급"] == "A")].sort_values("격차")
+                parts.append(", ".join(f"{SHORT.get(n, n)}({k}/{t})" for n, k, t in
+                                       zip(g["모델"], g["TIE이내종목"], g["종목수"])) or "-")
+            emit(f"| {cell} | " + " | ".join(parts) + " |")
+        emit()
+
+
+def family_votes(tt: pd.DataFrame) -> pd.DataFrame:
+    a = tt[tt["등급"] == "A"].copy()
+    a["계열"] = a["모델"].map(FAMILY)
+    return a.groupby(["H", "구간", "기준", "계열"]).size().rename("A등급수").reset_index()
+
+
 def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h, truncated):
     from report_header import render_standard_header
     models = [m for m in ALL_MODELS if m in set(rd["모델"])]
@@ -1196,7 +1266,71 @@ def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h
             emit(f"| {mname} | " + " | ".join(f"{v:.1f}" for v in x.values) + " |")
         emit()
 
-    emit("## 6. 모형 불안정 사례")
+    emit("## 6. 통합 판정: 구간별로 어느 모델들이 사실상 같이 최선인가")
+    emit()
+    emit(f"순위는 작은 차이도 한 계단씩 벌려 놓는다. 그래서 칸마다 **최선 모델 대비 QLIKE 격차가 {TIE} 이하인 모델을 "
+         f"A등급(사실상 동률)**으로 묶는다. {TIE}는 GRU를 시드 5개로 다시 학습했을 때의 QLIKE 표준편차(0.005~0.013)에 "
+         "맞춘 값으로, 이보다 작은 차이는 모델 차이라고 볼 수 없다. 괄호는 그 모델이 종목별 최선과 "
+         f"{TIE} 이내였던 종목 수다. 세 기준을 나란히 둔다.")
+    emit()
+    emit("- **보정후**(주 결과): 전 모델에 같은 절차의 수준 보정")
+    emit("- **보정전**(민감도): 아무 보정 없음. 로그 타깃 모델은 옌센 편향을 그대로 안는다")
+    emit("- **모양**(진단용, 사후): 칸마다 평가 구간에서 수준을 최적으로 맞춘 뒤의 손실. 수준 정확도를 빼고 오르내림 "
+         "추적 실력만 본다. 평가 구간 정보를 쓰므로 실전 성능이 아니다")
+    emit()
+    cl = cell_losses(rd, store, models)
+    tt = tier_table(cl)
+    tt.to_csv(RES / f"{STEM}_tier_table.csv", index=False)
+    family_votes(tt).to_csv(RES / f"{STEM}_tier_family_votes.csv", index=False)
+    emit_tiers(tt)
+    emit()
+
+    emit("## 7. 24번과 결과가 다른 이유(같은 1시간 예측)")
+    emit()
+    emit("QLIKE는 **모양**(수준을 완벽히 맞췄을 때의 손실)과 **수준 벌점**(c*−log c*−1, c*=평가 구간의 최적 배율)으로 "
+         "정확히 나뉜다. 24번 원래 예측(포스터 근거)과 26번 보정 전 예측에 같은 분해를 적용했다.")
+    emit()
+    try:
+        z = np.load(ROOT / "test" / "results" / "24_maxscale_refit_20260928" / "24_maxscale_refit_validation_predictions.npz")
+        r24 = []
+        for k in z.files:
+            if not k.endswith("|1|실제"):
+                continue
+            tk = k.split("|")[0]
+            a = z[k].astype(float)
+            for mk in z.files:
+                if mk.startswith(f"{tk}|1|") and not mk.endswith("|실제") and mk.split("|")[2] in models:
+                    pp = z[mk].astype(float)
+                    q = np.log(pp ** 2) + a ** 2 / pp ** 2
+                    ok = np.isfinite(q)
+                    cs = float(np.mean(a[ok] ** 2 / pp[ok] ** 2))
+                    r24.append((tk, mk.split("|")[2], q[ok].mean(), q[ok].mean() - (cs - np.log(cs) - 1), cs - np.log(cs) - 1))
+        d24 = pd.DataFrame(r24, columns=["종목", "모델", "총", "모양", "벌점"])
+        d26 = cl[(cl.H == 1) & (cl["구간"] == "전체") & cl["기준"].isin(["보정전", "모양"])].pivot_table(
+            index=["종목", "모델"], columns="기준", values="QLIKE").reset_index()
+        d26["벌점"] = d26["보정전"] - d26["모양"]
+        rk = lambda df, col: df.groupby("종목")[col].rank()
+        d24["순위총"], d24["순위모양"] = rk(d24, "총"), rk(d24, "모양")
+        d26["순위총"], d26["순위모양"] = rk(d26, "보정전"), rk(d26, "모양")
+        t = pd.DataFrame({"24 총": d24.groupby("모델")["순위총"].mean(), "24 모양": d24.groupby("모델")["순위모양"].mean(),
+                          "24 벌점": d24.groupby("모델")["벌점"].mean(),
+                          "26 총(보정전)": d26.groupby("모델")["순위총"].mean(), "26 모양": d26.groupby("모델")["순위모양"].mean(),
+                          "26 벌점": d26.groupby("모델")["벌점"].mean()}).sort_values("24 총")
+        emit("| 모델 | 24번 총 순위 | 24번 모양 순위 | 24번 수준 벌점 | 26번 총 순위(보정 전) | 26번 모양 순위 | 26번 수준 벌점 |")
+        emit("| :--- | ---: | ---: | ---: | ---: | ---: | ---: |")
+        for nm, x in t.iterrows():
+            emit(f"| {nm} | {x['24 총']:.1f} | {x['24 모양']:.1f} | {x['24 벌점']:.3f} | {x['26 총(보정전)']:.1f} | "
+                 f"{x['26 모양']:.1f} | {x['26 벌점']:.3f} |")
+        emit()
+        emit("읽는 법: 24번에서도 GRU·LSTM은 모양 1·2위였고, 로그 타깃 모델 공통의 수준 벌점(옌센 편향)에 가려 총 순위가 "
+             "5~6위였다. GARCH는 모양 하위권이지만 수준이 정확해서 1위였다. 26번에서는 두 수정이 반대로 작용했다. "
+             "정보 시점 통일(24번은 GRU·LSTM만 한 봉 더 최신 정보를 봤다)로 GRU의 모양 우위가 줄고 트리가 올라왔으며, "
+             "보정은 로그 모델 전체의 수준 벌점을 지웠다. GRU가 새로 튀어오른 것이 아니라, GARCH와 트리의 자리가 바뀐 것이다.")
+    except Exception as e:
+        emit(f"(24번 예측 파일을 읽지 못했다: {type(e).__name__})")
+    emit()
+
+    emit("## 8. 모형 불안정 사례")
     emit()
     unstable = rd[rd["모델"].isin(VAR_MODELS) & ((rd["보정계수"] < 0.3) | (rd["보정계수"] > 3.0))]
     if len(unstable):
@@ -1210,7 +1344,7 @@ def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h
     else:
         emit("보정 상수가 극단적인(0.3 미만 또는 3 초과) GARCH 계열 사례는 없다.")
     emit()
-    emit("## 7. 남은 일")
+    emit("## 9. 남은 일")
     emit()
     emit("- 유의성 검정(DM·MCS)을 이 예측값으로 다시 한다: 종목×구간×모델쌍 다중비교 보정, 종목 간 상관 반영, "
          "구간 효과는 조건부 예측 능력 검정.")
