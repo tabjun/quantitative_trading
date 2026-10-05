@@ -473,6 +473,59 @@ def plot_tie_map(mcs: pd.DataFrame, rg: pd.DataFrame, models: list[str]) -> Path
     return path
 
 
+
+def linearity_section() -> pd.DataFrame:
+    """예측 구간별 선형성: 23번의 선형성 기각(1시간 기준)이 다른 구간에서도 같은 크기인가."""
+    import statsmodels.api as sm
+    from statsmodels.stats.diagnostic import linear_reset
+    from statsmodels.tsa.stattools import bds
+    from report_header import study_universe
+    emit("## 5. 선형 모델의 자리: 가정이 기각된 모델이 긴 구간에서 강한 이유")
+    emit()
+    emit("Linear·Ridge·HAR-RV는 23번에서 RESET·BDS로 선형성이 기각돼 **계수를 해석하지 않는 참고용**으로 남긴 모델이다"
+         "(삭제된 적은 없다, history.md 2026-09-23). 가정 위반은 계수 해석과 추론을 무효로 만들지만, 표본 외 예측 손실의 "
+         "비교는 가정과 무관하다. 다만 결론에 쓰려면 왜 강한지 데이터 근거가 있어야 하므로, 예측 구간마다 선형성을 다시 본다. "
+         "표본이 수만 개면 아주 작은 비선형도 기각되므로, 종목마다 학습 표본을 최근 5,000개(긴 구간은 H시간 간격으로 겹침을 "
+         "줄여 뽑은 수)로 맞추고 **비선형 항이 늘리는 설명력의 크기**를 함께 본다.")
+    emit()
+    tks, _ = study_universe()
+    rows = []
+    for tk in tks:
+        D = M26.build_data(tk)
+        F = M26.make_features(D)["log"]
+        for H in M26.HORIZONS_H:
+            HD = M26.horizon_data(D, H)
+            sel = HD["tr_fit"] & (np.asarray(HD["T"].minute) == 0)
+            idx = np.where(sel)[0][::max(1, H // 60)][-5000:]
+            X = sm.add_constant(F[HD["j"]][idx])
+            y = np.log(HD["act_d"][idx])
+            ols = sm.OLS(y, X).fit()
+            f = ols.fittedvalues
+            r2a = sm.OLS(y, np.column_stack([X, f ** 2, f ** 3])).fit().rsquared
+            rows.append({"종목": tk, "H": H, "n": len(idx), "R2": ols.rsquared, "dR2": r2a - ols.rsquared,
+                         "RESET_p": float(linear_reset(ols, power=3, test_type="fitted", use_f=True).pvalue),
+                         "BDS_p": float(np.atleast_1d(bds(ols.resid[-3000:], max_dim=3)[1])[0])})
+    d = pd.DataFrame(rows)
+    d.to_csv(RES / f"{STEM}_linearity_by_horizon.csv", index=False)
+    tt = pd.read_csv(SRC / f"{SRC_STEM}_tier_table.csv")
+    gap = tt[(tt["기준"] == "보정후") & (tt["구간"] == "전체")].pivot_table(index="H", columns="모델", values="격차")
+    emit("| 예측 구간 | 표본(중앙) | 선형 R²(중앙) | 비선형 항 증분 R²(중앙) | RESET 기각 종목 | BDS 기각 종목 | "
+         "Linear 격차 | 트리 최선 격차 |")
+    emit("| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
+    for H, g in d.groupby("H"):
+        tree = min(gap.loc[H, m] for m in ("LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM"))
+        emit(f"| {M26.hlabel(int(H))} | {int(g['n'].median()):,} | {g['R2'].median():.3f} | {g['dR2'].median():.4f} | "
+             f"{int((g['RESET_p'] < 0.05).sum())}/{len(g)} | {int((g['BDS_p'] < 0.05).sum())}/{len(g)} | "
+             f"{gap.loc[H, 'Linear']:.3f} | {tree:.3f} |")
+    emit()
+    emit("읽는 법: 격차는 그 구간 최선 모델 대비 QLIKE 차(26번 보정후, 종목 평균)다. 선형 R²가 예측 구간과 함께 커지면 "
+         "긴 구간에서 선형 근사로 충분해진다는 뜻이다(변동성을 길게 합산할수록 잡음이 평균으로 줄어든다). 비선형 항 증분이 "
+         "작아도 짧은 구간에서 트리가 선형보다 크게 앞서면, 그 비선형은 RESET이 보는 거듭제곱 형태가 아니라 문턱·상호작용 "
+         "형태라는 뜻이다. BDS는 잔차의 독립성 위반 전반(이분산 포함)을 잡으므로 선형성만의 검정이 아니다.")
+    emit()
+    return d
+
+
 # %% [markdown]
 # ## 실행
 
@@ -497,6 +550,7 @@ def main(argv=None) -> None:
     pairs, mcs = significance_section(rd, store, models)
     rg = regime_significance(rd, store, models)
     agreement_section(mcs, rg)
+    linearity_section()
     fig = plot_tie_map(mcs, rg, models)
     emit(f"![통계적 동률 지도]({os.path.relpath(fig, RES)})")
     emit()
