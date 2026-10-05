@@ -6,7 +6,7 @@
 #
 # 1. **시드 견고성(전 모델)**: 무작위성이 있는 모델(트리 4종·Nystroem·GRU·LSTM)은 시드 0~4로 다시 학습한
 #    결과의 흔들림을 잰다. 무작위성이 없는 모델은 시드를 바꿔도 예측이 같아야 하므로, 시드 실행에 함께 돌린
-#    GARCH-t·HAR-RV·Linear·Ridge의 예측이 시드 0과 비트 단위로 같은지 확인한다. MS-GARCH·TAR-GARCH·
+#    GARCH-t의 예측이 시드 0과 같은지 확인한다(선형 3종은 결정에 따라 비교에서 제외). MS-GARCH·TAR-GARCH·
 #    KernelRidge·SVR은 난수를 쓰지 않는 결정적 알고리즘이라 시드 실행에서 뺐다(코드상 무작위 상태 없음).
 # 2. **4시간·12시간 구분 불가 진단**: 모델끼리 차이가 안 나는 이유가 적합 실패인지(조기종료 반복 수, 에폭,
 #    보정계수), 데이터 특성인지(평가 표본 수로 본 표준오차, 모델 예측끼리의 유사도, 예측 가능성 상한)를 가른다.
@@ -66,7 +66,7 @@ def _load_m26():
 M26 = _load_m26()
 SEEDS = (0, 1, 2, 3, 4)
 STOCHASTIC = ("LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM", "Nystroem+Ridge", "GRU", "LSTM")
-DET_CHECK = ("GARCH-t", "HAR-RV")
+DET_CHECK = ("GARCH-t",)
 DET_NOT_RERUN = ("MS-GARCH", "TAR-GARCH", "KernelRidge-RBF", "SVR-RBF")
 ALPHA = 0.05
 TIE = M26.TIE
@@ -224,7 +224,8 @@ def seed_section(rd: pd.DataFrame, store: dict) -> pd.DataFrame:
         for nm, x in pv.iterrows():
             emit(f"| {nm} | " + " | ".join(f"{v:.4f}" for v in x.values) + " |")
         emit()
-        emit(f"동률 폭 {TIE}와 비교한다. 시드 표준편차가 이보다 작으면 시드는 결론을 바꾸지 않는다.")
+        emit(f"동률 폭 {TIE}와 비교한다. 시드 표준편차가 이보다 작으면 시드는 결론을 바꾸지 않는다. HistGBM은 표본·특성 "
+             "추출을 쓰지 않는 설정이라(조기종료도 직접 감시) 시드가 결과에 영향을 주지 않는다.")
     emit()
     return sv
 
@@ -416,6 +417,53 @@ def regime_significance(rd: pd.DataFrame, store: dict, models: list[str]) -> pd.
     return rg
 
 
+def seed_mcs_frequency(store: dict, models: list[str]) -> pd.DataFrame:
+    """시드 0~4마다 무작위 모델의 예측을 그 시드 것으로 바꿔 MCS를 다시 돌리고, 모델별 포함 횟수를 센다."""
+    from arch.bootstrap import MCS
+    emit("### 3-3. 시드를 바꿔도 MCS 판정이 유지되는가")
+    emit()
+    emit("무작위 모델(트리·Nystroem·GRU·LSTM)의 예측만 시드 1~4의 것으로 바꾸고, 나머지 모델은 그대로 둔 채 같은 MCS를 "
+         "다시 돌렸다. 셀은 시드 5개 중 MCS에 포함된 횟수다.")
+    emit()
+    seeds = {0: None}
+    for sd in SEEDS[1:]:
+        r = load_seed(sd)
+        if r is not None:
+            seeds[sd] = r[1]
+    rows = []
+    for H in M26.HORIZONS_H:
+        for sd, pr in seeds.items():
+            ov = None
+            if pr is not None:
+                ov = {}
+                for key, S in store.items():
+                    d = dict(S["preds"])
+                    for nm in STOCHASTIC:
+                        if nm in pr.get(key, {}):
+                            d[nm] = pr[key][nm]
+                    ov[key] = d
+            L = loss_frame(store, H, models, ov)
+            common = sorted(set.intersection(*[set(L[m].index) for m in L]))
+            ML = pd.DataFrame({m: L[m].loc[common].mean(axis=1) for m in L})
+            block = max(5, int(round(len(ML) ** (1 / 3))))
+            mc = MCS(ML.to_numpy(), size=ALPHA, reps=2000, block_size=block, method="R", seed=0)
+            mc.compute()
+            inc = {list(ML.columns)[i] for i in mc.included}
+            for nm in ML.columns:
+                rows.append({"H": H, "시드": sd, "모델": nm, "포함": nm in inc})
+    f = pd.DataFrame(rows)
+    f.to_csv(RES / f"{STEM}_seed_mcs_frequency.csv", index=False)
+    pv = f.groupby(["모델", "H"])["포함"].sum().unstack()
+    pv = pv.loc[[m for m in M26.ALL_MODELS if m in pv.index]]
+    ns = f.groupby("H")["시드"].nunique()
+    emit("| 모델 | " + " | ".join(f"{M26.hlabel(int(h))}(/{ns[h]})" for h in pv.columns) + " |")
+    emit("| :--- | " + " | ".join(["---:"] * len(pv.columns)) + " |")
+    for nm, x in pv.iterrows():
+        emit(f"| {nm} | " + " | ".join(str(int(v)) for v in x.values) + " |")
+    emit()
+    return f
+
+
 def agreement_section(mcs: pd.DataFrame, rg: pd.DataFrame) -> None:
     emit("## 4. 실무 동률(A등급, 0.01)과 통계 판정의 일치")
     emit()
@@ -484,7 +532,7 @@ def linearity_section() -> pd.DataFrame:
     emit()
     emit("2026-09-07 가정 진단에서 선형성 검정(RESET·BDS)이 기각되어 Linear·Ridge는 비선형·커널 계열로 대체하기로 "
          "결정했다(이 분석의 순위·검정에서 제외). 그 판정은 1시간 타깃 기준이었으므로, 예측 구간마다 같은 판정이 "
-         "유지되는지 다시 본다. 이 결과는 선형 구조를 쓰는 HAR-RV의 해석에도 쓰인다. "
+         "유지되는지 다시 본다(HAR-RV도 같은 이유로 제외). "
          "표본이 수만 개면 아주 작은 비선형도 기각되므로, 종목마다 학습 표본을 최근 5,000개(긴 구간은 H시간 간격으로 겹침을 "
          "줄여 뽑은 수)로 맞추고 **비선형 항이 늘리는 설명력의 크기**를 함께 본다.")
     emit()
@@ -510,13 +558,13 @@ def linearity_section() -> pd.DataFrame:
     tt = pd.read_csv(SRC / f"{SRC_STEM}_tier_table.csv")
     gap = tt[(tt["기준"] == "보정후") & (tt["구간"] == "전체")].pivot_table(index="H", columns="모델", values="격차")
     emit("| 예측 구간 | 표본(중앙) | 선형 R²(중앙) | 비선형 항 증분 R²(중앙) | RESET 기각 종목 | BDS 기각 종목 | "
-         "HAR-RV 격차 | 트리 최선 격차 |")
-    emit("| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
+         "트리 최선 격차 |")
+    emit("| :--- | ---: | ---: | ---: | ---: | ---: | ---: |")
     for H, g in d.groupby("H"):
         tree = min(gap.loc[H, m] for m in ("LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM"))
         emit(f"| {M26.hlabel(int(H))} | {int(g['n'].median()):,} | {g['R2'].median():.3f} | {g['dR2'].median():.4f} | "
              f"{int((g['RESET_p'] < 0.05).sum())}/{len(g)} | {int((g['BDS_p'] < 0.05).sum())}/{len(g)} | "
-             f"{gap.loc[H, 'HAR-RV']:.3f} | {tree:.3f} |")
+             f"{tree:.3f} |")
     emit()
     emit("읽는 법: 격차는 그 구간 최선 모델 대비 QLIKE 차(26번 보정후, 종목 평균)다. 선형 R²가 예측 구간과 함께 커지면 "
          "긴 구간에서 선형 근사로 충분해진다는 뜻이다(변동성을 길게 합산할수록 잡음이 평균으로 줄어든다). 비선형 항 증분이 "
@@ -553,6 +601,8 @@ def main(argv=None) -> None:
     diagnose_section(rd, store, models)
     pairs, mcs = significance_section(rd, store, models)
     rg = regime_significance(rd, store, models)
+    if not a.skip_seed:
+        seed_mcs_frequency(store, models)
     agreement_section(mcs, rg)
     linearity_section()
     fig = plot_tie_map(mcs, rg, models)

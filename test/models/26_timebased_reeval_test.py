@@ -133,7 +133,9 @@ MIN_FREE_RAM_GB = 3.0
 # 2026-09-07 가정 진단 결정: 선형성 검정(RESET·BDS)이 기각되어 선형 모델(Linear·Ridge)은 비선형·커널 계열로
 # 대체한다(assumption_diagnosis_report_20260907.md 8절 3번). 23~26번 구현이 이 결정을 반영하지 않고 두 모델을
 # 계속 적합해 왔으므로, 이미 계산된 값은 기록으로만 두고 순위·동률·검정·결론에서는 뺀다.
-DECISION_EXCLUDED = ("Linear", "Ridge")
+# HAR-RV도 형식상 선형 회귀라 통일성을 위해 함께 뺀다(2026-10-05 사용자 결정. 12시간 외에는 하위권이고
+# 12시간에서도 Nystroem+Ridge가 같은 정보를 담는다).
+DECISION_EXCLUDED = ("Linear", "Ridge", "HAR-RV")
 LOG_TARGET_MODELS = ("HAR-RV", "Linear", "Ridge", "KernelRidge-RBF", "SVR-RBF", "Nystroem+Ridge",
                      "LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM", "GRU", "LSTM")
 VAR_MODELS = ("GARCH-t", "MS-GARCH", "TAR-GARCH")
@@ -1283,7 +1285,8 @@ def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h
     emit("**선형 모델(Linear·Ridge) 제외**: 2026-09-07 가정 진단에서 선형성 검정(RESET·BDS)이 기각되어 선형 모델을 "
          "비선형·커널 계열로 대체하기로 결정했다(`assumption_diagnosis_report_20260907.md` 8절 3번). 23~26번 구현은 이 "
          "결정을 반영하지 않고 두 모델을 계속 적합해 왔다. 이미 계산된 값은 결과 CSV에 기록으로만 남기고, 이 보고서의 "
-         "순위·동률·검정·결론에서는 모두 뺐다. HAR-RV는 벤치마크로 따로 분류해 왔으므로 일단 남긴다(포함 여부 확인 중).")
+         "순위·동률·검정·결론에서는 모두 뺐다. HAR-RV도 형식상 선형 회귀라 통일성을 위해 함께 뺐다(2026-10-05 결정; "
+         "12시간 외에는 하위권이고 12시간에서도 Nystroem+Ridge가 같은 정보를 담는다).")
     emit()
     emit(f"소요 {elapsed_h:.2f}시간.")
     if truncated:
