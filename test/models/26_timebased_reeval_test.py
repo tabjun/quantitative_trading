@@ -1203,6 +1203,52 @@ def emit_profile(tt: pd.DataFrame) -> None:
     emit()
 
 
+def emit_zero_split(store: dict, models: list[str]) -> pd.DataFrame:
+    """가격 정지(RV=0) 시점과 움직인 시점으로 나눈 손실 비교. 기준은 GARCH-t(수익률 0을 그대로 쓰는 분산 모형)."""
+    rows = []
+    for (tk, H), S in store.items():
+        a = S["act"].astype(float)
+        z = a == 0
+        base = qlike_vec(a, S["preds"]["GARCH-t"].astype(float))
+        for nm in models:
+            q = qlike_vec(a, S["preds"][nm].astype(float))
+            d = q - base
+            rows.append({"종목": tk, "H": H, "모델": nm, "RV0비율": float(z.mean()),
+                         "차_전체": float(d.mean()), "차_움직임": float(d[~z].mean()),
+                         "차_정지": float(d[z].mean()) if z.any() else np.nan})
+    zz = pd.DataFrame(rows)
+    zz.to_csv(RES / f"{STEM}_zero_split.csv", index=False)
+    hs = list(HORIZONS_H)
+    r0 = zz[zz["모델"] == "GARCH-t"].groupby("H")["RV0비율"].median()
+    emit("평가 시점을 **가격이 움직인 시점(RV>0)**과 **가격이 한 칸도 안 움직인 시점(RV=0)**으로 나눠, 각 모델의 "
+         "손실을 GARCH-t와 비교한다(음수면 그 모델이 GARCH-t보다 낫다). RV=0에서는 QLIKE가 log(예측 분산)이 되어 작게 "
+         "예측할수록 유리하다. 로그 타깃 모델은 log(0)을 정의할 수 없어 RV=0 표본을 빼고 학습하므로 이런 시점을 배운 "
+         "적이 없다. 반면 GARCH 계열은 수익률 0을 그대로 받아 분산을 추정한다.")
+    emit()
+    emit("| 예측 구간 | 평가 RV=0 비율(종목 중앙) | 종목별 RV=0 비율과 (LightGBM−GARCH-t) 격차의 상관 |")
+    emit("| :--- | ---: | ---: |")
+    for H in hs:
+        g = zz[(zz["H"] == H) & (zz["모델"] == "LightGBM")]
+        cc = np.corrcoef(g["RV0비율"], g["차_전체"])[0, 1] if g["RV0비율"].std() > 0 else np.nan
+        emit(f"| {hlabel(H)} | {r0.get(H, np.nan):.1%} | {cc:+.2f} |")
+    emit()
+    emit("셀은 `움직인 시점 차 / 정지 시점 차`(GARCH-t 대비, 종목 평균)이다.")
+    emit()
+    emit("| 모델 | " + " | ".join(hlabel(H) for H in hs) + " |")
+    emit("| :--- | " + " | ".join([":---"] * len(hs)) + " |")
+    for nm in models:
+        if nm == "GARCH-t":
+            continue
+        cells = []
+        for H in hs:
+            g = zz[(zz["H"] == H) & (zz["모델"] == nm)]
+            z_ = g["차_정지"].mean()
+            cells.append(f"{g['차_움직임'].mean():+.3f} / " + ("-" if not np.isfinite(z_) else f"{z_:+.3f}"))
+        emit(f"| {nm} | " + " | ".join(cells) + " |")
+    emit()
+    return zz
+
+
 def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h, truncated):
     from report_header import render_standard_header
     models = [m for m in ALL_MODELS if m in set(rd["모델"])]
@@ -1373,6 +1419,9 @@ def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h
     emit("### 알고리즘별 프로필: 예측 구간이 길어지면 어떻게 되는가")
     emit()
     emit_profile(tt)
+    emit("### 짧은 예측 구간과 가격 정지(RV=0): 결과가 데이터 특성에서 오는가")
+    emit()
+    emit_zero_split(store, models)
 
     emit("## 7. 24번과 결과가 다른 이유(같은 1시간 예측)")
     emit()
