@@ -17,7 +17,7 @@
 # | 로그 타깃 모델은 exp 역변환으로 기하평균을 내 체계적으로 낮게 예측했다(QLIKE는 과소예측을 크게 벌함) | 내부검증 구간에서 QLIKE 최적 스케일 상수를 추정해 보정. 보정 전 값도 함께 기록 |
 # | 학습 표본을 입력 조건(pas<=0)으로도 걸렀다 | 타깃 RV>0 조건만 |
 # | 구간을 사후(실현 RV)로 나눴다(예측자의 딜레마) | 구간은 사전 변수(직전 H시간 RV, 학습 구간 분위수)로만. 실현 RV 구간은 기술 통계로만 |
-# | 예측 구간이 1시간 하나였다 | 1·4·12시간 |
+# | 예측 구간이 1시간 하나였다 | 15분·30분·1시간·4시간·12시간 |
 #
 # ## 시각 규약
 #
@@ -93,8 +93,13 @@ M23 = _load_m23()
 # %%
 BAR = pd.Timedelta("15min")
 BPH = 4
-HORIZONS_H = (1, 4, 12)
-EVAL_HOURS = {1: tuple(range(24)), 4: tuple(range(0, 24, 4)), 12: (0, 12)}
+HORIZONS_H = (15, 30, 60, 240, 720)          # 예측 구간(분). 15분봉이라 15분 미만은 만들 수 없다
+EVAL_HOURS = {15: tuple(range(24)), 30: tuple(range(24)), 60: tuple(range(24)),
+              240: tuple(range(0, 24, 4)), 720: (0, 12)}
+
+
+def hlabel(H: int) -> str:
+    return f"{H}분" if H < 60 else f"{H // 60}시간"
 SPLIT = pd.Timestamp("2025-08-26 00:00:00")
 WARMUP = pd.Timedelta(days=7)
 INNER_FRAC = 0.85
@@ -243,7 +248,7 @@ def horizon_data(D: dict, H: int, split: pd.Timestamp = SPLIT) -> dict:
     """한 예측 구간 H(시간)의 예측 시점·타깃·naive·분할을 만든다."""
     grid, r, d, cfac, bad = D["grid"], D["r"], D["d"], D["cfac"], D["bad"]
     n = len(grid)
-    m = BPH * H
+    m = H // 15
     cs_r2, cs_d2, cs_c2 = _csum(r ** 2), _csum(d ** 2), _csum(cfac ** 2)
     cs_bad = _csum(bad.astype(float))
     j = np.arange(m, n - m + 1)
@@ -256,7 +261,7 @@ def horizon_data(D: dict, H: int, split: pd.Timestamp = SPLIT) -> dict:
     act_d = np.sqrt(cs_d2[j + m] - cs_d2[j])
     nai = np.sqrt(cs_r2[j] - cs_r2[j - m])
     c2m = (cs_c2[j + m] - cs_c2[j]) / m
-    end = T + pd.Timedelta(hours=H)
+    end = T + pd.Timedelta(minutes=H)
 
     t0 = T[0]
     inner = t0 + (split - t0) * INNER_FRAC
@@ -936,17 +941,17 @@ def selftest() -> None:
                           pd.DatetimeIndex(halt).append(pd.DatetimeIndex(halt2)), split=split)
     assert np.allclose(D["cfac"], D2["cfac"]), "주기 스케일은 학습 구간만으로 추정"
 
-    for H in (1, 4, 12):
+    for H in HORIZONS_H:
         HD = horizon_data(D, H, split=split)
-        m = 4 * H
+        m = H // 15
         jj = HD["j"][5]
         assert np.isclose(HD["act"][5], np.sqrt(np.nansum(D["r"][jj:jj + m] ** 2))), "타깃 창"
         assert np.isclose(HD["nai"][5], np.sqrt(np.nansum(D["r"][jj - m:jj] ** 2))), "naive 창"
-        assert g[jj + m - 1] - g[jj] == pd.Timedelta(hours=H) - BAR, "타깃 창 = H시간"
-        assert np.all(HD["T"][HD["tr"]] + pd.Timedelta(hours=H) <= split), "학습 타깃이 분할을 넘지 않음"
+        assert g[jj + m - 1] - g[jj] == pd.Timedelta(minutes=H) - BAR, "타깃 창 = H분"
+        assert np.all(HD["T"][HD["tr"]] + pd.Timedelta(minutes=H) <= split), "학습 타깃이 분할을 넘지 않음"
         tt = HD["T"][HD["te"]]
         assert np.all(tt >= split) and np.all(tt.minute == 0) and np.all(np.isin(tt.hour, EVAL_HOURS[H])), "평가 시점"
-        assert np.all(np.diff(tt) >= pd.Timedelta(hours=H)), "평가 창 비겹침"
+        assert np.all(np.diff(tt) >= pd.Timedelta(minutes=H)), "평가 창 비겹침"
         assert not np.any(np.isin(HD["j"], np.arange(k - m + 1, k + 17 + m))), "점검을 지나는 창 제외"
         assert np.isin(k - m, HD["j"]) or (g[k - m] < g[0] + WARMUP), "점검 직전까지 끝나는 창은 유지"
 
@@ -1097,7 +1102,7 @@ def emit_tiers(tt: pd.DataFrame) -> None:
     cells = ["전체", "Q1", "Q2", "Q3", "Q4", "Q5"]
     vers = ["보정후", "보정전", "모양"]
     for H in HORIZONS_H:
-        emit(f"### {H}시간")
+        emit(f"### {hlabel(H)}")
         emit()
         emit("| 구간 | " + " | ".join(f"{v} A등급(최선 대비 ≤{TIE})" for v in vers) + " |")
         emit("| :--- | " + " | ".join([":---"] * len(vers)) + " |")
@@ -1115,6 +1120,73 @@ def family_votes(tt: pd.DataFrame) -> pd.DataFrame:
     a = tt[tt["등급"] == "A"].copy()
     a["계열"] = a["모델"].map(FAMILY)
     return a.groupby(["H", "구간", "기준", "계열"]).size().rename("A등급수").reset_index()
+
+
+FAM_ORDER = ["통계", "하이브리드", "트리", "딥러닝", "선형", "커널", "벤치마크"]
+FAM_COLOR = dict(zip(FAM_ORDER, ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7"]))
+FAM_MARK = dict(zip(FAM_ORDER, ["o", "s", "^", "D", "v", "P", "X"]))
+FAM_LABEL = {"통계": "통계(GARCH 3종)", "하이브리드": "GARCH+트리", "트리": "트리", "딥러닝": "순환 딥러닝(GRU·LSTM)",
+             "선형": "선형(Linear·Ridge)", "커널": "커널", "벤치마크": "HAR-RV"}
+
+
+def emit_profile(tt: pd.DataFrame) -> None:
+    """알고리즘마다 예측 구간별 등급(전체·Q5)과 최선 대비 격차, 그리고 계열 최선 격차 그림."""
+    hs = list(HORIZONS_H)
+    sub = tt[tt["기준"] == "보정후"]
+    shp = tt[tt["기준"] == "모양"]
+    emit("셀은 `전체 등급/Q5 등급 (전체 격차)`이다. 등급 A는 최선 대비 ≤0.01, B는 ≤0.03, C는 그 밖이다. 보정후 기준이며, "
+         "괄호 안 격차는 그 구간 최선 모델 대비 QLIKE 차이의 종목 평균이다. 마지막 칸은 모양 기준 전체 등급이다.")
+    emit()
+    emit("| 계열 | 모델 | " + " | ".join(hlabel(H) for H in hs) + " | 모양 등급(" + "·".join(hlabel(H) for H in hs) + ") |")
+    emit("| :--- | :--- | " + " | ".join([":---"] * len(hs)) + " | :--- |")
+    models = [m_ for m_ in ALL_MODELS if m_ != "naive"]
+    for fam in FAM_ORDER:
+        for nm in [m_ for m_ in models if FAMILY[m_] == fam]:
+            cells, sh = [], []
+            for H in hs:
+                a = sub[(sub.H == H) & (sub["모델"] == nm) & (sub["구간"] == "전체")]
+                q = sub[(sub.H == H) & (sub["모델"] == nm) & (sub["구간"] == "Q5")]
+                z = shp[(shp.H == H) & (shp["모델"] == nm) & (shp["구간"] == "전체")]
+                if not len(a):
+                    cells.append("-"); sh.append("-"); continue
+                cells.append(f"{a['등급'].iloc[0]}/{q['등급'].iloc[0] if len(q) else '-'} ({a['격차'].iloc[0]:.3f})")
+                sh.append(z["등급"].iloc[0] if len(z) else "-")
+            emit(f"| {FAM_LABEL[fam]} | {nm} | " + " | ".join(cells) + " | " + "·".join(sh) + " |")
+    emit()
+    fig, axes = plt.subplots(1, 2, figsize=(12.5, 4.8))
+    for ax, ver, title in ((axes[0], "보정후", "총 손실(보정 포함, 주 결과)"), (axes[1], "모양", "모양(수준을 사후에 맞춘 진단용)")):
+        g = tt[(tt["기준"] == ver) & (tt["구간"] == "전체") & (tt["모델"] != "naive")].copy()
+        g["계열"] = g["모델"].map(FAMILY)
+        fb = g.groupby(["H", "계열"])["격차"].min().unstack()
+        x = np.arange(len(hs))
+        ax.axhspan(0, TIE, color="#e8e8e4", zorder=0)
+        ax.text(len(hs) - 1 + 0.15, TIE / 2, "동률 폭", fontsize=8, color="#6b6b66", va="center")
+        for fam in FAM_ORDER:
+            if fam not in fb:
+                continue
+            yv = fb[fam].reindex(hs).to_numpy()
+            ax.plot(x, yv, color=FAM_COLOR[fam], lw=2, marker=FAM_MARK[fam], ms=7,
+                    markeredgecolor="white", markeredgewidth=1.5, label=FAM_LABEL[fam], zorder=3)
+        ax.set_xticks(x, [hlabel(H) for H in hs])
+        ax.set_xlabel("예측 구간")
+        ax.set_ylabel("계열 최선 모델의 격차(최선 대비 QLIKE, 종목 평균)")
+        ax.set_title(title, fontsize=11, loc="left")
+        ax.grid(axis="y", color="#e5e5e0", lw=0.8)
+        for sp in ("top", "right"):
+            ax.spines[sp].set_visible(False)
+        ax.set_ylim(bottom=-0.005)
+    axes[0].legend(fontsize=8, frameon=False, loc="upper left")
+    fig.suptitle("예측 구간이 길어질 때 계열별로 최선과의 격차가 어떻게 변하는가(0에 가까울수록 최선)", fontsize=12, x=0.01, ha="left")
+    fig.tight_layout()
+    path = IMG / f"{STEM}_fig1_family_gap_by_horizon.png"
+    IMG.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    emit(f"![계열별 격차]({os.path.relpath(path, RES)})")
+    emit()
+    emit("그림 읽는 법: 각 선은 그 계열에서 가장 좋은 모델의 격차다. 회색 띠(0~0.01) 안에 있으면 그 예측 구간의 최선과 "
+         "사실상 동률이다. 수치는 위 표와 `tier_table.csv`에 있다.")
+    emit()
 
 
 def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h, truncated):
@@ -1140,7 +1212,7 @@ def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h
     emit("## 0. 이 회차가 고친 것")
     emit()
     emit("24·25번 점검에서 확인된 평가 틀의 결함을 고친 재평가다. 결함과 처리는 드라이버 상단 표에 있다. "
-         f"분할 시각은 전 종목 공통 **{SPLIT}**(KST)이고, 예측 시점은 정시, 예측 구간은 1·4·12시간이다. "
+         f"분할 시각은 전 종목 공통 **{SPLIT}**(KST)이고, 예측 시점은 정시, 예측 구간은 15분·30분·1시간·4시간·12시간이다. "
          "24번 수치와 직접 빼서 비교하지 않는다(평가 단위·표본·타깃이 모두 다르다).")
     emit()
     emit(f"소요 {elapsed_h:.2f}시간.")
@@ -1161,7 +1233,7 @@ def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h
     emit("| H | 평가 표본(종목 중앙) | 학습 RV 중앙값 | 평가 RV 중앙값 | 평가 RV 95% | 평가 RV=0 비율 | 학습 제외(RV=0) |")
     emit("| ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
     for H, g in heda_df.groupby("H"):
-        emit(f"| {H}시간 | {int(g['평가표본'].median()):,} | {g['학습RV중앙값'].median():.3%} | "
+        emit(f"| {hlabel(H)} | {int(g['평가표본'].median()):,} | {g['학습RV중앙값'].median():.3%} | "
              f"{g['평가RV중앙값'].median():.3%} | {g['평가RV95'].median():.3%} | "
              f"{g['평가RV0비율'].median():.2%} | {g['학습제외_RV0'].median():.2%} |")
     emit()
@@ -1203,7 +1275,7 @@ def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h
                                        보정전=("QLIKE_보정전", "mean"), 보정후=("QLIKE", "mean")).reset_index()
     for H in HORIZONS_H:
         t = tab[tab["H"] == H].sort_values("순위")
-        emit(f"### {H}시간")
+        emit(f"### {hlabel(H)}")
         emit()
         emit("| 순위 | 모델 | 처리 방식 | 종목 수 | 평균 순위 | 평균 순위(전원 미보정) | ΔQLIKE(naive 대비) | MASE 중앙 | 보정계수 중앙 |")
         emit("| ---: | :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |")
@@ -1222,7 +1294,7 @@ def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h
     emit("| H | 모델 | 보정계수 중앙 | QLIKE 보정 전(종목 평균) | 보정 후 |")
     emit("| ---: | :--- | ---: | ---: | ---: |")
     for _, x in tab[tab["모델"] != "naive"].iterrows():
-        emit(f"| {x['H']} | {x['모델']} | {x['보정']:.2f} | {x['보정전']:.4f} | {x['보정후']:.4f} |")
+        emit(f"| {hlabel(int(x['H']))} | {x['모델']} | {x['보정']:.2f} | {x['보정전']:.4f} | {x['보정후']:.4f} |")
     emit()
 
     emit("## 4. 사전 구간별 순위(직전 H시간 RV 5분위, 학습 구간 분위수)")
@@ -1237,7 +1309,7 @@ def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h
         pv = g.pivot_table(index="모델", columns="구간", values="순위", aggfunc="mean")
         pv = pv.loc[pv.mean(axis=1).sort_values().index]
         sz = size[size["H"] == H].groupby("구간")["중앙값_대비"].median()
-        emit(f"### {H}시간")
+        emit(f"### {hlabel(H)}")
         emit()
         emit("| 모델 | " + " | ".join(pv.columns) + " |")
         emit("| :--- | " + " | ".join(["---:"] * len(pv.columns)) + " |")
@@ -1258,7 +1330,7 @@ def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h
             continue
         pv = g.pivot_table(index="모델", columns="분기", values="순위", aggfunc="mean")
         pv = pv.loc[pv.mean(axis=1).sort_values().index].head(8)
-        emit(f"### {H}시간 (상위 8개 모델)")
+        emit(f"### {hlabel(H)} (상위 8개 모델)")
         emit()
         emit("| 모델 | " + " | ".join(pv.columns) + " |")
         emit("| :--- | " + " | ".join(["---:"] * len(pv.columns)) + " |")
@@ -1284,6 +1356,9 @@ def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h
     family_votes(tt).to_csv(RES / f"{STEM}_tier_family_votes.csv", index=False)
     emit_tiers(tt)
     emit()
+    emit("### 알고리즘별 프로필: 예측 구간이 길어지면 어떻게 되는가")
+    emit()
+    emit_profile(tt)
 
     emit("## 7. 24번과 결과가 다른 이유(같은 1시간 예측)")
     emit()
@@ -1306,7 +1381,7 @@ def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h
                     cs = float(np.mean(a[ok] ** 2 / pp[ok] ** 2))
                     r24.append((tk, mk.split("|")[2], q[ok].mean(), q[ok].mean() - (cs - np.log(cs) - 1), cs - np.log(cs) - 1))
         d24 = pd.DataFrame(r24, columns=["종목", "모델", "총", "모양", "벌점"])
-        d26 = cl[(cl.H == 1) & (cl["구간"] == "전체") & cl["기준"].isin(["보정전", "모양"])].pivot_table(
+        d26 = cl[(cl.H == 60) & (cl["구간"] == "전체") & cl["기준"].isin(["보정전", "모양"])].pivot_table(
             index=["종목", "모델"], columns="기준", values="QLIKE").reset_index()
         d26["벌점"] = d26["보정전"] - d26["모양"]
         rk = lambda df, col: df.groupby("종목")[col].rank()
