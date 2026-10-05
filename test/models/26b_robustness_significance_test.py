@@ -644,9 +644,10 @@ def main(argv=None) -> None:
     a = ap.parse_args(argv)
     RES.mkdir(parents=True, exist_ok=True)
     rd, store = load_main()
-    rd = rd[~rd["모델"].isin(M26.DECISION_EXCLUDED)].copy()
+    excl = getattr(M26, "DECISION_EXCLUDED", ())   # 26번 코드에만 있다(26c부터는 코드에서 제거됨)
+    rd = rd[~rd["모델"].isin(excl)].copy()
     for S in store.values():
-        for nm in M26.DECISION_EXCLUDED:
+        for nm in excl:
             S["preds"].pop(nm, None)
     models = [m for m in M26.ALL_MODELS if m in set(rd["모델"])]
     tickers = sorted(rd["종목"].unique())

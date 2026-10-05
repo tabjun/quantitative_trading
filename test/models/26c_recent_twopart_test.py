@@ -74,7 +74,7 @@ for _p in (ROOT, ROOT / "test" / "scripts"):
 TAG = "26c_recent_twopart_20261005"
 STEM = "26c_recent_twopart"
 # 시드 반복 실행: RUN26C_SEED>0이면 무작위성이 있는 모델(정지 분류기 포함)만 다시 학습하고 산출물 접두사에
-# 시드를 붙인다. 무작위성이 없는 모델은 결정성 확인용으로 GARCH-t·HAR-RV·Linear·Ridge만 함께 돌린다.
+# 시드를 붙인다. 무작위성이 없는 모델은 결정성 확인용으로 GARCH-t만 함께 돌린다.
 SEED = int(os.environ.get("RUN26C_SEED", "0"))
 RUN_STEM = STEM if SEED == 0 else f"{STEM}_seed{SEED}"
 SEED_SKIP = ("MS-GARCH", "TAR-GARCH", "KernelRidge-RBF", "SVR-RBF")
@@ -152,22 +152,18 @@ ZERO_MIN_IN, ZERO_MIN_VAL = 200, 30
 ZERO_ROUNDS, ZERO_LR, ZERO_EARLY_STOP = 2000, 0.03, 100
 PI_MAX = 0.99
 
-# 2026-09-07 가정 진단 결정: 선형성 검정(RESET·BDS)이 기각되어 선형 모델(Linear·Ridge)은 비선형·커널 계열로
-# 대체한다(assumption_diagnosis_report_20260907.md 8절 3번). 23~26번 구현이 이 결정을 반영하지 않고 두 모델을
-# 계속 적합해 왔으므로, 이미 계산된 값은 기록으로만 두고 순위·동률·검정·결론에서는 뺀다.
-# HAR-RV도 형식상 선형 회귀라 통일성을 위해 함께 뺀다(2026-10-05 사용자 결정. 12시간 외에는 하위권이고
-# 12시간에서도 Nystroem+Ridge가 같은 정보를 담는다).
-DECISION_EXCLUDED = ("Linear", "Ridge", "HAR-RV")
-LOG_TARGET_MODELS = ("HAR-RV", "Linear", "Ridge", "KernelRidge-RBF", "SVR-RBF", "Nystroem+Ridge",
+# 선형 예측기(Linear·Ridge·HAR-RV)는 2026-09-07 선형성 기각 결정과 2026-10-05 결정에 따라 이 코드에 없다.
+# 제외 이유와 복구 방법은 test/research_materials/model_catalog.md와 이 변경의 커밋 메시지에 있다.
+LOG_TARGET_MODELS = ("KernelRidge-RBF", "SVR-RBF", "Nystroem+Ridge",
                      "LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM", "GRU", "LSTM")
 VAR_MODELS = ("GARCH-t", "MS-GARCH", "TAR-GARCH")
 ALL_MODELS = ("naive",) + VAR_MODELS + LOG_TARGET_MODELS
-FAMILY = {"naive": "기준선", "HAR-RV": "벤치마크", "Linear": "선형", "Ridge": "선형",
+FAMILY = {"naive": "기준선",
           "KernelRidge-RBF": "커널", "SVR-RBF": "커널", "Nystroem+Ridge": "커널",
           "LightGBM": "트리", "XGBoost": "트리", "HistGBM": "트리", "GARCH+LightGBM": "하이브리드",
           "GARCH-t": "통계", "MS-GARCH": "통계", "TAR-GARCH": "통계", "GRU": "딥러닝", "LSTM": "딥러닝"}
-PROCESS = {"naive": "직전값", "HAR-RV": "지연 특성 회귀(비신경)", "Linear": "특성 기반 회귀(비신경)",
-           "Ridge": "특성 기반 회귀(비신경)", "KernelRidge-RBF": "특성 기반 회귀(비신경)",
+PROCESS = {"naive": "직전값",
+           "KernelRidge-RBF": "특성 기반 회귀(비신경)",
            "SVR-RBF": "특성 기반 회귀(비신경)", "Nystroem+Ridge": "특성 기반 회귀(비신경)",
            "LightGBM": "특성 기반 트리(비신경)", "XGBoost": "특성 기반 트리(비신경)",
            "HistGBM": "특성 기반 트리(비신경)", "GARCH+LightGBM": "순차·재귀 통계 + 트리 결합",
@@ -472,7 +468,7 @@ def var_to_rv(hpath_pct2: np.ndarray, cfac: np.ndarray, j0: np.ndarray) -> tuple
 # %%
 def make_features(D: dict) -> dict:
     d = D["d"]
-    return dict(log=M23.feats_log(d), har=M23.feats_har(d), tree=M23.feats_tree(d))
+    return dict(log=M23.feats_log(d), tree=M23.feats_tree(d))
 
 
 def make_sequences(D: dict, j0: np.ndarray, L: int, split: pd.Timestamp = SPLIT) -> np.ndarray:
@@ -641,7 +637,7 @@ class Scorer:
 
 # %%
 def run_cpu_job(ticker: str, quick: bool) -> dict:
-    from sklearn.linear_model import LinearRegression, Ridge
+    from sklearn.linear_model import Ridge
     from sklearn.preprocessing import StandardScaler
     from sklearn.kernel_ridge import KernelRidge
     from sklearn.svm import SVR
@@ -804,34 +800,6 @@ def run_cpu_job(ticker: str, quick: bool) -> dict:
                 fails.append((name, H, type(e).__name__, str(e)[:160]))
                 traceback.print_exc()
             timings[f"{name}_h{H}"] = time.time() - t_
-
-        def fit_linear(Xs):
-            def f():
-                sc = StandardScaler().fit(Xs[tr_in])
-                mdl = LinearRegression().fit(sc.transform(Xs[tr_in]), y[tr_in])
-                pv = mdl.predict(sc.transform(Xs[va]))
-                sc2 = StandardScaler().fit(Xs[tf])
-                mdl2 = LinearRegression().fit(sc2.transform(Xs[tf]), y[tf])
-                return pv, mdl2.predict(sc2.transform(Xs[te]))
-            return f
-
-        fit_log_model("HAR-RV", fit_linear(X["har"]))
-        fit_log_model("Linear", fit_linear(X["log"]))
-
-        def fit_ridge():
-            sc = StandardScaler().fit(X["log"][tr_in])
-            Zi, Zv = sc.transform(X["log"][tr_in]), sc.transform(X["log"][va])
-            best = None
-            for a in RIDGE_ALPHAS:
-                pv = Ridge(alpha=a).fit(Zi, y[tr_in]).predict(Zv)
-                q = S.select_score(S.to_raw(pv, va))
-                if best is None or q < best[0]:
-                    best = (q, a, pv)
-            meta[f"ridge_alpha_h{H}"] = best[1]
-            sc2 = StandardScaler().fit(X["log"][tf])
-            mdl2 = Ridge(alpha=best[1]).fit(sc2.transform(X["log"][tf]), y[tf])
-            return best[2], mdl2.predict(sc2.transform(X["log"][te]))
-        fit_log_model("Ridge", fit_ridge)
 
         def std_block(mask):
             """mask 행으로 x·y 표준화기를 맞춘다. 반환: (x 변환기, y 평균, y 표준편차)."""
@@ -1172,7 +1140,7 @@ def selftest() -> None:
         assert np.allclose(F[key][jj], Fp[key][jj]), f"특성 {key}에 미래 정보"
     assert np.array_equal(seq, seqp), "시퀀스에 미래 정보"
     Dq = dict(D); dq = D["d"].copy(); dq[jj - 1] *= 9; Dq["d"] = dq
-    assert not np.allclose(make_features(Dq)["har"][jj], F["har"][jj]), "특성이 직전 봉을 반영"
+    assert not np.allclose(make_features(Dq)["log"][jj], F["log"][jj]), "특성이 직전 봉을 반영"
     assert not np.array_equal(make_sequences(Dq, np.array([jj]), 16, split=split), seq), "시퀀스가 직전 봉을 반영"
     ch = np.column_stack([np.nan_to_num(D["d"]), np.abs(np.nan_to_num(D["d"]))])
     trb = (g < split) & np.isfinite(D["d"])
@@ -1283,7 +1251,7 @@ def quarter_table(store: dict, models: list[str]) -> pd.DataFrame:
 
 
 SHORT = {"GARCH+LightGBM": "G+LGBM", "LightGBM": "LGBM", "XGBoost": "XGB", "HistGBM": "HGB",
-         "Nystroem+Ridge": "Nys", "KernelRidge-RBF": "KRR", "SVR-RBF": "SVR", "HAR-RV": "HAR"}
+         "Nystroem+Ridge": "Nys", "KernelRidge-RBF": "KRR", "SVR-RBF": "SVR"}
 TIE = 0.01      # 동률 폭(QLIKE). GRU 시드 간 표준편차 0.005~0.013(1시간, 4종목 × 5시드)에 근거
 TIE2 = 0.03
 
@@ -1358,11 +1326,11 @@ def family_votes(tt: pd.DataFrame) -> pd.DataFrame:
     return a.groupby(["H", "구간", "기준", "계열"]).size().rename("A등급수").reset_index()
 
 
-FAM_ORDER = ["통계", "하이브리드", "트리", "딥러닝", "선형", "커널", "벤치마크"]
-FAM_COLOR = dict(zip(FAM_ORDER, ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7"]))
-FAM_MARK = dict(zip(FAM_ORDER, ["o", "s", "^", "D", "v", "P", "X"]))
+FAM_ORDER = ["통계", "하이브리드", "트리", "딥러닝", "커널"]
+FAM_COLOR = dict(zip(FAM_ORDER, ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#008300"]))
+FAM_MARK = dict(zip(FAM_ORDER, ["o", "s", "^", "D", "P"]))
 FAM_LABEL = {"통계": "통계(GARCH 3종)", "하이브리드": "GARCH+트리", "트리": "트리", "딥러닝": "순환 딥러닝(GRU·LSTM)",
-             "선형": "선형(Linear·Ridge)", "커널": "커널", "벤치마크": "HAR-RV"}
+             "커널": "커널"}
 
 
 def emit_profile(tt: pd.DataFrame) -> None:
@@ -1375,7 +1343,7 @@ def emit_profile(tt: pd.DataFrame) -> None:
     emit()
     emit("| 계열 | 모델 | " + " | ".join(hlabel(H) for H in hs) + " | 모양 등급(" + "·".join(hlabel(H) for H in hs) + ") |")
     emit("| :--- | :--- | " + " | ".join([":---"] * len(hs)) + " | :--- |")
-    models = [m_ for m_ in ALL_MODELS if m_ != "naive" and m_ not in DECISION_EXCLUDED]
+    models = [m_ for m_ in ALL_MODELS if m_ != "naive"]
     for fam in FAM_ORDER:
         for nm in [m_ for m_ in models if FAMILY[m_] == fam]:
             cells, sh = [], []
@@ -1574,8 +1542,6 @@ def emit_vs26(rd1, store1, models) -> None:
 
 def write_report(rd, store, rd1, store1, fails_df, eda_df, heda_df, zdf, tickers, quick, elapsed_h, truncated):
     from report_header import render_standard_header, use_source
-    rd = rd[~rd["모델"].isin(DECISION_EXCLUDED)].copy()
-    rd1 = rd1[~rd1["모델"].isin(DECISION_EXCLUDED)].copy()
     models = [m for m in ALL_MODELS if m in set(rd["모델"])]
     rk, size = regime_tables(store, models)
     qt = quarter_table(store, models)
@@ -1614,8 +1580,8 @@ def write_report(rd, store, rd1, store1, fails_df, eda_df, heda_df, zdf, tickers
          "본 실행 안에서 내부학습 재적합으로 한다.")
     emit("- **상장폐지 종목**: AQT·AERGO는 7월 이후 업비트 KRW 마켓에서 빠져 새 데이터를 받을 수 없다. 생존 편향을 피하려고 "
          "빼지 않고, 2026-07-18까지의 데이터로만 평가했다(평가 기간이 다른 종목보다 약 2.5개월 짧다).")
-    emit("- 선형 모델(Linear·Ridge)과 HAR-RV는 결정대로 순위·동률·검정·결론에서 뺐다(2026-09-07 선형성 기각, 2026-10-05 "
-         "HAR-RV 결정). 값은 CSV에 기록으로만 남는다.")
+    emit("- 비교 대상은 24번 모델에서 선형 예측기(Linear·Ridge·HAR-RV)를 뺀 12종과 naive다. 제외 이유는 "
+         "`test/research_materials/model_catalog.md`에 있다.")
     emit()
     emit(f"소요 {elapsed_h:.2f}시간.")
     if truncated:
@@ -1642,7 +1608,7 @@ def write_report(rd, store, rd1, store1, fails_df, eda_df, heda_df, zdf, tickers
 
     emit("## 2. 적합 완결성")
     emit()
-    exp_n = len(tickers) * len(HORIZONS_H) * len(models)   # 결론에 쓰는 모델 기준(선형 2종 제외)
+    exp_n = len(tickers) * len(HORIZONS_H) * len(models)   # naive 포함
     emit(f"기대 {len(tickers)}종목 × {len(HORIZONS_H)}구간 × {len(models)}모델 = {exp_n}행, 실제 {len(rd)}행.")
     if len(fails_df):
         emit()
