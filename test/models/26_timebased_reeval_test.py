@@ -798,9 +798,9 @@ def horizon_eda(D: dict, HD: dict) -> dict:
 # ## GPU 작업: GRU·LSTM(구간별 재학습)
 
 # %%
-def train_dl_once(name, Xtr, ytr, Xval, yval, Xva, Xte, dev, max_epochs, patience, batch, lr, tmax=None):
+def train_dl_once(name, Xtr, ytr, Xval, yval, Xva, Xte, dev, max_epochs, patience, batch, lr, tmax=None, seed=0):
     from engine.models import make_model
-    torch.manual_seed(0)
+    torch.manual_seed(seed)
     model = make_model(name, Xtr.shape[1], Xtr.shape[2], DL_HIDDEN).to(dev)
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=tmax or max_epochs)
