@@ -554,6 +554,32 @@ def combine() -> None:
     print(f"[합치기 완료] 모델 {len(models)}종(naive 포함) · 행 {len(rd)} · 시드 {got}", flush=True)
 
 
+def seed_mean_losses(rd: pd.DataFrame, store: dict, models: list[str]) -> tuple[pd.DataFrame, dict]:
+    """시드 0~4의 칸별 손실을 평균한 cell_losses. 무작위성이 있는 모델은 시드마다 그 시드의 예측·보정계수로 손실을 구하고
+    (손실의 평균이며 예측의 평균이 아니다), 나머지 모델은 시드와 무관하므로 같은 값이 평균된다. 반환: (평균 손실표, 모델별 시드 수)."""
+    frames = [M.cell_losses(rd, store, models).assign(seed=0)]
+    n_seed = {m_: 1 for m_ in models}
+    for sd in (1, 2, 3, 4):
+        f_rd, f_np = RES / f"{STEM}_seed{sd}_model_comparison.csv", RES / f"{STEM}_seed{sd}_test_predictions.npz"
+        if not (f_rd.exists() and f_np.exists()):
+            continue
+        rds = pd.read_csv(f_rd)
+        pr = {}
+        for key, v in M._npz_to_store(f_np).items():
+            pr[key] = v["preds"]
+        st = {key: {**{a_: b_ for a_, b_ in S.items() if a_ != "preds"}, "preds": {**S["preds"], **pr.get(key, {})}}
+              for key, S in store.items()}
+        have = set(rds["모델"])
+        rd_s = pd.concat([rd[~rd["모델"].isin(have)], rds[rds["모델"].isin(models)]], ignore_index=True)
+        frames.append(M.cell_losses(rd_s, st, models).assign(seed=sd))
+        for m_ in models:
+            if m_ in have and m_ in set(M.LOG_TARGET_MODELS) and m_ not in FM_MODELS:
+                n_seed[m_] += 1
+    cl = pd.concat(frames, ignore_index=True)
+    cl = cl.groupby(["종목", "H", "구간", "기준", "모델"], as_index=False)["QLIKE"].mean()
+    return cl, n_seed
+
+
 ROSTER = [
     # (계열, 모델, 구현, 입력, 학습·추론 방식, 시드 반복)
     ("통계", "GARCH-t·MS-GARCH·TAR-GARCH", "arch 패키지 / 자체 엔진(`engine/regime_garch.py`)", "15분 수익률", "최대우도, 다단계 재귀 예측", "해당 없음(결정적)"),
@@ -626,27 +652,36 @@ def write_report27(elapsed_note: str = "") -> None:
     except FileNotFoundError:
         emit("조회 결과 파일이 없다.")
     emit()
-    rd = rd.copy()
-    rd["rank"] = rd.groupby(["종목", "H"])["QLIKE"].rank()
-    nq = rd[rd["모델"] == "naive"][["종목", "H", "QLIKE"]].rename(columns={"QLIKE": "QLIKE_naive"})
-    rd = rd.merge(nq, on=["종목", "H"], how="left")
-    rd["dQLIKE"] = rd["QLIKE"] - rd["QLIKE_naive"]
-    cl = M.cell_losses(rd, store, models)
+    cl, n_seed = seed_mean_losses(rd, store, models)
+    cl.to_csv(RES / f"{STEM}_cell_losses_seedmean.csv", index=False)
     tt = M.tier_table(cl)
+    cl0 = cl[(cl["구간"] == "전체") & (cl["기준"] == "보정후")].copy()
+    cl0["rank"] = cl0.groupby(["종목", "H"])["QLIKE"].rank()
     tt.to_csv(RES / f"{STEM}_tier_table.csv", index=False)
     M.family_votes(tt).to_csv(RES / f"{STEM}_tier_family_votes.csv", index=False)
     emit("## 3. 구간별 결과(전 모델)")
     emit()
-    emit(f"종목마다 QLIKE 순위를 매겨 평균했다(작을수록 좋음). 격차는 그 구간 최선 모델 대비 QLIKE 차의 종목 평균이다. **A등급은 격차가 {M.TIE} 이하**로, "
-         "GRU 시드 표준편차에서 가져온 실무 기준이며 통계 검정이 아니다. 통계 검정(DM·MCS)은 26b 보고서에 있다.")
+    emit("**이 절의 모든 손실은 시드 평균이다.** 무작위성이 있는 모델(트리, Nystroem, GRU·LSTM, 신규 신경망)은 시드마다 그 시드의 예측과 보정계수로 "
+         "손실을 구한 뒤 평균했고(예측을 평균한 앙상블이 아니다), 시드와 무관한 모델(GARCH 3종, 커널 2종, 파운데이션 7종)은 같은 값이 평균된다. "
+         "한 시드만 쓰면 신경망의 순위가 시드에 따라 바뀌기 때문이다(26c에서 GRU 15분 종목 평균 손실이 시드에 따라 -9.74~-9.81).")
+    emit()
+    emit("| 모델 | " + " | ".join(m_ for m_ in models if m_ != "naive") + " |")
+    emit("| :--- | " + " | ".join(["---:"] * (len(models) - 1)) + " |")
+    emit("| 사용한 시드 수 | " + " | ".join(str(n_seed[m_]) for m_ in models if m_ != "naive") + " |")
+    emit()
+    emit("시드 수가 1인 모델은 시드로 결과가 바뀌지 않는 모델(해당 없음)이거나 해당 시드 산출물이 아직 없는 모델이다. 후자라면 이 표의 값은 "
+         "시드 1개 결과이므로 해석에 주의해야 한다.")
+    emit()
+    emit(f"종목마다 시드 평균 QLIKE로 순위를 매겨 평균했다(작을수록 좋음). 격차는 그 구간 최선 모델 대비 시드 평균 QLIKE 차의 종목 평균이다. "
+         f"**A등급은 격차가 {M.TIE} 이하**로, GRU 시드 표준편차에서 가져온 실무 기준이며 통계 검정이 아니다. 통계 검정(DM·MCS)은 26b 보고서에 있다.")
     emit()
     for H in M.HORIZONS_H:
         g = tt[(tt["H"] == H) & (tt["구간"] == "전체") & (tt["기준"] == "보정후")].set_index("모델")
-        r = rd[rd["H"] == H].groupby("모델")["rank"].mean()
+        r = cl0[cl0["H"] == H].groupby("모델")["rank"].mean()
         order = g.sort_values("격차").index
         emit(f"### {M.hlabel(H)}")
         emit()
-        emit("| 순위 | 모델 | 계열 | 평균 순위 | 격차(최선 대비) | 등급 | 종목 수 |")
+        emit("| 순위 | 모델 | 계열 | 평균 순위(시드 평균 손실) | 격차(최선 대비) | 등급 | 종목 수 |")
         emit("| ---: | :--- | :--- | ---: | ---: | :--- | ---: |")
         for i, nm in enumerate(order, 1):
             emit(f"| {i} | {nm} | {M.FAMILY[nm]} | {r.get(nm, np.nan):.1f} | {g.loc[nm, '격차']:.4f} | {g.loc[nm, '등급']} | {int(g.loc[nm, '종목수'])} |")
