@@ -76,7 +76,6 @@ STOCHASTIC = ("LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM", "Nystroem+Ridg
 if SRC_KEY == "27":
     STOCHASTIC = STOCHASTIC + ("PatchTST", "iTransformer", "TCN", "Autoformer", "TimesNet", "TimeXer", "ModernTCN", "S-Mamba")
 DET_CHECK = ("GARCH-t",)
-DET_NOT_RERUN = ("MS-GARCH", "TAR-GARCH", "KernelRidge-RBF", "SVR-RBF")
 ALPHA = 0.05
 TIE = M26.TIE
 _LINES: list[str] = []

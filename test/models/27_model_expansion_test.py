@@ -450,9 +450,6 @@ def run_nf_job(ticker: str, H: int, quick: bool, models: tuple, seed: int) -> di
 # ## 파운데이션 모델: 입력 작성 → 러너(모델별 venv) → 점수
 
 # %%
-FM_PY = {"Chronos-Bolt": ".venv", "TimesFM": ".venv", "TTM": ".venv", "Moirai-2": ".venvs/moirai_py312_20261004_192438",
-         "Sundial": ".venvs/legacy_hf_py312_20261004", "Time-MoE": ".venvs/legacy_hf_py312_20261004",
-         "Lag-Llama": ".venvs/lagllama_py312_20261004"}
 FM_DIR = RES / "fm_io"
 
 
@@ -657,7 +654,6 @@ def write_report27(elapsed_note: str = "") -> None:
     emit = M.emit
     rd, store, rd1, store1 = M.load_saved(STEM)
     models = [m_ for m_ in M.ALL_MODELS if m_ in set(rd["모델"])]
-    tickers = sorted(rd["종목"].unique())
     new_in = [m_ for m_ in NEW_MODELS if m_ in set(rd["모델"])]
     new_out = [m_ for m_ in NEW_MODELS if m_ not in set(rd["모델"])]
     emit("# 27번: 신규 알고리즘 확대(병렬 어텐션·합성곱·파운데이션)")

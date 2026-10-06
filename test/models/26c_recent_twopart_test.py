@@ -109,7 +109,6 @@ def load_close(ticker: str) -> pd.Series:
 
 # %%
 BAR = pd.Timedelta("15min")
-BPH = 4
 HORIZONS_H = (15, 30, 60, 240, 720)          # 예측 구간(분). 15분봉이라 15분 미만은 만들 수 없다
 EVAL_HOURS = {15: tuple(range(24)), 30: tuple(range(24)), 60: tuple(range(24)),
               240: tuple(range(0, 24, 4)), 720: (0, 12)}
@@ -146,7 +145,6 @@ NYSTROEM_COMPONENTS = 2048
 MS_ROUNDS, MS_MAXITER, MS_FIT_N = 4, 1500, 30000
 TAR_RESTARTS, TAR_MAXITER = 2, 600
 TAR_TAU_Q = (0.5, 0.65, 0.8, 0.9)
-MIN_FREE_RAM_GB = 3.0
 # 정지 분류기(두 부분 모형). 내부학습·내부검증에 정지 표본이 이보다 적으면 π=0(단일 처리와 같아진다).
 ZERO_MIN_IN, ZERO_MIN_VAL = 200, 30
 ZERO_ROUNDS, ZERO_LR, ZERO_EARLY_STOP = 2000, 0.03, 100
