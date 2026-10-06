@@ -58,3 +58,6 @@ materials/research_overview.docx
 # conversation_l2_cache.md
 # history.md
 # process.md
+
+# 외부 공식 저장소 사본(커밋 해시는 test/research_materials/model_catalog.md에 기록)
+third_party/
