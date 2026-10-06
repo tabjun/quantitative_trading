@@ -97,32 +97,34 @@ M = _load_m26c()
 # %%
 NF_MODELS = ("PatchTST", "iTransformer", "TCN", "Autoformer", "TimesNet", "TimeXer")
 CONV_MODELS = ("ModernTCN",)
+SSM_MODELS = ("S-Mamba",)
 FM_MODELS = ("Chronos-Bolt", "TimesFM", "TTM", "Moirai-2", "Sundial", "Time-MoE", "Lag-Llama")
-NEW_MODELS = NF_MODELS + CONV_MODELS + FM_MODELS
+NEW_MODELS = NF_MODELS + CONV_MODELS + SSM_MODELS + FM_MODELS
 
 NEW_FAMILY = {"PatchTST": "어텐션", "iTransformer": "어텐션", "Autoformer": "어텐션", "TimeXer": "어텐션",
-              "TCN": "합성곱", "TimesNet": "합성곱", "ModernTCN": "합성곱", **{m_: "파운데이션" for m_ in FM_MODELS}}
+              "TCN": "합성곱", "TimesNet": "합성곱", "ModernTCN": "합성곱", "S-Mamba": "상태공간",
+              **{m_: "파운데이션" for m_ in FM_MODELS}}
 NEW_PROCESS = {"PatchTST": "병렬 어텐션(패치)", "iTransformer": "병렬 어텐션(변수 토큰)", "Autoformer": "병렬 어텐션(자기상관)",
                "TimeXer": "병렬 어텐션(패치+변수 토큰)", "TCN": "병렬 합성곱(인과 팽창)", "TimesNet": "병렬 합성곱(2D 주기)",
-               "ModernTCN": "병렬 합성곱(순수)", "Chronos-Bolt": "사전학습 zero-shot(인코더-디코더)",
+               "ModernTCN": "병렬 합성곱(순수)", "S-Mamba": "선택적 상태공간(학습 병렬·추론 재귀)", "Chronos-Bolt": "사전학습 zero-shot(인코더-디코더)",
                "TimesFM": "사전학습 zero-shot(디코더)", "TTM": "사전학습 zero-shot(MLP-Mixer)",
                "Moirai-2": "사전학습 zero-shot(디코더)", "Sundial": "사전학습 zero-shot(플로우 매칭)",
                "Time-MoE": "사전학습 zero-shot(전문가 혼합)", "Lag-Llama": "사전학습 zero-shot(lag 디코더)"}
 M.FAMILY.update(NEW_FAMILY)
 M.PROCESS.update(NEW_PROCESS)
-M.FAM_ORDER[:] = ["통계", "하이브리드", "트리", "딥러닝", "커널", "어텐션", "합성곱", "파운데이션"]
-M.FAM_COLOR.update({"어텐션": "#4a3aa7", "합성곱": "#e87ba4", "파운데이션": "#6b6b66"})
-M.FAM_MARK.update({"어텐션": "X", "합성곱": "v", "파운데이션": "*"})
-M.FAM_LABEL.update({"어텐션": "병렬 어텐션", "합성곱": "병렬 합성곱", "파운데이션": "파운데이션(zero-shot)"})
+M.FAM_ORDER[:] = ["통계", "하이브리드", "트리", "딥러닝", "커널", "어텐션", "합성곱", "상태공간", "파운데이션"]
+M.FAM_COLOR.update({"어텐션": "#4a3aa7", "합성곱": "#e87ba4", "상태공간": "#a0522d", "파운데이션": "#6b6b66"})
+M.FAM_MARK.update({"어텐션": "X", "합성곱": "v", "상태공간": "h", "파운데이션": "*"})
+M.FAM_LABEL.update({"어텐션": "병렬 어텐션", "합성곱": "병렬 합성곱", "상태공간": "선택적 상태공간", "파운데이션": "파운데이션(zero-shot)"})
 M.SHORT.update({"PatchTST": "PTST", "iTransformer": "iTrans", "Autoformer": "Autof", "TimesNet": "TNet",
-                "ModernTCN": "MTCN", "Chronos-Bolt": "Chr", "TimesFM": "TFM", "Moirai-2": "Moi",
+                "ModernTCN": "MTCN", "S-Mamba": "SMmb", "Chronos-Bolt": "Chr", "TimesFM": "TFM", "Moirai-2": "Moi",
                 "Sundial": "Sun", "Time-MoE": "TMoE", "Lag-Llama": "LagL"})
 
 INPUT_BLOCKS = {15: 96, 30: 96, 60: 96, 240: 60, 720: 30}   # 입력 길이(블록 수): 하루~며칠치 이력
 # 26c 모듈의 목록을 신규 모델까지 넓힌다(모든 신규 모델은 로그 타깃이라 정지 확률 π를 받는다)
 M.ALL_MODELS = tuple(M.ALL_MODELS) + NEW_MODELS
 M.LOG_TARGET_MODELS = tuple(M.LOG_TARGET_MODELS) + NEW_MODELS
-STOCHASTIC_NEW = NF_MODELS + CONV_MODELS          # 시드로 흔들리는 신규 모델(파운데이션은 zero-shot이라 학습 시드 없음)
+STOCHASTIC_NEW = NF_MODELS + CONV_MODELS + SSM_MODELS          # 시드로 흔들리는 신규 모델(파운데이션은 zero-shot이라 학습 시드 없음)
 
 NF_MAX_STEPS, NF_VAL_CHECK, NF_PATIENCE = 1000, 100, 3
 NF_WINDOWS_BATCH = 256        # 모델마다 기본 배치가 달라(Autoformer 1,024 등) 계산량이 크게 갈려 모두 같은 값으로 맞춘다
@@ -294,9 +296,33 @@ def modern_tcn_predict(B: dict, ymu: float, ysd: float, train_end: int, end: int
     return p
 
 
+SMAMBA_VENV = ROOT / ".venvs" / "smamba_py310_20261006"
+
+
+def smamba_predict(B: dict, ymu: float, ysd: float, train_end: int, end: int, H: int, seed: int, quick: bool):
+    """S-Mamba는 구버전 torch·mamba_ssm이 필요해 격리 venv의 러너(`27_smamba_run.py`)를 서브프로세스로 부른다."""
+    import subprocess
+    import tempfile
+    L = INPUT_BLOCKS[H] if not quick else 16
+    rsd = float(np.std(B["ret"][:train_end])) or 1.0
+    libs = ":".join(str(d) for d in sorted((SMAMBA_VENV / "lib" / "python3.10" / "site-packages" / "nvidia").glob("*/lib")))
+    with tempfile.TemporaryDirectory() as td:
+        fin, fout = Path(td) / "in.npz", Path(td) / "out.npz"
+        np.savez(fin, y=((locf(B["y"]) - ymu) / ysd).astype(np.float32), ret=(B["ret"] / rsd).astype(np.float32),
+                 ok=B["ok"], train_end=train_end, end=end, L=L, seed=seed, quick=quick)
+        env = {**os.environ, "LD_LIBRARY_PATH": libs + ":" + os.environ.get("LD_LIBRARY_PATH", "")}
+        r = subprocess.run([str(SMAMBA_VENV / "bin" / "python"), str(ROOT / "test" / "models" / "27_smamba_run.py"),
+                            "--inp", str(fin), "--out", str(fout)], capture_output=True, text=True, env=env)
+        if r.returncode != 0:
+            raise RuntimeError(f"S-Mamba 러너 실패: {r.stderr[-300:]}")
+        return np.load(fout)["p"]
+
+
 def nf_predict(name: str, B: dict, ymu: float, ysd: float, train_end: int, end: int, H: int, seed: int, quick: bool):
     if name == "ModernTCN":
         return modern_tcn_predict(B, ymu, ysd, train_end, end, H, seed, quick)
+    if name == "S-Mamba":
+        return smamba_predict(B, ymu, ysd, train_end, end, H, seed, quick)
     """블록 [0, end)로 모델 하나를 학습(앞 train_end개 중 끝 15%는 조기종료 검증)하고 [train_end, end)를 예측.
     반환: 길이 end-train_end의 표준화 로그 RV 예측."""
     from neuralforecast import NeuralForecast
@@ -467,7 +493,7 @@ def _read_family(stem: str, seed: int = 0) -> list[tuple[pd.DataFrame, pd.DataFr
     """한 시드의 신규 모델 산출물(nf·conv·fm)을 (rows, rows1, store, store1)로 읽는다. 없는 계열은 건너뛴다."""
     out = []
     pre = f"{STEM}" if seed == 0 else f"{STEM}_seed{seed}"
-    for tag in ("nf", "conv", "fm"):
+    for tag in ("nf", "conv", "ssm", "fm"):
         f = RES / f"{pre}_{tag}_model_comparison.csv"
         if not f.exists():
             continue
@@ -537,6 +563,7 @@ ROSTER = [
     ("순환 딥러닝", "GRU·LSTM", "PyTorch(`engine/models.py`)", "15분봉 96개 (d,|d|)", "내부검증 조기종료, 학습률 3개 비교, 전체 재적합", "예"),
     ("어텐션", "PatchTST·iTransformer·Autoformer·TimeXer", "neuralforecast 공식 패키지", "H분 블록 로그 RV 이력(iTransformer는 +블록 수익률)", "라이브러리 기본값, 조기종료, 전체 재적합", "예"),
     ("합성곱", "TCN·TimesNet", "neuralforecast 공식 패키지", "H분 블록 로그 RV 이력", "라이브러리 기본값, 조기종료, 전체 재적합", "예"),
+    ("상태공간", "S-Mamba", "저자 공식 GitHub 코드(`third_party/S-D-Mamba`), 격리 venv", "H분 블록 로그 RV 이력 + 블록 수익률(2변수)", "저자 ETTh1 설정, 조기종료, 전체 재적합", "예"),
     ("합성곱", "ModernTCN", "저자 공식 GitHub 코드(`third_party/ModernTCN`)", "H분 블록 로그 RV 이력", "저자 ETTh1 설정, 조기종료, 전체 재적합", "예"),
     ("파운데이션", "Chronos-Bolt·TimesFM·TTM", "공식 패키지(메인 venv)", "직전 512블록 로그 RV", "zero-shot(재학습 없음), 중앙값 점예측", "해당 없음(결정적)"),
     ("파운데이션", "Moirai-2·Sundial·Time-MoE", "공식 패키지(격리 venv)", "직전 512블록 로그 RV", "zero-shot, Moirai-2 중앙 분위수 / Sundial 표본 50개 중앙값 / Time-MoE 점예측", "Sundial은 표본 추출(시드 고정, 반복 안 함)"),
@@ -564,8 +591,9 @@ def write_report27(elapsed_note: str = "") -> None:
     emit()
     emit("- **26c 결과는 다시 계산하지 않고 그대로 가져왔다.** 평가 시각과 실제값이 모든 모델에서 같은지 합치는 단계에서 대조했다.")
     emit(f"- 신규 모델 중 이번 결과에 들어온 것: {', '.join(new_in) or '없음'}. 들어오지 못한 것: {', '.join(new_out) or '없음(전부 포함)'}.")
-    emit("- **S-Mamba는 이번 비교에 없다**: 공식 구현이 `mamba_ssm`(CUDA 컴파일 필요)에 의존하는데 서버에 `nvcc`가 없어 설치에 실패했다"
-         "(`pip` 빌드 오류 확인). 이 계열의 결과는 이번 회차에 해당 없음이다.")
+    emit("- **S-Mamba**: 공식 구현이 `mamba_ssm`(구버전 `torch==2.0.1` 필요)에 의존하고 서버에 `nvcc`가 없어 처음에는 설치에 실패했다. "
+         "저자 요구 버전에 맞춰 미리 컴파일된 wheel로 **격리 venv**(`.venvs/smamba_py310_20261006`)를 구성해 해결했다(시스템 변경 없음). "
+         "메인 환경의 torch 버전은 그대로다.")
     emit("- 제외 모델(Linear·Ridge·HAR-RV·DLinear·NLinear 등)의 제외 이유는 `test/research_materials/model_catalog.md`에 있다.")
     emit(f"- {elapsed_note}" if elapsed_note else "- 소요 시간 기록: 해당 없음(여러 실행으로 나뉘어 합산하지 않았다).")
     emit()
@@ -628,7 +656,7 @@ def write_report27(elapsed_note: str = "") -> None:
     emit("각 계열에서 그 구간 최선과의 격차가 가장 작은 모델을 대표로 삼았다. 값이 0.01 이하면 그 구간의 최선과 사실상 동률이다. 계열에 해당 모델이 "
          "없으면 \"-\"로 표시했다.")
     emit()
-    fams = ["통계", "하이브리드", "트리", "딥러닝", "커널", "어텐션", "합성곱", "파운데이션"]
+    fams = ["통계", "하이브리드", "트리", "딥러닝", "커널", "어텐션", "합성곱", "상태공간", "파운데이션"]
     emit("| 계열 | 모델 수 | " + " | ".join(M.hlabel(H) for H in M.HORIZONS_H) + " |")
     emit("| :--- | ---: | " + " | ".join(["---:"] * len(M.HORIZONS_H)) + " |")
     allg = tt[(tt["구간"] == "전체") & (tt["기준"] == "보정후") & (tt["모델"] != "naive")].copy()
@@ -683,7 +711,7 @@ def merge_jobs(results: list, store: dict, rows: list, rows1: list, store1: dict
 def main(argv=None) -> None:
     from report_header import study_universe
     ap = argparse.ArgumentParser()
-    ap.add_argument("--family", default="nf", choices=["nf", "conv", "fm-prep", "fm-score", "combine", "report"])
+    ap.add_argument("--family", default="nf", choices=["nf", "conv", "ssm", "fm-prep", "fm-score", "combine", "report"])
     ap.add_argument("--elapsed-note", default="")
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--selftest", action="store_true")
@@ -709,9 +737,9 @@ def main(argv=None) -> None:
     if a.family == "report":
         write_report27(a.elapsed_note)
         return
-    default = {"nf": NF_MODELS, "conv": CONV_MODELS, "fm-score": FM_MODELS, "fm-prep": ()}[a.family]
+    default = {"nf": NF_MODELS, "conv": CONV_MODELS, "ssm": SSM_MODELS, "fm-score": FM_MODELS, "fm-prep": ()}[a.family]
     models = tuple(m_ for m_ in (a.models.split(",") if a.models else default) if m_)
-    tag = {"nf": "nf", "conv": "conv", "fm-score": "fm", "fm-prep": "prep"}[a.family]
+    tag = {"nf": "nf", "conv": "conv", "ssm": "ssm", "fm-score": "fm", "fm-prep": "prep"}[a.family]
     jobs = [(tk, H) for tk in tickers for H in M.HORIZONS_H]
     print(f"[시작] {a.family} {models} · 종목 {len(tickers)} × 구간 {M.HORIZONS_H} = {len(jobs)}작업 · 시드 {SEED} · 워커 {a.workers}",
           flush=True)

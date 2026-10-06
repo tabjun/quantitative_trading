@@ -74,7 +74,7 @@ M26 = _load_m26()
 SEEDS = (0, 1, 2, 3, 4)
 STOCHASTIC = ("LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM", "Nystroem+Ridge", "GRU", "LSTM")
 if SRC_KEY == "27":
-    STOCHASTIC = STOCHASTIC + ("PatchTST", "iTransformer", "TCN", "Autoformer", "TimesNet", "TimeXer", "ModernTCN")
+    STOCHASTIC = STOCHASTIC + ("PatchTST", "iTransformer", "TCN", "Autoformer", "TimesNet", "TimeXer", "ModernTCN", "S-Mamba")
 DET_CHECK = ("GARCH-t",)
 DET_NOT_RERUN = ("MS-GARCH", "TAR-GARCH", "KernelRidge-RBF", "SVR-RBF")
 ALPHA = 0.05
