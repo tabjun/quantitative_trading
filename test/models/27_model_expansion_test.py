@@ -119,6 +119,11 @@ M.SHORT.update({"PatchTST": "PTST", "iTransformer": "iTrans", "Autoformer": "Aut
                 "Sundial": "Sun", "Time-MoE": "TMoE", "Lag-Llama": "LagL"})
 
 INPUT_BLOCKS = {15: 96, 30: 96, 60: 96, 240: 60, 720: 30}   # 입력 길이(블록 수): 하루~며칠치 이력
+# 26c 모듈의 목록을 신규 모델까지 넓힌다(모든 신규 모델은 로그 타깃이라 정지 확률 π를 받는다)
+M.ALL_MODELS = tuple(M.ALL_MODELS) + NEW_MODELS
+M.LOG_TARGET_MODELS = tuple(M.LOG_TARGET_MODELS) + NEW_MODELS
+STOCHASTIC_NEW = NF_MODELS + CONV_MODELS          # 시드로 흔들리는 신규 모델(파운데이션은 zero-shot이라 학습 시드 없음)
+
 NF_MAX_STEPS, NF_VAL_CHECK, NF_PATIENCE = 1000, 100, 3
 NF_WINDOWS_BATCH = 256        # 모델마다 기본 배치가 달라(Autoformer 1,024 등) 계산량이 크게 갈려 모두 같은 값으로 맞춘다
 VAL_FRAC = 0.15
@@ -458,6 +463,71 @@ def selftest() -> None:
 # ## 저장과 실행
 
 # %%
+def _read_family(stem: str, seed: int = 0) -> list[tuple[pd.DataFrame, pd.DataFrame, dict, dict]]:
+    """한 시드의 신규 모델 산출물(nf·conv·fm)을 (rows, rows1, store, store1)로 읽는다. 없는 계열은 건너뛴다."""
+    out = []
+    pre = f"{STEM}" if seed == 0 else f"{STEM}_seed{seed}"
+    for tag in ("nf", "conv", "fm"):
+        f = RES / f"{pre}_{tag}_model_comparison.csv"
+        if not f.exists():
+            continue
+        rd = pd.read_csv(f)
+        rd1 = pd.read_csv(RES / f"{pre}_{tag}_onepart_comparison.csv")
+        st = M._npz_to_store(RES / f"{pre}_{tag}_test_predictions.npz")
+        st1 = M._npz_to_store(RES / f"{pre}_{tag}_onepart_predictions.npz")
+        out.append((rd, rd1, st, st1))
+    return out
+
+
+def combine() -> None:
+    """26c의 12종+naive와 27번 신규 모델을 한 묶음으로 합친다(26b 검정 도구와 보고서가 읽는 형식).
+
+    평가 시각·실제값은 모든 산출물에서 같아야 하므로 같은지 대조한다. 시드 파일에는 신규 모델의 시드별 예측과 26c의
+    시드별 예측을 함께 담는다."""
+    rd, store, rd1, store1 = M.load_saved()                        # 26c(MS-GARCH 재적합 반영)
+    fam = _read_family(STEM, 0)
+    if not fam:
+        raise RuntimeError("27번 신규 모델 산출물이 없다")
+    for rn, rn1, sn, sn1 in fam:
+        rd, rd1 = pd.concat([rd, rn], ignore_index=True), pd.concat([rd1, rn1], ignore_index=True)
+        for key, S in sn.items():
+            T0 = store[key]["T"]
+            if not (np.array_equal(S["T"], T0) and np.allclose(S["act"], store[key]["act"])):
+                raise AssertionError(f"{key}: 신규 모델과 26c의 평가 시각·실제값이 다르다")
+            store[key]["preds"].update(S["preds"])
+            store1[key]["preds"].update(sn1[key]["preds"])
+    rd.to_csv(RES / f"{STEM}_model_comparison.csv", index=False)
+    rd1.to_csv(RES / f"{STEM}_onepart_comparison.csv", index=False)
+    M.save_npz(RES / f"{STEM}_test_predictions.npz", store, aux=True)
+    M.save_npz(RES / f"{STEM}_onepart_predictions.npz", store1, aux=False)
+    import shutil
+    for f in ("chosen_hyperparams.csv", "zero_classifier.csv"):
+        shutil.copy(SRC26C / f"26c_recent_twopart_{f}", RES / f"{STEM}_{f}")
+    # 시드 묶음
+    got = []
+    for sd in (1, 2, 3, 4):
+        f26 = SRC26C / f"26c_recent_twopart_seed{sd}_test_predictions.npz"
+        fam_s = _read_family(STEM, sd)
+        if not f26.exists() or not fam_s:
+            continue
+        pr = {}
+        for key, v in M._npz_to_store(f26).items():
+            pr.setdefault(key, {}).update(v["preds"])
+        rows_s = [pd.read_csv(SRC26C / f"26c_recent_twopart_seed{sd}_model_comparison.csv")]
+        for rn, _, sn, _ in fam_s:
+            rows_s.append(rn)
+            for key, S in sn.items():
+                pr.setdefault(key, {}).update(S["preds"])
+        M.save_npz(RES / f"{STEM}_seed{sd}_test_predictions.npz", {k: {"preds": v} for k, v in pr.items()}, aux=False)
+        pd.concat(rows_s, ignore_index=True).to_csv(RES / f"{STEM}_seed{sd}_model_comparison.csv", index=False)
+        got.append(sd)
+    models = [m_ for m_ in M.ALL_MODELS if m_ in set(rd["모델"])]
+    cl = M.cell_losses(rd, store, models)
+    tt = M.tier_table(cl)
+    tt.to_csv(RES / f"{STEM}_tier_table.csv", index=False)
+    print(f"[합치기 완료] 모델 {len(models)}종(naive 포함) · 행 {len(rd)} · 시드 {got}", flush=True)
+
+
 def merge_jobs(results: list, store: dict, rows: list, rows1: list, store1: dict) -> None:
     for r in results:
         key = (r["ticker"], r["H"])
@@ -472,7 +542,7 @@ def merge_jobs(results: list, store: dict, rows: list, rows1: list, store1: dict
 def main(argv=None) -> None:
     from report_header import study_universe
     ap = argparse.ArgumentParser()
-    ap.add_argument("--family", default="nf", choices=["nf", "conv", "fm-prep", "fm-score"])
+    ap.add_argument("--family", default="nf", choices=["nf", "conv", "fm-prep", "fm-score", "combine"])
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--n-tickers", type=int, default=20)
@@ -491,6 +561,9 @@ def main(argv=None) -> None:
     RES.mkdir(parents=True, exist_ok=True)
     tickers, _ = study_universe()
     tickers = tickers[:2] if a.quick else tickers[:a.n_tickers]
+    if a.family == "combine":
+        combine()
+        return
     default = {"nf": NF_MODELS, "conv": CONV_MODELS, "fm-score": FM_MODELS, "fm-prep": ()}[a.family]
     models = tuple(m_ for m_ in (a.models.split(",") if a.models else default) if m_)
     tag = {"nf": "nf", "conv": "conv", "fm-score": "fm", "fm-prep": "prep"}[a.family]
