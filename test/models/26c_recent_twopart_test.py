@@ -1458,6 +1458,23 @@ def emit_twopart(rd, store, rd1, store1, zdf, models, tt) -> None:
         emit(f"| {hlabel(H)} | {len(fit)}/{len(g)} | {g['정지_학습'].median():.1%} | {g['정지_내부검증'].median():.1%} | "
              f"{g['정지_평가'].median():.1%} | {med('π평균_평가'):.1%} | {med('AUC_평가'):.3f} | {bri:+.4f} | {med('반복'):.0f} |")
     emit()
+    emit("**해석(예측 구간마다)**: 분류기는 \"다음 구간에 가격이 한 칸도 안 움직이는가\"를 맞히는 이진 분류다. AUC는 정지·비정지 쌍을 "
+         "올바른 순서로 매기는 확률이라 0.5면 무작위, 1이면 완벽하다. Brier 개선이 양수면 최근 상태를 쓰는 분류기가 학습 평균 정지율을 "
+         "상수로 쓰는 것보다 낫다는 뜻이다.")
+    emit()
+    for H in hs:
+        g = zdf[zdf["H"] == H]
+        fit = g[g["분류기"] == "LightGBM"]
+        if not len(fit):
+            emit(f"- {hlabel(H)}: 정지가 거의 없어(평가 정지 비율 중앙 {g['정지_평가'].median():.2%}) 분류기를 적합한 종목이 없다. π=0이라 두 부분 모형과 "
+                 "단일 처리가 같고, 이 구간의 결론은 정지 처리와 무관하다.")
+            continue
+        up = (g["정지_평가"] / g["정지_학습"].replace(0, np.nan)).median()
+        emit(f"- {hlabel(H)}: {len(fit)}/{len(g)}종목에서 분류기를 적합했다(나머지는 정지 표본이 {ZERO_MIN_IN}개 미만). 정지 비율이 학습 {g['정지_학습'].median():.1%} → "
+             f"평가 {g['정지_평가'].median():.1%}(약 {up:.1f}배)로 늘었는데 π 평균은 {fit['π평균_평가'].median():.1%}로 이 증가를 대부분 따라간다"
+             f"(고정 학습 평균을 쓰면 놓친다). AUC {fit['AUC_평가'].median():.3f}는 무작위(0.5)보다 {'분명히 높아' if fit['AUC_평가'].median() > 0.6 else '약간만 높아'} "
+             f"최근 정지 이력으로 다음 정지를 어느 정도 가려낸다는 뜻이지만 완벽한 예측은 아니다(0.75 안팎이면 보통 수준).")
+    emit()
     rows = []
     for (tk, H), S in store.items():
         a = S["act"].astype(float)
@@ -1487,6 +1504,19 @@ def emit_twopart(rd, store, rd1, store1, zdf, models, tt) -> None:
                          f"{int((g['차_총'] < 0).sum())}/{len(g)}")
         emit(f"| {nm} | " + " | ".join(cells) + " |")
     emit()
+    emit("**해석(모델마다)**: 음수는 두 부분 모형이 단일 처리보다 손실이 작다는 뜻이고, 괄호는 정지 시점(RV=0)과 움직인 시점(RV>0)에서 나온 "
+         "몫이다. 정지 시점 몫은 모든 모델에서 같은 음수(π가 같고 예측이 작아지므로)이고, 모델 간 차이는 움직인 시점에서 크기 배율이 c에서 "
+         "c₊로 바뀌는 효과가 얼마나 손해로 돌아오느냐에서 나온다. 개선 종목 수가 20 중 절반 이하면 평균 개선이 일부 종목에 몰려 있다는 뜻이다. "
+         "통계적 유의성(H0: 두 결합의 기대 손실이 같다)은 26b 보고서 6절에 있다.")
+    emit()
+    for nm in [m_ for m_ in models if m_ in LOG_TARGET_MODELS]:
+        parts = []
+        for H in hs[:3]:
+            g = dd[(dd["H"] == H) & (dd["모델"] == nm)]
+            if len(g):
+                parts.append(f"{hlabel(H)} {g['차_총'].mean():+.4f}(개선 {int((g['차_총'] < 0).sum())}/{len(g)}종목)")
+        emit(f"- {nm}: " + ", ".join(parts) + ". 4시간·12시간은 정지가 없어 차이가 0에 가깝다.")
+    emit()
     tt1 = tier_table(cell_losses(rd1, store1, models))
     tt1.to_csv(RES / f"{STEM}_tier_table_onepart.csv", index=False)
     emit("### 두 처리의 통계적 동률 묶음(보정후, 전체 구간, 최선 대비 ≤0.01)")
@@ -1501,6 +1531,10 @@ def emit_twopart(rd, store, rd1, store1, zdf, models, tt) -> None:
             g = t_[(t_.H == H) & (t_["구간"] == "전체") & (t_["기준"] == "보정후") & (t_["모델"] == "GARCH-t")]
             return g["격차"].iloc[0] if len(g) else np.nan
         emit(f"| {hlabel(H)} | {aset(tt)} | {aset(tt1)} | {gg(tt):.3f} / {gg(tt1):.3f} |")
+    emit()
+    emit("**해석**: 두 부분 모형에서 15분은 GARCH-t·TAR-GARCH와 Nystroem이, 30분은 트리 4종이 최선과 0.01 이내다. 단일 처리에서 30분에 GARCH-t가 "
+         "동률이던 것이 두 부분 모형에서는 격차 0.008에서 0.029로 벌어졌다. 곧 30분의 GARCH 우위 일부는 로그 타깃 모델이 정지를 못 배운 탓이었고, "
+         "정지를 따로 다루면 트리가 앞선다는 뜻이다. 15분은 GARCH-t가 여전히 최선이며 이 구간의 GARCH 우위는 정지 처리만으로는 사라지지 않았다.")
     emit()
     chk = rd[rd["정지처리"] == "두 부분"].groupby("H")["검증배율_두부분"].median()
     emit("결합 뒤 내부검증 배율(1이면 두 부분 결합이 내부검증의 평균 수준을 그대로 맞춘다, 로그 타깃 모델 중앙값): "
@@ -1756,6 +1790,15 @@ def write_report(rd, store, rd1, store1, fails_df, eda_df, heda_df, zdf, tickers
         emit("| :--- | ---: | :--- | ---: | ---: | ---: |")
         for _, x in unstable.iterrows():
             emit(f"| {x['종목']} | {x['H']} | {x['모델']} | {x['보정계수']:.3f} | {x['QLIKE_보정전']:.3f} | {x['QLIKE']:.3f} |")
+        ms = rd[rd["모델"] == "MS-GARCH"]
+        bad = set(unstable["종목"])
+        ok = ms[~ms["종목"].isin(bad)]
+        emit()
+        emit(f"**해석**: 두 종목({', '.join(sorted(b_.replace('KRW-', '') for b_ in bad))})에서 MS-GARCH의 내부학습 재적합이 불안정해 보정계수가 0.04~0.08로 나왔고, "
+             "이 값을 평가 예측에 곱하자 손실이 보정 전 약 -9에서 +3~+29로 악화했다. 평가 예측은 학습 전체 적합 모형에서 나오므로 보정 상수만 "
+             "내부학습 모형의 불안정성 때문에 틀린 것이다. 그래서 MS-GARCH의 평균 손실이 큰 것은 이 모형 자체의 성능이 아니라 보정 절차의 실패가 섞인 "
+             f"결과다. 두 종목을 빼면 MS-GARCH의 평균 QLIKE는 {ms['QLIKE'].mean():.3f}에서 {ok['QLIKE'].mean():.3f}로 바뀐다. **이 결함은 아직 처리하지 않았고, "
+             "MS-GARCH의 순위·검정(최하위권)은 이 사실을 단서로 읽어야 한다.**")
     else:
         emit("보정 상수가 극단적인(0.3 미만 또는 3 초과) GARCH 계열 사례는 없다.")
     emit()

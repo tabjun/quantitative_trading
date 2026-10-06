@@ -164,6 +164,38 @@ def loss_frame(store: dict, H: int, models: list[str], preds_override: dict | No
 
 
 # %% [markdown]
+# ## 0. 검정 설계와 읽는 법
+
+# %%
+def design_section() -> None:
+    emit("## 0. 검정 설계와 읽는 법")
+    emit()
+    emit("모든 검정의 관측 단위는 **평가 시각 t**(정시)이다. 모델 m의 시각 t, 종목 k 손실을 `L[m][k,t] = QLIKE(실제 RV, 예측)`라고 "
+         "쓴다. 두 모델은 같은 시각·같은 종목에서 비교하므로 독립 두 표본이 아니라 **대응(paired) 표본**이며, 비교 집단은 "
+         "\"A의 손실들\"과 \"B의 손실들\"이 아니라 그 시각별 차이 한 줄이다. 시각마다 20종목을 평균하므로 종목 간 상관은 "
+         "그 평균 시계열의 분산에 그대로 들어간다(종목을 독립 반복으로 세지 않는다). 모든 p값은 양측이고 유의수준은 "
+         f"{ALPHA}이다. **p값이 작아 H0가 기각된다는 것은 \"차이가 있다는 증거가 있다\"는 뜻이고, 기각하지 못한다는 것은 "
+         "\"같다고 증명했다\"가 아니라 \"차이가 있다는 증거가 부족하다\"는 뜻이다.** 평가 시각이 적은 긴 예측 구간에서는 증거가 "
+         "부족해서 기각하지 못하는 경우가 많다.")
+    emit()
+    emit("| 번호 | 검정 | 비교 집단(코드) | 귀무가설 H0 | 대립가설 H1 | 통계량·보정 | H0 기각의 의미 |")
+    emit("| :--- | :--- | :--- | :--- | :--- | :--- | :--- |")
+    emit("| 3-1a | Diebold-Mariano(대응 t, HAC) | `d_t = (L[A]-L[B]).mean(axis=1)`, 한 예측 구간의 모델 쌍마다 | E[d_t]=0, 두 모델의 기대 QLIKE가 같다 | E[d_t]≠0 | t=평균/SE, SE는 Newey-West(lag=⌊4(n/100)^(2/9)⌋, Bartlett). 구간마다 전 쌍에 Holm | 한쪽이 평균적으로 더 낫다(방향은 평균차의 부호) |")
+    emit("| 3-1b | MCS(Hansen·Lunde·Nason 2011) | 한 구간의 시각×모델 평균 손실 행렬 전체 | 현재 집합의 모델들이 모두 동등한 예측 능력 | 집합에 기대 손실이 더 큰 모델이 있다 | 블록 부트스트랩(블록=n^(1/3), 2,000회), 기각되면 가장 나쁜 모델을 빼고 반복 | 기각되어 빠진 모델은 최선과 구분되는 열세, 남은 집합은 \"최선이 아니라고 기각할 수 없는\" 모델 |")
+    emit("| 3-2 | 사전 구간별 DM | `(L[m]-L[best]).where(Q==q).mean(axis=1)`, 직전 H시간 RV 5분위(학습 구간 분위수) 칸마다 | 그 칸에서 m과 최선의 기대 손실이 같다 | 다르다 | HAC t, 칸마다 Holm. 기각하지 못한 모델을 통계적 동률로 부른다 | 그 칸에서 m이 최선보다 열세 |")
+    emit("| 3-3 | 시드별 MCS 반복 | 무작위 모델의 예측만 시드 s의 것으로 바꿔 MCS를 5번 | (검정이 아니라 안정성 점검) | | 시드 5개 중 포함 횟수 | 5/5는 시드와 무관한 판정, 1~4는 시드에 따라 달라짐, 0/5는 항상 제외 |")
+    emit("| 1 | 시드 변동 | 시드 5개의 모델×종목×구간 평균 QLIKE 표준편차 | (기술통계) | | 중앙값을 동률 폭 0.01과 비교 | 0.01보다 크면 그 모델끼리의 순위 차이는 시드 잡음일 수 있음 |")
+    emit("| 2 | 구분 불가 진단 | 상위 6개 모델 쌍의 |평균차|/SE, 예측 상관, 적합 지표 | (진단) | | 격차/SE<2이고 상관≈1이면 데이터·표본 한계 | 적합 지표가 정상인데 격차/SE가 작으면 \"적합 실패가 아니다\" |")
+    emit("| 5 | RESET 선형성 | 학습 표본 5,000개로 OLS(y=log RV_d, X=로그 특성), 적합값²·³ 항 추가 | 선형 모형의 함수형이 옳다(두 항 계수=0) | 비선형 구조가 있다 | F 검정, 종목마다 | 기각이면 선형 모델에 부적합(제외 결정의 근거) |")
+    emit("| 5 | BDS 독립성 | 위 OLS 잔차 마지막 3,000개 | 잔차가 i.i.d.다 | 비선형·이분산 의존이 남아 있다 | BDS 통계량(차원 2) | 기각이면 선형 모형이 구조를 놓침(이분산 포함이라 선형성만의 검정은 아님) |")
+    emit("| 6 | 두 부분 대 단일 DM | `(L[두 부분]-L[단일]).mean(axis=1)`, 같은 모델의 같은 예측에 결합만 다름 | 두 결합의 기대 손실이 같다 | 다르다 | HAC t, 구간×모델 전체에 Holm | 정지 확률을 따로 곱하는 것이 손실을 바꾼다(부호가 음수면 개선) |")
+    emit()
+    emit(f"**통계 검정이 아닌 실무 기준**: A등급(최선과 QLIKE 격차 ≤{TIE})은 GRU 시드 표준편차에서 가져온 값으로, 가설검정이 아니라 "
+         "\"이보다 작은 차이는 모델 차이로 보지 않는다\"는 약속이다. 통계 판정(MCS)과 일치하는지는 4절에서 비교한다.")
+    emit()
+
+
+# %% [markdown]
 # ## 1. 시드 견고성
 
 # %%
@@ -189,7 +221,8 @@ def seed_section(rd: pd.DataFrame, store: dict) -> pd.DataFrame:
                 if nm in d:
                     base = store[(tk, H)]["preds"][nm].astype(float)
                     c = float(rd[(rd["종목"] == tk) & (rd["H"] == H) & (rd["모델"] == nm)]["보정계수"].iloc[0])
-                    base0 = base / np.sqrt(c) if nm == "GARCH-t" else base     # 시드 실행의 GARCH-t는 보정 전
+                    # 26번 시드 실행의 GARCH-t는 보정 전 값이다(보정은 본 실행 뒤 별도 단계). 26c는 시드 실행에도 보정이 들어 있다.
+                    base0 = base / np.sqrt(c) if (nm == "GARCH-t" and SRC_KEY == "26") else base
                     rows.append({"시드": s, "모델": nm, "최대차": float(np.max(np.abs(d[nm].astype(float) - base0)))})
     det = pd.DataFrame(rows)
     if len(det):
@@ -232,6 +265,15 @@ def seed_section(rd: pd.DataFrame, store: dict) -> pd.DataFrame:
         emit()
         emit(f"동률 폭 {TIE}와 비교한다. 시드 표준편차가 이보다 작으면 시드는 결론을 바꾸지 않는다. HistGBM은 표본·특성 "
              "추출을 쓰지 않는 설정이라(조기종료도 직접 감시) 시드가 결과에 영향을 주지 않는다.")
+        emit()
+        emit("**해석(모델마다)**:")
+        for nm, x in pv.iterrows():
+            big = [M26.hlabel(int(h)) for h, v in x.items() if v > TIE]
+            if not big:
+                emit(f"- {nm}: 모든 구간에서 시드 표준편차가 {TIE} 이하(최대 {x.max():.4f}). 시드는 이 모델의 순위를 바꾸지 않는다.")
+            else:
+                emit(f"- {nm}: {', '.join(big)}에서 표준편차가 {TIE}를 넘는다(최대 {x.max():.4f}). 이 구간들에서 이 모델과 "
+                     "다른 모델의 순위·동률 판정은 시드 한 개로 확정할 수 없고, 시드 평균과 시드별 MCS 빈도(3-3절)로 봐야 한다.")
     emit()
     return sv
 
@@ -301,6 +343,17 @@ def diagnose_section(rd: pd.DataFrame, store: dict, models: list[str]) -> pd.Dat
     emit("읽는 법: 적합 실패라면 반복 수·에폭이 1 근처에서 멈추거나(학습이 시작되지 않음) 보정계수가 비정상적으로 "
          "튄다. 데이터 특성이라면 적합 진단은 정상인데, 평가 시각이 적어 표준오차가 커지고(격차/표준오차가 2보다 "
          "작음), 상위 모델의 예측이 서로 거의 같다(예측 상관이 1에 가까움).")
+    emit()
+    emit("**해석(예측 구간마다)**:")
+    for _, x in dg.iterrows():
+        fit_ok = min(x["LGBM반복"], x["XGB반복"], x["GRU에폭"], x["LSTM에폭"]) > 5 and 0.5 < x["로그모델보정계수"] < 5
+        weak = x["상위6쌍 |격차|/표준오차"] < 2
+        emit(f"- {M26.hlabel(int(x['H']))}: 적합 지표는 {'정상' if fit_ok else '이상(확인 필요)'}(반복·에폭이 1 근처가 아니고 보정계수 "
+             f"{x['로그모델보정계수']:.2f}). 상위 6개 모델 쌍의 격차는 표준오차의 {x['상위6쌍 |격차|/표준오차']:.2f}배로 "
+             f"{'2배 미만이라 쌍 검정으로 구분할 수 없다' if weak else '2배 이상이라 쌍 검정으로 구분 가능한 쌍이 있다'}, 예측 상관 "
+             f"{x['상위6 예측상관']:.3f}, 최선 모델의 로그 상관 {x['최선 로그상관']:.3f}(MZ R² {x['최선 MZ_R2']:.3f}). "
+             + ("**결론: 적합 실패가 아니라 표본 수와 모델 예측의 유사성 때문이다.**" if (fit_ok and weak) else
+                "**결론: 이 구간은 모델 구분이 가능하다.**" if (fit_ok and not weak) else "**결론: 적합 문제를 먼저 확인해야 한다.**"))
     emit()
     return dg
 
@@ -373,6 +426,22 @@ def significance_section(rd: pd.DataFrame, store: dict, models: list[str]) -> tu
                 pp = f"{r['p_holm'].iloc[0]:.3g}" if len(r) else "-"
             emit(f"| {nm} | {M26.PROCESS[nm]} | {x['평균손실'] - b0:+.4f} | {'예' if x['MCS포함'] else '아니오'} | {pp} |")
         emit()
+        emit(f"**해석({M26.hlabel(H)}, 모델마다 H0: 최선 `{best}`와 기대 손실이 같다)**:")
+        for _, x in mh.iterrows():
+            nm = x["모델"]
+            if nm == best:
+                emit(f"- {nm}: 평균 손실이 가장 작아 비교 기준이 된다(MCS 포함 여부와 무관하게 \"유일한 최선\"이라는 뜻은 아니다).")
+                continue
+            r = ph[((ph["A"] == nm) & (ph["B"] == best)) | ((ph["A"] == best) & (ph["B"] == nm))].iloc[0]
+            gap = x["평균손실"] - b0
+            if x["MCS포함"]:
+                extra = (" 쌍 검정(최선 대비)만 따로 보면 유의하지만 MCS는 집합 전체를 함께 검정해 더 보수적이라 포함됐다." if r["p_holm"] < ALPHA else "")
+                emit(f"- {nm}: 최선보다 평균 {gap:+.4f} 크지만 Holm 보정 p={r['p_holm']:.3g}로 **H0를 기각하지 못했다**(MCS 포함). "
+                     f"곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).{extra}")
+            else:
+                emit(f"- {nm}: 최선보다 평균 {gap:+.4f} 크고 Holm 보정 p={r['p_holm']:.3g}로 **H0를 기각**했다(MCS 제외). "
+                     "곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.")
+        emit()
     return pairs, mcs
 
 
@@ -419,6 +488,17 @@ def regime_significance(rd: pd.DataFrame, store: dict, models: list[str]) -> pd.
         tie = g[g["통계적동률"] & (g["모델"] != g["최선"])].sort_values("격차")
         emit(f"| {M26.hlabel(int(H))} | {q} | {g['최선'].iloc[0]} | "
              + (", ".join(f"{M26.SHORT.get(n, n)}" for n in tie["모델"]) or "-") + " |")
+    emit()
+    emit("**해석(예측 구간 × 직전 RV 구간마다)**: 구간 최선과 H0(기대 손실이 같다)를 Holm 보정으로 검정했다. 동률 = H0 기각 못함, 열세 = H0 기각.")
+    emit()
+    for (H, q), g in rg.groupby(["H", "구간"]):
+        b = g["최선"].iloc[0]
+        tie = [M26.SHORT.get(n, n) for n in g[g["통계적동률"] & (g["모델"] != b)].sort_values("격차")["모델"]]
+        lose = [M26.SHORT.get(n, n) for n in g[~g["통계적동률"]].sort_values("격차")["모델"]]
+        emit(f"- {M26.hlabel(int(H))} {q}: 최선 {M26.SHORT.get(b, b)}. 동률(H0 기각 못함) {', '.join(tie) or '없음'}. "
+             f"열세(H0 기각) {', '.join(lose) or '없음'}. "
+             + ("직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다." if len(tie) >= 5 else
+                "직전 변동성이 이 구간일 때 모델 선택이 결과를 가른다." if len(tie) <= 1 else ""))
     emit()
     return rg
 
@@ -467,6 +547,15 @@ def seed_mcs_frequency(store: dict, models: list[str]) -> pd.DataFrame:
     for nm, x in pv.iterrows():
         emit(f"| {nm} | " + " | ".join(str(int(v)) for v in x.values) + " |")
     emit()
+    emit("**해석(예측 구간마다)**: 5/5는 시드와 무관하게 최선과 구분되지 않는 모델, 1~4는 시드에 따라 판정이 달라지는 모델, 0은 항상 제외되는 모델이다.")
+    emit()
+    for h in pv.columns:
+        full = [m_ for m_ in pv.index if pv.loc[m_, h] == ns[h]]
+        part = [f"{m_}({int(pv.loc[m_, h])}/{ns[h]})" for m_ in pv.index if 0 < pv.loc[m_, h] < ns[h]]
+        none = [m_ for m_ in pv.index if pv.loc[m_, h] == 0]
+        emit(f"- {M26.hlabel(int(h))}: 항상 포함 {', '.join(full) or '없음'}. 시드 의존 {', '.join(part) or '없음'}. "
+             f"항상 제외 {', '.join(none) or '없음'}.")
+    emit()
     return f
 
 
@@ -482,6 +571,19 @@ def agreement_section(mcs: pd.DataFrame, rg: pd.DataFrame) -> None:
         Mm = set(mcs[(mcs["H"] == H) & mcs["MCS포함"]]["모델"])
         f = lambda s_: ", ".join(M26.SHORT.get(n, n) for n in sorted(s_)) or "-"
         emit(f"| {M26.hlabel(H)} | {f(A)} | {f(Mm)} | {f(A & Mm)} | {f(A - Mm)} | {f(Mm - A)} |")
+    emit()
+    emit("**해석**: A등급(실무 약속)과 MCS(통계 판정)가 같은 모델을 가리키면 0.01 기준이 통계적으로도 정당하다. 'A등급만'은 격차는 작지만 "
+         "통계적으로는 최선과 구분되는 모델이고, 'MCS만'은 격차가 0.01보다 크지만 표본이 적어 구분할 증거가 부족한 모델이다.")
+    emit()
+    for H in M26.HORIZONS_H:
+        A = set(a[(a["H"] == H) & (a["등급"] == "A")]["모델"])
+        Mm = set(mcs[(mcs["H"] == H) & mcs["MCS포함"]]["모델"])
+        f = lambda s_: ", ".join(M26.SHORT.get(n, n) for n in sorted(s_)) or "없음"
+        same = A == Mm
+        emit(f"- {M26.hlabel(H)}: " + ("두 기준이 같은 모델 집합을 가리킨다. 0.01 기준이 통계 판정과 일치한다." if same else
+             f"A등급만 {f(A - Mm)}, MCS만 {f(Mm - A)}. " +
+             ("A등급만 있는 모델은 격차가 0.01 이하지만 통계적으로는 최선과 구분된다(표본이 커서 작은 차이도 잡힌다). " if (A - Mm) else "") +
+             ("MCS만 있는 모델은 격차가 0.01을 넘지만 평가 시각이 적어 구분할 증거가 부족하다. " if (Mm - A) else "")))
     emit()
 
 
@@ -572,6 +674,15 @@ def linearity_section() -> pd.DataFrame:
              f"{int((g['RESET_p'] < 0.05).sum())}/{len(g)} | {int((g['BDS_p'] < 0.05).sum())}/{len(g)} | "
              f"{tree:.3f} |")
     emit()
+    emit("**해석(예측 구간마다)**: RESET H0 = 선형 회귀의 함수형이 옳다, H1 = 비선형 구조가 있다. BDS H0 = 선형 회귀 잔차가 i.i.d.다, "
+         "H1 = 잔차에 의존 구조가 남아 있다.")
+    emit()
+    for H, g in d.groupby("H"):
+        nr, nb = int((g["RESET_p"] < 0.05).sum()), int((g["BDS_p"] < 0.05).sum())
+        emit(f"- {M26.hlabel(int(H))}: RESET은 {nr}/{len(g)}종목에서 H0를 기각({'다수 종목에서 선형성 기각' if nr > len(g) / 2 else '과반 종목은 기각하지 못함'}), "
+             f"BDS는 {nb}/{len(g)}종목에서 기각. 비선형 항이 늘리는 설명력은 중앙 {g['dR2'].median():.4f}로 "
+             f"{'작아서 기각되더라도 효과 크기는 미미하다' if g['dR2'].median() < 0.01 else '실질적으로 크다'}. 선형 R²는 {g['R2'].median():.3f}.")
+    emit()
     emit(f"읽는 법: 격차는 그 구간 최선 모델 대비 QLIKE 차({SRC_LABEL} 보정후, 종목 평균)다. 선형 R²가 예측 구간과 함께 커지면 "
          "긴 구간에서 선형 근사로 충분해진다는 뜻이다(변동성을 길게 합산할수록 잡음이 평균으로 줄어든다). 비선형 항 증분이 "
          "작아도 짧은 구간에서 트리가 선형보다 크게 앞서면, 그 비선형은 RESET이 보는 거듭제곱 형태가 아니라 문턱·상호작용 "
@@ -631,6 +742,21 @@ def twopart_section(store: dict, models: list[str]) -> pd.DataFrame:
             cells.append(f"**{c}**" if x["p_Holm"] < ALPHA else c)
         emit(f"| {nm} | " + " | ".join(cells) + " |")
     emit()
+    emit("**해석(모델마다, H0: 두 부분 모형과 단일 처리의 기대 손실이 같다)**:")
+    for nm in logm:
+        parts = []
+        for h in hs:
+            g = t[(t["H"] == h) & (t["모델"] == nm)]
+            if not len(g):
+                continue
+            x = g.iloc[0]
+            if x["p_Holm"] < ALPHA:
+                parts.append(f"{M26.hlabel(int(h))} {x['평균차']:+.4f}(p={x['p_Holm']:.2g}) H0 기각, "
+                             + ("두 부분 모형이 손실을 유의하게 줄임" if x["평균차"] < 0 else "두 부분 모형이 오히려 유의하게 나쁨"))
+            else:
+                parts.append(f"{M26.hlabel(int(h))} {x['평균차']:+.4f}(p={x['p_Holm']:.2g}) 기각 못함, 차이의 증거 부족")
+        emit(f"- {nm}: " + "; ".join(parts) + ".")
+    emit()
     return t
 
 
@@ -657,6 +783,7 @@ def main(argv=None) -> None:
          f"{len(rd)}행). 재적합 없이 저장된 평가 예측만 쓴다. 데이터 정의와 결측 처리는 "
          "`test/research_materials/data_definition.md`, 모델 정의는 `test/research_materials/model_catalog.md`를 본다.")
     emit()
+    design_section()
     if not a.skip_seed:
         seed_section(rd, store)
     diagnose_section(rd, store, models)
