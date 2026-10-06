@@ -1,7 +1,7 @@
 H,시드,모델,포함
 15,0,naive,False
 15,0,GARCH-t,True
-15,0,MS-GARCH,False
+15,0,MS-GARCH,True
 15,0,TAR-GARCH,True
 15,0,KernelRidge-RBF,False
 15,0,SVR-RBF,False
@@ -14,7 +14,7 @@ H,시드,모델,포함
 15,0,LSTM,False
 15,1,naive,False
 15,1,GARCH-t,True
-15,1,MS-GARCH,False
+15,1,MS-GARCH,True
 15,1,TAR-GARCH,True
 15,1,KernelRidge-RBF,False
 15,1,SVR-RBF,False
@@ -27,7 +27,7 @@ H,시드,모델,포함
 15,1,LSTM,False
 15,2,naive,False
 15,2,GARCH-t,True
-15,2,MS-GARCH,False
+15,2,MS-GARCH,True
 15,2,TAR-GARCH,True
 15,2,KernelRidge-RBF,False
 15,2,SVR-RBF,False
@@ -40,7 +40,7 @@ H,시드,모델,포함
 15,2,LSTM,False
 15,3,naive,False
 15,3,GARCH-t,True
-15,3,MS-GARCH,False
+15,3,MS-GARCH,True
 15,3,TAR-GARCH,True
 15,3,KernelRidge-RBF,False
 15,3,SVR-RBF,False
@@ -53,7 +53,7 @@ H,시드,모델,포함
 15,3,LSTM,False
 15,4,naive,False
 15,4,GARCH-t,True
-15,4,MS-GARCH,False
+15,4,MS-GARCH,True
 15,4,TAR-GARCH,True
 15,4,KernelRidge-RBF,False
 15,4,SVR-RBF,False

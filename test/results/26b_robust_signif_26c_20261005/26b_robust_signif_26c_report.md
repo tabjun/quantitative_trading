@@ -59,7 +59,7 @@ MS-GARCH·TAR-GARCH(고정 시작점의 Nelder-Mead)·KernelRidge·SVR(고정 �
 
 | 예측 구간 | 평가 시각 수 | LightGBM 반복(중앙) | XGB 반복 | GRU 에폭 | LSTM 에폭 | 로그 모델 보정계수 | 상위 6개 쌍 격차 | 격차/표준오차 | 상위 6개 예측 상관 | 최선 로그 상관 | 최선 MZ R² |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 15분 | 7,878 | 121 | 118 | 18 | 14 | 3.66 | 0.0133 | 1.43 | 0.912 | 0.395 | 0.156 |
+| 15분 | 7,878 | 121 | 118 | 18 | 14 | 3.66 | 0.0117 | 1.21 | 0.918 | 0.399 | 0.173 |
 | 30분 | 7,874 | 128 | 139 | 20 | 16 | 2.31 | 0.0096 | 2.55 | 0.949 | 0.481 | 0.238 |
 | 1시간 | 7,873 | 150 | 148 | 22 | 23 | 1.68 | 0.0072 | 2.70 | 0.969 | 0.554 | 0.292 |
 | 4시간 | 1,964 | 154 | 162 | 20 | 20 | 1.30 | 0.0013 | 0.32 | 0.963 | 0.640 | 0.316 |
@@ -68,7 +68,7 @@ MS-GARCH·TAR-GARCH(고정 시작점의 Nelder-Mead)·KernelRidge·SVR(고정 �
 읽는 법: 적합 실패라면 반복 수·에폭이 1 근처에서 멈추거나(학습이 시작되지 않음) 보정계수가 비정상적으로 튄다. 데이터 특성이라면 적합 진단은 정상인데, 평가 시각이 적어 표준오차가 커지고(격차/표준오차가 2보다 작음), 상위 모델의 예측이 서로 거의 같다(예측 상관이 1에 가까움).
 
 **해석(예측 구간마다)**:
-- 15분: 적합 지표는 정상(반복·에폭이 1 근처가 아니고 보정계수 3.66). 상위 6개 모델 쌍의 격차는 표준오차의 1.43배로 2배 미만이라 쌍 검정으로 구분할 수 없다, 예측 상관 0.912, 최선 모델의 로그 상관 0.395(MZ R² 0.156). **결론: 적합 실패가 아니라 표본 수와 모델 예측의 유사성 때문이다.**
+- 15분: 적합 지표는 정상(반복·에폭이 1 근처가 아니고 보정계수 3.66). 상위 6개 모델 쌍의 격차는 표준오차의 1.21배로 2배 미만이라 쌍 검정으로 구분할 수 없다, 예측 상관 0.918, 최선 모델의 로그 상관 0.399(MZ R² 0.173). **결론: 적합 실패가 아니라 표본 수와 모델 예측의 유사성 때문이다.**
 - 30분: 적합 지표는 정상(반복·에폭이 1 근처가 아니고 보정계수 2.31). 상위 6개 모델 쌍의 격차는 표준오차의 2.55배로 2배 이상이라 쌍 검정으로 구분 가능한 쌍이 있다, 예측 상관 0.949, 최선 모델의 로그 상관 0.481(MZ R² 0.238). **결론: 이 구간은 모델 구분이 가능하다.**
 - 1시간: 적합 지표는 정상(반복·에폭이 1 근처가 아니고 보정계수 1.68). 상위 6개 모델 쌍의 격차는 표준오차의 2.70배로 2배 이상이라 쌍 검정으로 구분 가능한 쌍이 있다, 예측 상관 0.969, 최선 모델의 로그 상관 0.554(MZ R² 0.292). **결론: 이 구간은 모델 구분이 가능하다.**
 - 4시간: 적합 지표는 정상(반복·에폭이 1 근처가 아니고 보정계수 1.30). 상위 6개 모델 쌍의 격차는 표준오차의 0.32배로 2배 미만이라 쌍 검정으로 구분할 수 없다, 예측 상관 0.963, 최선 모델의 로그 상관 0.640(MZ R² 0.316). **결론: 적합 실패가 아니라 표본 수와 모델 예측의 유사성 때문이다.**
@@ -86,34 +86,34 @@ MCS 포함은 "최선이 아니라는 것을 기각할 수 없는 모델"이다.
 
 | 모델 | 처리 방식 | 종목 평균 손실 − 최선 | MCS 포함 | 최선 대비 열세 p(Holm) |
 | :--- | :--- | ---: | :--- | ---: |
-| GARCH-t | 순차·재귀(통계) | +0.0000 | 예 | - |
-| TAR-GARCH | 순차·재귀(통계) | +0.0027 | 예 | 1 |
-| Nystroem+Ridge | 특성 기반 회귀(비신경) | +0.0045 | 예 | 1 |
-| HistGBM | 특성 기반 트리(비신경) | +0.0162 | 예 | 1 |
-| GARCH+LightGBM | 순차·재귀 통계 + 트리 결합 | +0.0177 | 예 | 0.286 |
-| LightGBM | 특성 기반 트리(비신경) | +0.0214 | 예 | 0.12 |
-| XGBoost | 특성 기반 트리(비신경) | +0.0345 | 아니오 | 0.00294 |
-| KernelRidge-RBF | 특성 기반 회귀(비신경) | +0.0890 | 아니오 | 3.88e-07 |
-| SVR-RBF | 특성 기반 회귀(비신경) | +0.1022 | 아니오 | 5.32e-13 |
-| LSTM | 순차·재귀 | +0.1370 | 아니오 | 6.64e-45 |
-| GRU | 순차·재귀 | +0.1686 | 아니오 | 1.33e-34 |
-| MS-GARCH | 순차·재귀(통계) | +1.5314 | 아니오 | 2.16e-186 |
-| naive | 직전값 | +32.4376 | 아니오 | 0.000238 |
+| MS-GARCH | 순차·재귀(통계) | +0.0000 | 예 | - |
+| GARCH-t | 순차·재귀(통계) | +0.0008 | 예 | 1 |
+| TAR-GARCH | 순차·재귀(통계) | +0.0035 | 예 | 1 |
+| Nystroem+Ridge | 특성 기반 회귀(비신경) | +0.0053 | 예 | 1 |
+| HistGBM | 특성 기반 트리(비신경) | +0.0171 | 예 | 0.363 |
+| GARCH+LightGBM | 순차·재귀 통계 + 트리 결합 | +0.0186 | 예 | 0.244 |
+| LightGBM | 특성 기반 트리(비신경) | +0.0222 | 예 | 0.145 |
+| XGBoost | 특성 기반 트리(비신경) | +0.0353 | 아니오 | 0.00366 |
+| KernelRidge-RBF | 특성 기반 회귀(비신경) | +0.0898 | 아니오 | 2.12e-09 |
+| SVR-RBF | 특성 기반 회귀(비신경) | +0.1031 | 아니오 | 9.4e-26 |
+| LSTM | 순차·재귀 | +0.1379 | 아니오 | 8.52e-65 |
+| GRU | 순차·재귀 | +0.1695 | 아니오 | 7.4e-49 |
+| naive | 직전값 | +32.4385 | 아니오 | 0.000279 |
 
-**해석(15분, 모델마다 H0: 최선 `GARCH-t`와 기대 손실이 같다)**:
-- GARCH-t: 평균 손실이 가장 작아 비교 기준이 된다(MCS 포함 여부와 무관하게 "유일한 최선"이라는 뜻은 아니다).
-- TAR-GARCH: 최선보다 평균 +0.0027 크지만 Holm 보정 p=1로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
-- Nystroem+Ridge: 최선보다 평균 +0.0045 크지만 Holm 보정 p=1로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
-- HistGBM: 최선보다 평균 +0.0162 크지만 Holm 보정 p=1로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
-- GARCH+LightGBM: 최선보다 평균 +0.0177 크지만 Holm 보정 p=0.286로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
-- LightGBM: 최선보다 평균 +0.0214 크지만 Holm 보정 p=0.12로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
-- XGBoost: 최선보다 평균 +0.0345 크고 Holm 보정 p=0.00294로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- KernelRidge-RBF: 최선보다 평균 +0.0890 크고 Holm 보정 p=3.88e-07로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- SVR-RBF: 최선보다 평균 +0.1022 크고 Holm 보정 p=5.32e-13로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- LSTM: 최선보다 평균 +0.1370 크고 Holm 보정 p=6.64e-45로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- GRU: 최선보다 평균 +0.1686 크고 Holm 보정 p=1.33e-34로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- MS-GARCH: 최선보다 평균 +1.5314 크고 Holm 보정 p=2.16e-186로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- naive: 최선보다 평균 +32.4376 크고 Holm 보정 p=0.000238로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+**해석(15분, 모델마다 H0: 최선 `MS-GARCH`와 기대 손실이 같다)**:
+- MS-GARCH: 평균 손실이 가장 작아 비교 기준이 된다(MCS 포함 여부와 무관하게 "유일한 최선"이라는 뜻은 아니다).
+- GARCH-t: 최선보다 평균 +0.0008 크지만 Holm 보정 p=1로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
+- TAR-GARCH: 최선보다 평균 +0.0035 크지만 Holm 보정 p=1로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
+- Nystroem+Ridge: 최선보다 평균 +0.0053 크지만 Holm 보정 p=1로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
+- HistGBM: 최선보다 평균 +0.0171 크지만 Holm 보정 p=0.363로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
+- GARCH+LightGBM: 최선보다 평균 +0.0186 크지만 Holm 보정 p=0.244로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
+- LightGBM: 최선보다 평균 +0.0222 크지만 Holm 보정 p=0.145로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
+- XGBoost: 최선보다 평균 +0.0353 크고 Holm 보정 p=0.00366로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- KernelRidge-RBF: 최선보다 평균 +0.0898 크고 Holm 보정 p=2.12e-09로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- SVR-RBF: 최선보다 평균 +0.1031 크고 Holm 보정 p=9.4e-26로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- LSTM: 최선보다 평균 +0.1379 크고 Holm 보정 p=8.52e-65로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- GRU: 최선보다 평균 +0.1695 크고 Holm 보정 p=7.4e-49로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- naive: 최선보다 평균 +32.4385 크고 Holm 보정 p=0.000279로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
 
 #### 30분 (평가 시각 7,874, 블록 20)
 
@@ -122,31 +122,31 @@ MCS 포함은 "최선이 아니라는 것을 기각할 수 없는 모델"이다.
 | HistGBM | 특성 기반 트리(비신경) | +0.0000 | 예 | - |
 | LightGBM | 특성 기반 트리(비신경) | +0.0028 | 예 | 1 |
 | GARCH+LightGBM | 순차·재귀 통계 + 트리 결합 | +0.0031 | 예 | 1 |
-| XGBoost | 특성 기반 트리(비신경) | +0.0054 | 예 | 0.648 |
-| Nystroem+Ridge | 특성 기반 회귀(비신경) | +0.0127 | 아니오 | 1.81e-06 |
-| GARCH-t | 순차·재귀(통계) | +0.0307 | 아니오 | 5.22e-05 |
-| TAR-GARCH | 순차·재귀(통계) | +0.0319 | 아니오 | 1.37e-05 |
-| GRU | 순차·재귀 | +0.0464 | 아니오 | 2.54e-26 |
-| LSTM | 순차·재귀 | +0.0681 | 아니오 | 6.24e-40 |
-| KernelRidge-RBF | 특성 기반 회귀(비신경) | +0.0914 | 아니오 | 6.22e-11 |
-| SVR-RBF | 특성 기반 회귀(비신경) | +0.1284 | 아니오 | 6.79e-45 |
-| MS-GARCH | 순차·재귀(통계) | +1.8093 | 아니오 | 2.52e-308 |
-| naive | 직전값 | +2.6399 | 아니오 | 1.08e-63 |
+| XGBoost | 특성 기반 트리(비신경) | +0.0054 | 예 | 0.863 |
+| Nystroem+Ridge | 특성 기반 회귀(비신경) | +0.0127 | 아니오 | 2.15e-06 |
+| GARCH-t | 순차·재귀(통계) | +0.0307 | 아니오 | 6.38e-05 |
+| TAR-GARCH | 순차·재귀(통계) | +0.0319 | 아니오 | 1.63e-05 |
+| MS-GARCH | 순차·재귀(통계) | +0.0357 | 아니오 | 6.71e-11 |
+| GRU | 순차·재귀 | +0.0464 | 아니오 | 3.05e-26 |
+| LSTM | 순차·재귀 | +0.0681 | 아니오 | 7.46e-40 |
+| KernelRidge-RBF | 특성 기반 회귀(비신경) | +0.0914 | 아니오 | 7.11e-11 |
+| SVR-RBF | 특성 기반 회귀(비신경) | +0.1284 | 아니오 | 8.07e-45 |
+| naive | 직전값 | +2.6399 | 아니오 | 1.27e-63 |
 
 **해석(30분, 모델마다 H0: 최선 `HistGBM`와 기대 손실이 같다)**:
 - HistGBM: 평균 손실이 가장 작아 비교 기준이 된다(MCS 포함 여부와 무관하게 "유일한 최선"이라는 뜻은 아니다).
 - LightGBM: 최선보다 평균 +0.0028 크지만 Holm 보정 p=1로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
 - GARCH+LightGBM: 최선보다 평균 +0.0031 크지만 Holm 보정 p=1로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
-- XGBoost: 최선보다 평균 +0.0054 크지만 Holm 보정 p=0.648로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
-- Nystroem+Ridge: 최선보다 평균 +0.0127 크고 Holm 보정 p=1.81e-06로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- GARCH-t: 최선보다 평균 +0.0307 크고 Holm 보정 p=5.22e-05로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- TAR-GARCH: 최선보다 평균 +0.0319 크고 Holm 보정 p=1.37e-05로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- GRU: 최선보다 평균 +0.0464 크고 Holm 보정 p=2.54e-26로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- LSTM: 최선보다 평균 +0.0681 크고 Holm 보정 p=6.24e-40로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- KernelRidge-RBF: 최선보다 평균 +0.0914 크고 Holm 보정 p=6.22e-11로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- SVR-RBF: 최선보다 평균 +0.1284 크고 Holm 보정 p=6.79e-45로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- MS-GARCH: 최선보다 평균 +1.8093 크고 Holm 보정 p=2.52e-308로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- naive: 최선보다 평균 +2.6399 크고 Holm 보정 p=1.08e-63로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- XGBoost: 최선보다 평균 +0.0054 크지만 Holm 보정 p=0.863로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
+- Nystroem+Ridge: 최선보다 평균 +0.0127 크고 Holm 보정 p=2.15e-06로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- GARCH-t: 최선보다 평균 +0.0307 크고 Holm 보정 p=6.38e-05로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- TAR-GARCH: 최선보다 평균 +0.0319 크고 Holm 보정 p=1.63e-05로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- MS-GARCH: 최선보다 평균 +0.0357 크고 Holm 보정 p=6.71e-11로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- GRU: 최선보다 평균 +0.0464 크고 Holm 보정 p=3.05e-26로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- LSTM: 최선보다 평균 +0.0681 크고 Holm 보정 p=7.46e-40로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- KernelRidge-RBF: 최선보다 평균 +0.0914 크고 Holm 보정 p=7.11e-11로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- SVR-RBF: 최선보다 평균 +0.1284 크고 Holm 보정 p=8.07e-45로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- naive: 최선보다 평균 +2.6399 크고 Holm 보정 p=1.27e-63로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
 
 #### 1시간 (평가 시각 7,873, 블록 20)
 
@@ -156,30 +156,30 @@ MCS 포함은 "최선이 아니라는 것을 기각할 수 없는 모델"이다.
 | LightGBM | 특성 기반 트리(비신경) | +0.0006 | 예 | 1 |
 | XGBoost | 특성 기반 트리(비신경) | +0.0015 | 예 | 1 |
 | HistGBM | 특성 기반 트리(비신경) | +0.0018 | 예 | 1 |
-| Nystroem+Ridge | 특성 기반 회귀(비신경) | +0.0087 | 아니오 | 0.00308 |
-| LSTM | 순차·재귀 | +0.0207 | 아니오 | 8.49e-10 |
-| GRU | 순차·재귀 | +0.0241 | 아니오 | 1.52e-11 |
-| GARCH-t | 순차·재귀(통계) | +0.0509 | 아니오 | 1.37e-28 |
-| TAR-GARCH | 순차·재귀(통계) | +0.0510 | 아니오 | 1.36e-35 |
-| KernelRidge-RBF | 특성 기반 회귀(비신경) | +0.0808 | 아니오 | 1.65e-11 |
-| SVR-RBF | 특성 기반 회귀(비신경) | +0.1452 | 아니오 | 7.04e-45 |
-| naive | 직전값 | +0.9995 | 아니오 | 5.34e-143 |
-| MS-GARCH | 순차·재귀(통계) | +2.3250 | 아니오 | 1.62e-258 |
+| Nystroem+Ridge | 특성 기반 회귀(비신경) | +0.0087 | 아니오 | 0.00368 |
+| LSTM | 순차·재귀 | +0.0207 | 아니오 | 9.37e-10 |
+| GRU | 순차·재귀 | +0.0241 | 아니오 | 1.66e-11 |
+| GARCH-t | 순차·재귀(통계) | +0.0509 | 아니오 | 1.59e-28 |
+| TAR-GARCH | 순차·재귀(통계) | +0.0510 | 아니오 | 1.63e-35 |
+| MS-GARCH | 순차·재귀(통계) | +0.0641 | 아니오 | 4.18e-38 |
+| KernelRidge-RBF | 특성 기반 회귀(비신경) | +0.0808 | 아니오 | 1.79e-11 |
+| SVR-RBF | 특성 기반 회귀(비신경) | +0.1452 | 아니오 | 8.5e-45 |
+| naive | 직전값 | +0.9995 | 아니오 | 6.22e-143 |
 
 **해석(1시간, 모델마다 H0: 최선 `GARCH+LightGBM`와 기대 손실이 같다)**:
 - GARCH+LightGBM: 평균 손실이 가장 작아 비교 기준이 된다(MCS 포함 여부와 무관하게 "유일한 최선"이라는 뜻은 아니다).
 - LightGBM: 최선보다 평균 +0.0006 크지만 Holm 보정 p=1로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
 - XGBoost: 최선보다 평균 +0.0015 크지만 Holm 보정 p=1로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
 - HistGBM: 최선보다 평균 +0.0018 크지만 Holm 보정 p=1로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
-- Nystroem+Ridge: 최선보다 평균 +0.0087 크고 Holm 보정 p=0.00308로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- LSTM: 최선보다 평균 +0.0207 크고 Holm 보정 p=8.49e-10로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- GRU: 최선보다 평균 +0.0241 크고 Holm 보정 p=1.52e-11로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- GARCH-t: 최선보다 평균 +0.0509 크고 Holm 보정 p=1.37e-28로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- TAR-GARCH: 최선보다 평균 +0.0510 크고 Holm 보정 p=1.36e-35로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- KernelRidge-RBF: 최선보다 평균 +0.0808 크고 Holm 보정 p=1.65e-11로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- SVR-RBF: 최선보다 평균 +0.1452 크고 Holm 보정 p=7.04e-45로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- naive: 최선보다 평균 +0.9995 크고 Holm 보정 p=5.34e-143로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- MS-GARCH: 최선보다 평균 +2.3250 크고 Holm 보정 p=1.62e-258로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- Nystroem+Ridge: 최선보다 평균 +0.0087 크고 Holm 보정 p=0.00368로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- LSTM: 최선보다 평균 +0.0207 크고 Holm 보정 p=9.37e-10로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- GRU: 최선보다 평균 +0.0241 크고 Holm 보정 p=1.66e-11로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- GARCH-t: 최선보다 평균 +0.0509 크고 Holm 보정 p=1.59e-28로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- TAR-GARCH: 최선보다 평균 +0.0510 크고 Holm 보정 p=1.63e-35로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- MS-GARCH: 최선보다 평균 +0.0641 크고 Holm 보정 p=4.18e-38로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- KernelRidge-RBF: 최선보다 평균 +0.0808 크고 Holm 보정 p=1.79e-11로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- SVR-RBF: 최선보다 평균 +0.1452 크고 Holm 보정 p=8.5e-45로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- naive: 최선보다 평균 +0.9995 크고 Holm 보정 p=6.22e-143로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
 
 #### 4시간 (평가 시각 1,964, 블록 13)
 
@@ -188,31 +188,31 @@ MCS 포함은 "최선이 아니라는 것을 기각할 수 없는 모델"이다.
 | LightGBM | 특성 기반 트리(비신경) | +0.0000 | 예 | - |
 | GRU | 순차·재귀 | +0.0010 | 예 | 1 |
 | XGBoost | 특성 기반 트리(비신경) | +0.0015 | 예 | 1 |
-| GARCH+LightGBM | 순차·재귀 통계 + 트리 결합 | +0.0022 | 예 | 0.969 |
+| GARCH+LightGBM | 순차·재귀 통계 + 트리 결합 | +0.0022 | 예 | 1 |
 | Nystroem+Ridge | 특성 기반 회귀(비신경) | +0.0022 | 예 | 1 |
 | HistGBM | 특성 기반 트리(비신경) | +0.0035 | 예 | 1 |
 | LSTM | 순차·재귀 | +0.0038 | 예 | 1 |
-| KernelRidge-RBF | 특성 기반 회귀(비신경) | +0.0680 | 아니오 | 0.000124 |
-| GARCH-t | 순차·재귀(통계) | +0.0790 | 아니오 | 4.07e-18 |
-| TAR-GARCH | 순차·재귀(통계) | +0.0931 | 아니오 | 2.68e-13 |
-| SVR-RBF | 특성 기반 회귀(비신경) | +0.1384 | 아니오 | 1.91e-17 |
-| naive | 직전값 | +0.6292 | 아니오 | 1.36e-14 |
-| MS-GARCH | 순차·재귀(통계) | +2.8275 | 아니오 | 3.84e-90 |
+| KernelRidge-RBF | 특성 기반 회귀(비신경) | +0.0680 | 아니오 | 0.000139 |
+| MS-GARCH | 순차·재귀(통계) | +0.0769 | 아니오 | 1.98e-10 |
+| GARCH-t | 순차·재귀(통계) | +0.0790 | 아니오 | 4.85e-18 |
+| TAR-GARCH | 순차·재귀(통계) | +0.0931 | 아니오 | 3.44e-13 |
+| SVR-RBF | 특성 기반 회귀(비신경) | +0.1384 | 아니오 | 2.29e-17 |
+| naive | 직전값 | +0.6292 | 아니오 | 1.69e-14 |
 
 **해석(4시간, 모델마다 H0: 최선 `LightGBM`와 기대 손실이 같다)**:
 - LightGBM: 평균 손실이 가장 작아 비교 기준이 된다(MCS 포함 여부와 무관하게 "유일한 최선"이라는 뜻은 아니다).
 - GRU: 최선보다 평균 +0.0010 크지만 Holm 보정 p=1로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
 - XGBoost: 최선보다 평균 +0.0015 크지만 Holm 보정 p=1로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
-- GARCH+LightGBM: 최선보다 평균 +0.0022 크지만 Holm 보정 p=0.969로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
+- GARCH+LightGBM: 최선보다 평균 +0.0022 크지만 Holm 보정 p=1로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
 - Nystroem+Ridge: 최선보다 평균 +0.0022 크지만 Holm 보정 p=1로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
 - HistGBM: 최선보다 평균 +0.0035 크지만 Holm 보정 p=1로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
 - LSTM: 최선보다 평균 +0.0038 크지만 Holm 보정 p=1로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
-- KernelRidge-RBF: 최선보다 평균 +0.0680 크고 Holm 보정 p=0.000124로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- GARCH-t: 최선보다 평균 +0.0790 크고 Holm 보정 p=4.07e-18로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- TAR-GARCH: 최선보다 평균 +0.0931 크고 Holm 보정 p=2.68e-13로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- SVR-RBF: 최선보다 평균 +0.1384 크고 Holm 보정 p=1.91e-17로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- naive: 최선보다 평균 +0.6292 크고 Holm 보정 p=1.36e-14로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- MS-GARCH: 최선보다 평균 +2.8275 크고 Holm 보정 p=3.84e-90로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- KernelRidge-RBF: 최선보다 평균 +0.0680 크고 Holm 보정 p=0.000139로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- MS-GARCH: 최선보다 평균 +0.0769 크고 Holm 보정 p=1.98e-10로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- GARCH-t: 최선보다 평균 +0.0790 크고 Holm 보정 p=4.85e-18로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- TAR-GARCH: 최선보다 평균 +0.0931 크고 Holm 보정 p=3.44e-13로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- SVR-RBF: 최선보다 평균 +0.1384 크고 Holm 보정 p=2.29e-17로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- naive: 최선보다 평균 +0.6292 크고 Holm 보정 p=1.69e-14로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
 
 #### 12시간 (평가 시각 651, 블록 9)
 
@@ -225,12 +225,12 @@ MCS 포함은 "최선이 아니라는 것을 기각할 수 없는 모델"이다.
 | XGBoost | 특성 기반 트리(비신경) | +0.0100 | 예 | 1 |
 | LightGBM | 특성 기반 트리(비신경) | +0.0106 | 예 | 1 |
 | GARCH+LightGBM | 순차·재귀 통계 + 트리 결합 | +0.0129 | 예 | 1 |
-| KernelRidge-RBF | 특성 기반 회귀(비신경) | +0.0808 | 아니오 | 0.0094 |
-| naive | 직전값 | +0.1448 | 아니오 | 4.12e-07 |
-| GARCH-t | 순차·재귀(통계) | +0.1470 | 아니오 | 3.27e-12 |
-| TAR-GARCH | 순차·재귀(통계) | +0.1642 | 아니오 | 3.23e-14 |
-| SVR-RBF | 특성 기반 회귀(비신경) | +0.1709 | 아니오 | 1.67e-07 |
-| MS-GARCH | 순차·재귀(통계) | +3.0155 | 아니오 | 1.56e-27 |
+| KernelRidge-RBF | 특성 기반 회귀(비신경) | +0.0808 | 아니오 | 0.00994 |
+| MS-GARCH | 순차·재귀(통계) | +0.0846 | 아니오 | 8.34e-07 |
+| naive | 직전값 | +0.1448 | 아니오 | 5.16e-07 |
+| GARCH-t | 순차·재귀(통계) | +0.1470 | 아니오 | 3.94e-12 |
+| TAR-GARCH | 순차·재귀(통계) | +0.1642 | 아니오 | 3.83e-14 |
+| SVR-RBF | 특성 기반 회귀(비신경) | +0.1709 | 아니오 | 2.07e-07 |
 
 **해석(12시간, 모델마다 H0: 최선 `GRU`와 기대 손실이 같다)**:
 - GRU: 평균 손실이 가장 작아 비교 기준이 된다(MCS 포함 여부와 무관하게 "유일한 최선"이라는 뜻은 아니다).
@@ -240,12 +240,12 @@ MCS 포함은 "최선이 아니라는 것을 기각할 수 없는 모델"이다.
 - XGBoost: 최선보다 평균 +0.0100 크지만 Holm 보정 p=1로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
 - LightGBM: 최선보다 평균 +0.0106 크지만 Holm 보정 p=1로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
 - GARCH+LightGBM: 최선보다 평균 +0.0129 크지만 Holm 보정 p=1로 **H0를 기각하지 못했다**(MCS 포함). 곧 최선과 다르다는 증거가 부족해 통계적으로 구분되지 않는다(같다는 증명은 아니다).
-- KernelRidge-RBF: 최선보다 평균 +0.0808 크고 Holm 보정 p=0.0094로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- naive: 최선보다 평균 +0.1448 크고 Holm 보정 p=4.12e-07로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- GARCH-t: 최선보다 평균 +0.1470 크고 Holm 보정 p=3.27e-12로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- TAR-GARCH: 최선보다 평균 +0.1642 크고 Holm 보정 p=3.23e-14로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- SVR-RBF: 최선보다 평균 +0.1709 크고 Holm 보정 p=1.67e-07로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
-- MS-GARCH: 최선보다 평균 +3.0155 크고 Holm 보정 p=1.56e-27로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- KernelRidge-RBF: 최선보다 평균 +0.0808 크고 Holm 보정 p=0.00994로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- MS-GARCH: 최선보다 평균 +0.0846 크고 Holm 보정 p=8.34e-07로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- naive: 최선보다 평균 +0.1448 크고 Holm 보정 p=5.16e-07로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- GARCH-t: 최선보다 평균 +0.1470 크고 Holm 보정 p=3.94e-12로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- TAR-GARCH: 최선보다 평균 +0.1642 크고 Holm 보정 p=3.83e-14로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
+- SVR-RBF: 최선보다 평균 +0.1709 크고 Holm 보정 p=2.07e-07로 **H0를 기각**했다(MCS 제외). 곧 이 모델의 기대 손실이 최선보다 유의하게 크다, 즉 열세다.
 
 ### 3-2. 사전 구간별 통계적 동률 집합
 
@@ -255,19 +255,19 @@ MCS 포함은 "최선이 아니라는 것을 기각할 수 없는 모델"이다.
 | :--- | :--- | :--- | :--- |
 | 15분 | Q1 | LightGBM | G+LGBM, GARCH-t, TAR-GARCH |
 | 15분 | Q2 | GARCH+LightGBM | LGBM, XGB, GARCH-t, TAR-GARCH |
-| 15분 | Q3 | TAR-GARCH | GARCH-t, Nys, G+LGBM, HGB, XGB, LGBM, KRR |
-| 15분 | Q4 | Nystroem+Ridge | TAR-GARCH, GARCH-t |
-| 15분 | Q5 | Nystroem+Ridge | GARCH-t, TAR-GARCH |
+| 15분 | Q3 | TAR-GARCH | MS-GARCH, GARCH-t, Nys, G+LGBM, HGB, XGB, LGBM, KRR |
+| 15분 | Q4 | Nystroem+Ridge | MS-GARCH, TAR-GARCH, GARCH-t, G+LGBM, XGB |
+| 15분 | Q5 | Nystroem+Ridge | MS-GARCH, GARCH-t, TAR-GARCH |
 | 30분 | Q1 | LightGBM | G+LGBM, XGB |
 | 30분 | Q2 | LightGBM | HGB, G+LGBM, XGB, Nys, GRU |
 | 30분 | Q3 | GARCH+LightGBM | LGBM, Nys, HGB |
-| 30분 | Q4 | XGBoost | G+LGBM, Nys, LGBM, HGB, TAR-GARCH, GARCH-t |
-| 30분 | Q5 | HistGBM | Nys, GRU, LSTM, XGB, LGBM, G+LGBM, GARCH-t, TAR-GARCH |
+| 30분 | Q4 | XGBoost | G+LGBM, Nys, LGBM, MS-GARCH, HGB, TAR-GARCH, GARCH-t |
+| 30분 | Q5 | HistGBM | Nys, GRU, MS-GARCH, LSTM, XGB, LGBM, G+LGBM, GARCH-t, TAR-GARCH |
 | 1시간 | Q1 | LightGBM | G+LGBM, HGB, XGB, Nys |
 | 1시간 | Q2 | GARCH+LightGBM | LGBM, Nys, XGB, HGB |
 | 1시간 | Q3 | XGBoost | LGBM, G+LGBM, HGB, Nys |
 | 1시간 | Q4 | Nystroem+Ridge | XGB, G+LGBM, LGBM, HGB |
-| 1시간 | Q5 | LSTM | GRU, G+LGBM, LGBM, HGB, XGB, Nys, TAR-GARCH, GARCH-t |
+| 1시간 | Q5 | LSTM | GRU, G+LGBM, LGBM, HGB, XGB, Nys, MS-GARCH, TAR-GARCH, GARCH-t |
 | 4시간 | Q1 | GARCH+LightGBM | LGBM, XGB, HGB, LSTM, GRU |
 | 4시간 | Q2 | LightGBM | HGB, G+LGBM, XGB, Nys, GRU, KRR |
 | 4시간 | Q3 | Nystroem+Ridge | LGBM, G+LGBM, GRU, XGB, HGB |
@@ -276,36 +276,36 @@ MCS 포함은 "최선이 아니라는 것을 기각할 수 없는 모델"이다.
 | 12시간 | Q1 | GRU | KRR, HGB, LGBM, XGB, G+LGBM, Nys, LSTM |
 | 12시간 | Q2 | Nystroem+Ridge | XGB, GRU, LGBM, G+LGBM, HGB, LSTM, KRR |
 | 12시간 | Q3 | Nystroem+Ridge | LGBM, XGB, G+LGBM, HGB, SVR, LSTM, KRR, GRU, naive |
-| 12시간 | Q4 | GRU | LSTM, naive, Nys, XGB, HGB, LGBM, G+LGBM, TAR-GARCH, KRR, SVR, MS-GARCH |
+| 12시간 | Q4 | GRU | LSTM, naive, Nys, XGB, HGB, LGBM, G+LGBM, TAR-GARCH, KRR, SVR |
 | 12시간 | Q5 | LSTM | GRU, Nys, HGB, naive, XGB, LGBM, G+LGBM |
 
 **해석(예측 구간 × 직전 RV 구간마다)**: 구간 최선과 H0(기대 손실이 같다)를 Holm 보정으로 검정했다. 동률 = H0 기각 못함, 열세 = H0 기각.
 
-- 15분 Q1: 최선 LGBM. 동률(H0 기각 못함) G+LGBM, GARCH-t, TAR-GARCH. 열세(H0 기각) XGB, HGB, Nys, KRR, SVR, GRU, LSTM, MS-GARCH, naive. 
-- 15분 Q2: 최선 G+LGBM. 동률(H0 기각 못함) LGBM, XGB, GARCH-t, TAR-GARCH. 열세(H0 기각) HGB, Nys, KRR, SVR, LSTM, GRU, MS-GARCH, naive. 
-- 15분 Q3: 최선 TAR-GARCH. 동률(H0 기각 못함) GARCH-t, Nys, G+LGBM, HGB, XGB, LGBM, KRR. 열세(H0 기각) LSTM, GRU, SVR, MS-GARCH, naive. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
-- 15분 Q4: 최선 Nys. 동률(H0 기각 못함) TAR-GARCH, GARCH-t. 열세(H0 기각) G+LGBM, LGBM, XGB, HGB, KRR, LSTM, SVR, GRU, naive, MS-GARCH. 
-- 15분 Q5: 최선 Nys. 동률(H0 기각 못함) GARCH-t, TAR-GARCH. 열세(H0 기각) HGB, LSTM, naive, SVR, GRU, G+LGBM, LGBM, KRR, XGB, MS-GARCH. 
-- 30분 Q1: 최선 LGBM. 동률(H0 기각 못함) G+LGBM, XGB. 열세(H0 기각) HGB, Nys, GARCH-t, KRR, TAR-GARCH, GRU, LSTM, SVR, MS-GARCH, naive. 
-- 30분 Q2: 최선 LGBM. 동률(H0 기각 못함) HGB, G+LGBM, XGB, Nys, GRU. 열세(H0 기각) GARCH-t, TAR-GARCH, KRR, LSTM, SVR, MS-GARCH, naive. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
-- 30분 Q3: 최선 G+LGBM. 동률(H0 기각 못함) LGBM, Nys, HGB. 열세(H0 기각) XGB, TAR-GARCH, GARCH-t, KRR, GRU, LSTM, SVR, naive, MS-GARCH. 
-- 30분 Q4: 최선 XGB. 동률(H0 기각 못함) G+LGBM, Nys, LGBM, HGB, TAR-GARCH, GARCH-t. 열세(H0 기각) KRR, GRU, SVR, LSTM, naive, MS-GARCH. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
-- 30분 Q5: 최선 HGB. 동률(H0 기각 못함) Nys, GRU, LSTM, XGB, LGBM, G+LGBM, GARCH-t, TAR-GARCH. 열세(H0 기각) naive, SVR, KRR, MS-GARCH. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
+- 15분 Q1: 최선 LGBM. 동률(H0 기각 못함) G+LGBM, GARCH-t, TAR-GARCH. 열세(H0 기각) XGB, MS-GARCH, HGB, Nys, KRR, SVR, GRU, LSTM, naive. 
+- 15분 Q2: 최선 G+LGBM. 동률(H0 기각 못함) LGBM, XGB, GARCH-t, TAR-GARCH. 열세(H0 기각) HGB, MS-GARCH, Nys, KRR, SVR, LSTM, GRU, naive. 
+- 15분 Q3: 최선 TAR-GARCH. 동률(H0 기각 못함) MS-GARCH, GARCH-t, Nys, G+LGBM, HGB, XGB, LGBM, KRR. 열세(H0 기각) LSTM, GRU, SVR, naive. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
+- 15분 Q4: 최선 Nys. 동률(H0 기각 못함) MS-GARCH, TAR-GARCH, GARCH-t, G+LGBM, XGB. 열세(H0 기각) LGBM, HGB, KRR, LSTM, SVR, GRU, naive. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
+- 15분 Q5: 최선 Nys. 동률(H0 기각 못함) MS-GARCH, GARCH-t, TAR-GARCH. 열세(H0 기각) HGB, LSTM, naive, SVR, GRU, G+LGBM, LGBM, KRR, XGB. 
+- 30분 Q1: 최선 LGBM. 동률(H0 기각 못함) G+LGBM, XGB. 열세(H0 기각) HGB, Nys, GARCH-t, KRR, TAR-GARCH, MS-GARCH, GRU, LSTM, SVR, naive. 
+- 30분 Q2: 최선 LGBM. 동률(H0 기각 못함) HGB, G+LGBM, XGB, Nys, GRU. 열세(H0 기각) GARCH-t, TAR-GARCH, MS-GARCH, KRR, LSTM, SVR, naive. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
+- 30분 Q3: 최선 G+LGBM. 동률(H0 기각 못함) LGBM, Nys, HGB. 열세(H0 기각) XGB, MS-GARCH, TAR-GARCH, GARCH-t, KRR, GRU, LSTM, SVR, naive. 
+- 30분 Q4: 최선 XGB. 동률(H0 기각 못함) G+LGBM, Nys, LGBM, MS-GARCH, HGB, TAR-GARCH, GARCH-t. 열세(H0 기각) KRR, GRU, SVR, LSTM, naive. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
+- 30분 Q5: 최선 HGB. 동률(H0 기각 못함) Nys, GRU, MS-GARCH, LSTM, XGB, LGBM, G+LGBM, GARCH-t, TAR-GARCH. 열세(H0 기각) naive, SVR, KRR. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
 - 1시간 Q1: 최선 LGBM. 동률(H0 기각 못함) G+LGBM, HGB, XGB, Nys. 열세(H0 기각) KRR, LSTM, GRU, GARCH-t, TAR-GARCH, SVR, MS-GARCH, naive. 
-- 1시간 Q2: 최선 G+LGBM. 동률(H0 기각 못함) LGBM, Nys, XGB, HGB. 열세(H0 기각) GRU, LSTM, KRR, GARCH-t, TAR-GARCH, SVR, naive, MS-GARCH. 
-- 1시간 Q3: 최선 XGB. 동률(H0 기각 못함) LGBM, G+LGBM, HGB, Nys. 열세(H0 기각) KRR, LSTM, GRU, TAR-GARCH, GARCH-t, SVR, naive, MS-GARCH. 
-- 1시간 Q4: 최선 Nys. 동률(H0 기각 못함) XGB, G+LGBM, LGBM, HGB. 열세(H0 기각) LSTM, KRR, GRU, TAR-GARCH, GARCH-t, SVR, naive, MS-GARCH. 
-- 1시간 Q5: 최선 LSTM. 동률(H0 기각 못함) GRU, G+LGBM, LGBM, HGB, XGB, Nys, TAR-GARCH, GARCH-t. 열세(H0 기각) naive, KRR, SVR, MS-GARCH. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
-- 4시간 Q1: 최선 G+LGBM. 동률(H0 기각 못함) LGBM, XGB, HGB, LSTM, GRU. 열세(H0 기각) KRR, Nys, GARCH-t, TAR-GARCH, SVR, naive, MS-GARCH. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
-- 4시간 Q2: 최선 LGBM. 동률(H0 기각 못함) HGB, G+LGBM, XGB, Nys, GRU, KRR. 열세(H0 기각) LSTM, SVR, GARCH-t, TAR-GARCH, naive, MS-GARCH. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
-- 4시간 Q3: 최선 Nys. 동률(H0 기각 못함) LGBM, G+LGBM, GRU, XGB, HGB. 열세(H0 기각) LSTM, KRR, SVR, GARCH-t, TAR-GARCH, naive, MS-GARCH. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
-- 4시간 Q4: 최선 XGB. 동률(H0 기각 못함) LSTM, GRU, Nys, LGBM, HGB, G+LGBM, KRR. 열세(H0 기각) TAR-GARCH, GARCH-t, SVR, naive, MS-GARCH. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
-- 4시간 Q5: 최선 GRU. 동률(H0 기각 못함) LSTM, HGB, Nys, LGBM, G+LGBM, XGB. 열세(H0 기각) TAR-GARCH, GARCH-t, naive, KRR, SVR, MS-GARCH. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
-- 12시간 Q1: 최선 GRU. 동률(H0 기각 못함) KRR, HGB, LGBM, XGB, G+LGBM, Nys, LSTM. 열세(H0 기각) GARCH-t, TAR-GARCH, SVR, naive, MS-GARCH. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
-- 12시간 Q2: 최선 Nys. 동률(H0 기각 못함) XGB, GRU, LGBM, G+LGBM, HGB, LSTM, KRR. 열세(H0 기각) SVR, GARCH-t, TAR-GARCH, naive, MS-GARCH. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
-- 12시간 Q3: 최선 Nys. 동률(H0 기각 못함) LGBM, XGB, G+LGBM, HGB, SVR, LSTM, KRR, GRU, naive. 열세(H0 기각) GARCH-t, TAR-GARCH, MS-GARCH. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
-- 12시간 Q4: 최선 GRU. 동률(H0 기각 못함) LSTM, naive, Nys, XGB, HGB, LGBM, G+LGBM, TAR-GARCH, KRR, SVR, MS-GARCH. 열세(H0 기각) GARCH-t. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
-- 12시간 Q5: 최선 LSTM. 동률(H0 기각 못함) GRU, Nys, HGB, naive, XGB, LGBM, G+LGBM. 열세(H0 기각) TAR-GARCH, KRR, GARCH-t, SVR, MS-GARCH. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
+- 1시간 Q2: 최선 G+LGBM. 동률(H0 기각 못함) LGBM, Nys, XGB, HGB. 열세(H0 기각) GRU, LSTM, KRR, GARCH-t, TAR-GARCH, MS-GARCH, SVR, naive. 
+- 1시간 Q3: 최선 XGB. 동률(H0 기각 못함) LGBM, G+LGBM, HGB, Nys. 열세(H0 기각) KRR, LSTM, GRU, MS-GARCH, TAR-GARCH, GARCH-t, SVR, naive. 
+- 1시간 Q4: 최선 Nys. 동률(H0 기각 못함) XGB, G+LGBM, LGBM, HGB. 열세(H0 기각) LSTM, KRR, GRU, MS-GARCH, TAR-GARCH, GARCH-t, SVR, naive. 
+- 1시간 Q5: 최선 LSTM. 동률(H0 기각 못함) GRU, G+LGBM, LGBM, HGB, XGB, Nys, MS-GARCH, TAR-GARCH, GARCH-t. 열세(H0 기각) naive, KRR, SVR. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
+- 4시간 Q1: 최선 G+LGBM. 동률(H0 기각 못함) LGBM, XGB, HGB, LSTM, GRU. 열세(H0 기각) KRR, Nys, GARCH-t, TAR-GARCH, MS-GARCH, SVR, naive. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
+- 4시간 Q2: 최선 LGBM. 동률(H0 기각 못함) HGB, G+LGBM, XGB, Nys, GRU, KRR. 열세(H0 기각) LSTM, MS-GARCH, SVR, GARCH-t, TAR-GARCH, naive. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
+- 4시간 Q3: 최선 Nys. 동률(H0 기각 못함) LGBM, G+LGBM, GRU, XGB, HGB. 열세(H0 기각) LSTM, KRR, SVR, MS-GARCH, GARCH-t, TAR-GARCH, naive. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
+- 4시간 Q4: 최선 XGB. 동률(H0 기각 못함) LSTM, GRU, Nys, LGBM, HGB, G+LGBM, KRR. 열세(H0 기각) MS-GARCH, TAR-GARCH, GARCH-t, SVR, naive. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
+- 4시간 Q5: 최선 GRU. 동률(H0 기각 못함) LSTM, HGB, Nys, LGBM, G+LGBM, XGB. 열세(H0 기각) TAR-GARCH, GARCH-t, MS-GARCH, naive, KRR, SVR. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
+- 12시간 Q1: 최선 GRU. 동률(H0 기각 못함) KRR, HGB, LGBM, XGB, G+LGBM, Nys, LSTM. 열세(H0 기각) MS-GARCH, GARCH-t, TAR-GARCH, SVR, naive. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
+- 12시간 Q2: 최선 Nys. 동률(H0 기각 못함) XGB, GRU, LGBM, G+LGBM, HGB, LSTM, KRR. 열세(H0 기각) MS-GARCH, SVR, GARCH-t, TAR-GARCH, naive. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
+- 12시간 Q3: 최선 Nys. 동률(H0 기각 못함) LGBM, XGB, G+LGBM, HGB, SVR, LSTM, KRR, GRU, naive. 열세(H0 기각) MS-GARCH, GARCH-t, TAR-GARCH. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
+- 12시간 Q4: 최선 GRU. 동률(H0 기각 못함) LSTM, naive, Nys, XGB, HGB, LGBM, G+LGBM, TAR-GARCH, KRR, SVR. 열세(H0 기각) MS-GARCH, GARCH-t. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
+- 12시간 Q5: 최선 LSTM. 동률(H0 기각 못함) GRU, Nys, HGB, naive, XGB, LGBM, G+LGBM. 열세(H0 기각) MS-GARCH, TAR-GARCH, KRR, GARCH-t, SVR. 직전 변동성이 이 구간일 때 동률 묶음이 넓어 모델 선택의 영향이 작다.
 
 ### 3-3. 시드를 바꿔도 MCS 판정이 유지되는가
 
@@ -315,7 +315,7 @@ MCS 포함은 "최선이 아니라는 것을 기각할 수 없는 모델"이다.
 | :--- | ---: | ---: | ---: | ---: | ---: |
 | naive | 0 | 0 | 0 | 0 | 0 |
 | GARCH-t | 5 | 0 | 0 | 0 | 0 |
-| MS-GARCH | 0 | 0 | 0 | 0 | 0 |
+| MS-GARCH | 5 | 0 | 0 | 0 | 0 |
 | TAR-GARCH | 5 | 0 | 0 | 0 | 0 |
 | KernelRidge-RBF | 0 | 0 | 0 | 0 | 0 |
 | SVR-RBF | 0 | 0 | 0 | 0 | 0 |
@@ -329,7 +329,7 @@ MCS 포함은 "최선이 아니라는 것을 기각할 수 없는 모델"이다.
 
 **해석(예측 구간마다)**: 5/5는 시드와 무관하게 최선과 구분되지 않는 모델, 1~4는 시드에 따라 판정이 달라지는 모델, 0은 항상 제외되는 모델이다.
 
-- 15분: 항상 포함 GARCH-t, TAR-GARCH, Nystroem+Ridge, HistGBM, GARCH+LightGBM. 시드 의존 LightGBM(2/5). 항상 제외 naive, MS-GARCH, KernelRidge-RBF, SVR-RBF, XGBoost, GRU, LSTM.
+- 15분: 항상 포함 GARCH-t, MS-GARCH, TAR-GARCH, Nystroem+Ridge, HistGBM, GARCH+LightGBM. 시드 의존 LightGBM(2/5). 항상 제외 naive, KernelRidge-RBF, SVR-RBF, XGBoost, GRU, LSTM.
 - 30분: 항상 포함 LightGBM, XGBoost, HistGBM, GARCH+LightGBM. 시드 의존 없음. 항상 제외 naive, GARCH-t, MS-GARCH, TAR-GARCH, KernelRidge-RBF, SVR-RBF, Nystroem+Ridge, GRU, LSTM.
 - 1시간: 항상 포함 XGBoost, GARCH+LightGBM. 시드 의존 LightGBM(4/5), HistGBM(3/5). 항상 제외 naive, GARCH-t, MS-GARCH, TAR-GARCH, KernelRidge-RBF, SVR-RBF, Nystroem+Ridge, GRU, LSTM.
 - 4시간: 항상 포함 Nystroem+Ridge, LightGBM, XGBoost, HistGBM, GARCH+LightGBM, GRU. 시드 의존 LSTM(4/5). 항상 제외 naive, GARCH-t, MS-GARCH, TAR-GARCH, KernelRidge-RBF, SVR-RBF.
@@ -339,7 +339,7 @@ MCS 포함은 "최선이 아니라는 것을 기각할 수 없는 모델"이다.
 
 | 예측 구간 | A등급(0.01 이내) | MCS 포함 | 둘 다 | A등급만 | MCS만 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| 15분 | GARCH-t, Nys, TAR-GARCH | G+LGBM, GARCH-t, HGB, LGBM, Nys, TAR-GARCH | GARCH-t, Nys, TAR-GARCH | - | G+LGBM, HGB, LGBM |
+| 15분 | GARCH-t, MS-GARCH, Nys, TAR-GARCH | G+LGBM, GARCH-t, HGB, LGBM, MS-GARCH, Nys, TAR-GARCH | GARCH-t, MS-GARCH, Nys, TAR-GARCH | - | G+LGBM, HGB, LGBM |
 | 30분 | G+LGBM, HGB, LGBM, XGB | G+LGBM, HGB, LGBM, XGB | G+LGBM, HGB, LGBM, XGB | - | - |
 | 1시간 | G+LGBM, HGB, LGBM, Nys, XGB | G+LGBM, HGB, LGBM, XGB | G+LGBM, HGB, LGBM, XGB | Nys | - |
 | 4시간 | G+LGBM, GRU, HGB, LSTM, LGBM, Nys, XGB | G+LGBM, GRU, HGB, LSTM, LGBM, Nys, XGB | G+LGBM, GRU, HGB, LSTM, LGBM, Nys, XGB | - | - |
