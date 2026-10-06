@@ -119,7 +119,8 @@ M.SHORT.update({"PatchTST": "PTST", "iTransformer": "iTrans", "Autoformer": "Aut
                 "Sundial": "Sun", "Time-MoE": "TMoE", "Lag-Llama": "LagL"})
 
 INPUT_BLOCKS = {15: 96, 30: 96, 60: 96, 240: 60, 720: 30}   # 입력 길이(블록 수): 하루~며칠치 이력
-NF_MAX_STEPS, NF_VAL_CHECK, NF_PATIENCE = 2000, 100, 5
+NF_MAX_STEPS, NF_VAL_CHECK, NF_PATIENCE = 1000, 100, 3
+NF_WINDOWS_BATCH = 256        # 모델마다 기본 배치가 달라(Autoformer 1,024 등) 계산량이 크게 갈려 모두 같은 값으로 맞춘다
 VAL_FRAC = 0.15
 
 
@@ -189,6 +190,7 @@ def make_nf_model(name: str, H: int, seed: int, quick: bool):
     L = INPUT_BLOCKS[H] if not quick else 16
     common = dict(h=1, input_size=L, loss=MSE(), valid_loss=MSE(), max_steps=NF_MAX_STEPS if not quick else 40,
                   val_check_steps=NF_VAL_CHECK if not quick else 20, early_stop_patience_steps=NF_PATIENCE,
+                  windows_batch_size=NF_WINDOWS_BATCH, inference_windows_batch_size=512, valid_batch_size=512,
                   random_seed=seed, logger=False, enable_progress_bar=False, enable_model_summary=False)
     if name == "PatchTST":
         return nfm.PatchTST(**common)
@@ -214,7 +216,82 @@ def nf_frame(name: str, B: dict, ymu: float, ysd: float, end: int) -> pd.DataFra
     return parts
 
 
+MODERNTCN_DIR = ROOT / "third_party" / "ModernTCN" / "ModernTCN-Long-term-forecasting"
+MTCN_EPOCHS, MTCN_PATIENCE, MTCN_BATCH, MTCN_LR = 60, 10, 512, 1e-4
+
+
+def modern_tcn_predict(B: dict, ymu: float, ysd: float, train_end: int, end: int, H: int, seed: int, quick: bool):
+    """ModernTCN 공식 코드(저자 GitHub)를 같은 두 단계 절차로 학습·예측. 설정은 저자의 ETTh1 스크립트
+    (patch 8, stride 4, ffn_ratio 1, 블록 1개, 큰 커널 51·작은 커널 5, dims 64, dropout 0.3, head_dropout 0, lr 1e-4,
+    batch 512, 학습률 감소 type3, RevIN 사용, 다중 스케일 끔)를 따른다. 변수 1개(log RV), 다음 1블록 예측."""
+    import types
+    import torch
+    import torch.nn as nn
+    if str(MODERNTCN_DIR) not in sys.path:
+        sys.path.insert(0, str(MODERNTCN_DIR))
+    from models.ModernTCN import Model
+    L = INPUT_BLOCKS[H] if not quick else 16
+    cfg = types.SimpleNamespace(stem_ratio=6, downsample_ratio=2, ffn_ratio=1, num_blocks=[1], large_size=[51], small_size=[5],
+                                dims=[64, 64, 64, 64], dw_dims=[256, 256, 256, 256], enc_in=1, small_kernel_merged=False,
+                                dropout=0.3, head_dropout=0.0, use_multi_scale=False, revin=1, affine=0, subtract_last=0,
+                                freq="h", seq_len=L, individual=0, pred_len=1, kernel_size=25, patch_size=8, patch_stride=4,
+                                decomposition=0)
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    model = Model(cfg).to(dev)
+    yl = ((locf(B["y"]) - ymu) / ysd).astype(np.float32)
+    ok = B["ok"]
+    win = lambda e: yl[e - L:e]                                        # 블록 e 직전 L개
+    val_n = int(VAL_FRAC * train_end)
+    fit_end = train_end - val_n
+    tr_idx = np.array([e for e in range(L, fit_end) if ok[e]])
+    va_idx = np.array([e for e in range(fit_end, train_end) if ok[e]])
+    X = lambda idx: torch.tensor(np.stack([win(e) for e in idx])[:, :, None]).to(dev)
+    Xtr, ytr = X(tr_idx), torch.tensor(yl[tr_idx]).to(dev)
+    Xva, yva = X(va_idx), torch.tensor(yl[va_idx]).to(dev)
+    opt = torch.optim.Adam(model.parameters(), lr=MTCN_LR)
+    lossf = nn.MSELoss()
+
+    def infer(x):
+        model.eval()
+        out = []
+        with torch.no_grad():
+            for i in range(0, len(x), 2048):
+                out.append(model(x[i:i + 2048])[:, 0, 0].float())
+        return torch.cat(out)
+
+    best, best_state, bad = np.inf, None, 0
+    for ep in range(MTCN_EPOCHS if not quick else 2):
+        for g in opt.param_groups:                                      # 저자 lradj type3: 3에폭 이후 0.9배씩 감소
+            g["lr"] = MTCN_LR * (0.9 ** max(0, ep - 3))
+        model.train()
+        perm = torch.randperm(len(Xtr), device=dev)
+        for i in range(0, len(Xtr), MTCN_BATCH):
+            b = perm[i:i + MTCN_BATCH]
+            opt.zero_grad(set_to_none=True)
+            loss = lossf(model(Xtr[b])[:, 0, 0], ytr[b])
+            loss.backward()
+            opt.step()
+        vl = float(lossf(infer(Xva), yva).item())
+        if vl < best - 1e-6:
+            best, bad = vl, 0
+            best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
+        else:
+            bad += 1
+            if bad >= MTCN_PATIENCE:
+                break
+    model.load_state_dict(best_state)
+    te_idx = np.arange(train_end, end)
+    p = infer(X(te_idx)).cpu().numpy().astype(float)
+    if not np.all(np.isfinite(p)):
+        raise FloatingPointError("ModernTCN: 예측에 비유한값")
+    return p
+
+
 def nf_predict(name: str, B: dict, ymu: float, ysd: float, train_end: int, end: int, H: int, seed: int, quick: bool):
+    if name == "ModernTCN":
+        return modern_tcn_predict(B, ymu, ysd, train_end, end, H, seed, quick)
     """블록 [0, end)로 모델 하나를 학습(앞 train_end개 중 끝 15%는 조기종료 검증)하고 [train_end, end)를 예측.
     반환: 길이 end-train_end의 표준화 로그 RV 예측."""
     from neuralforecast import NeuralForecast
@@ -395,7 +472,7 @@ def merge_jobs(results: list, store: dict, rows: list, rows1: list, store1: dict
 def main(argv=None) -> None:
     from report_header import study_universe
     ap = argparse.ArgumentParser()
-    ap.add_argument("--family", default="nf", choices=["nf", "fm-prep", "fm-score"])
+    ap.add_argument("--family", default="nf", choices=["nf", "conv", "fm-prep", "fm-score"])
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--n-tickers", type=int, default=20)
@@ -414,9 +491,9 @@ def main(argv=None) -> None:
     RES.mkdir(parents=True, exist_ok=True)
     tickers, _ = study_universe()
     tickers = tickers[:2] if a.quick else tickers[:a.n_tickers]
-    default = {"nf": NF_MODELS, "fm-score": FM_MODELS, "fm-prep": ()}[a.family]
+    default = {"nf": NF_MODELS, "conv": CONV_MODELS, "fm-score": FM_MODELS, "fm-prep": ()}[a.family]
     models = tuple(m_ for m_ in (a.models.split(",") if a.models else default) if m_)
-    tag = {"nf": "nf", "fm-score": "fm", "fm-prep": "prep"}[a.family]
+    tag = {"nf": "nf", "conv": "conv", "fm-score": "fm", "fm-prep": "prep"}[a.family]
     jobs = [(tk, H) for tk in tickers for H in M.HORIZONS_H]
     print(f"[시작] {a.family} {models} · 종목 {len(tickers)} × 구간 {M.HORIZONS_H} = {len(jobs)}작업 · 시드 {SEED} · 워커 {a.workers}",
           flush=True)
@@ -430,8 +507,8 @@ def main(argv=None) -> None:
                 print(f"  [{i}/{len(jobs)}] {name}", flush=True)
         print(f"[입력 작성 완료] {(time.time() - t_start) / 60:.1f}분 · {FM_DIR / 'in'}", flush=True)
         return
-    fn = run_nf_job if a.family == "nf" else run_fm_score_job
-    extra = (models, SEED) if a.family == "nf" else (models,)
+    fn = run_fm_score_job if a.family == "fm-score" else run_nf_job
+    extra = (models,) if a.family == "fm-score" else (models, SEED)
     with ProcessPoolExecutor(max_workers=a.workers, mp_context=ctx) as pool:
         futs = {pool.submit(fn, tk, H, a.quick, *extra): (tk, H) for tk, H in jobs}
         for i, fu in enumerate(as_completed(futs), 1):
