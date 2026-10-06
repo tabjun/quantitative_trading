@@ -44,7 +44,7 @@ def build(model: str, device: str):
     if model == "TimesFM":
         import timesfm
         m = timesfm.TimesFM_2p5_200M_torch.from_pretrained("google/timesfm-2.5-200m-pytorch")
-        m.compile(timesfm.ForecastConfig(max_context=512, max_horizon=8, normalize_inputs=True,
+        m.compile(timesfm.ForecastConfig(max_context=512, max_horizon=8, normalize_inputs=True, per_core_batch_size=256,
                                          use_continuous_quantile_head=False, force_flip_invariance=False,
                                          infer_is_positive=False, fix_quantile_crossing=False))
 
@@ -122,8 +122,11 @@ def main() -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
+    if a.batch <= 1:
+        raise SystemExit("배치가 1 이하다. model_catalog.md 6-1절 점검표를 확인하라")
     f = build(a.model, device)
     L = CTX[a.model]
+    print(f"[{a.model}] 문맥 {L} · 외부 배치 {a.batch}" + (" · TimesFM per_core_batch_size 256" if a.model == "TimesFM" else ""), flush=True)
     t0 = time.time()
     files = sorted(Path(a.inputs).glob("*.npz"))
     for i, fp in enumerate(files, 1):
@@ -137,13 +140,24 @@ def main() -> None:
         if orig.min() < L:
             raise AssertionError(f"{fp.name}: 이력이 {L}블록 미만인 예측 시점이 있다(최소 {orig.min()})")
         pred = np.empty(len(orig), np.float32)
-        for b in range(0, len(orig), a.batch):
-            kk = orig[b:b + a.batch]
+        b, bs = 0, a.batch
+        while b < len(orig):
+            kk = orig[b:b + bs]
             x = np.stack([s[k - L:k] for k in kk]).astype(np.float32)
-            p = np.asarray(f(x, {"H": H, "ds0": ds0, "k": kk}), np.float32)
+            try:
+                p = np.asarray(f(x, {"H": H, "ds0": ds0, "k": kk}), np.float32)
+            except torch.OutOfMemoryError:
+                # GPU 메모리 부족: 캐시를 비우고 배치를 절반으로 줄여 같은 구간을 다시 예측한다(결과는 배치 크기와 무관)
+                torch.cuda.empty_cache()
+                if bs <= 8:
+                    raise
+                bs //= 2
+                print(f"    메모리 부족 → 배치 {bs}로 축소", flush=True)
+                continue
             if p.shape != (len(kk),) or not np.all(np.isfinite(p)):
                 raise FloatingPointError(f"{fp.name}: 예측이 비정상 {p.shape}")
-            pred[b:b + a.batch] = p
+            pred[b:b + len(kk)] = p
+            b += len(kk)
         np.savez_compressed(dst, orig=orig, pred=pred)
         print(f"  [{a.model} {i}/{len(files)}] {fp.name} {len(orig)}건 ({time.time() - t0:.0f}s)", flush=True)
     print(f"[{a.model} 완료] {(time.time() - t0) / 60:.1f}분", flush=True)

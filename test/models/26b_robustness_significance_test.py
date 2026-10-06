@@ -71,7 +71,7 @@ def _load_m26():
 
 
 M26 = _load_m26()
-SEEDS = (0, 1, 2, 3, 4)
+SEEDS = tuple(int(x) for x in os.environ.get("RUN26B_SEEDS", "0,1,2,3,4").split(","))   # 27번은 "0,1,2"(전 모델 동일)
 STOCHASTIC = ("LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM", "Nystroem+Ridge", "GRU", "LSTM")
 if SRC_KEY == "27":
     STOCHASTIC = STOCHASTIC + ("PatchTST", "iTransformer", "TCN", "Autoformer", "TimesNet", "TimeXer", "ModernTCN", "S-Mamba")

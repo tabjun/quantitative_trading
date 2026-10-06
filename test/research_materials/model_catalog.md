@@ -97,6 +97,32 @@ AGENTS.md 2.13(모델명 Like 금지 — 검증된 구현 사용 의무)의 계�
 
 ---
 
+## 6-1. 실행 설정 점검표(실행 전 대조 필수)
+
+공식 문서·저자 스크립트의 실행 예시 값과 우리 설정을 나란히 둔다. **새 모델을 돌리거나 설정을 바꾸기 전에 이 표와 대조한다.**
+배치 관련 기본값을 확인하지 않아 계산이 수십 배 느려지거나(TimesFM `per_core_batch_size` 기본 1, 2026-10-06) 메모리 부족으로
+실패한(Time-MoE, Autoformer 기본 윈도 배치 1,024) 일이 있었다. 러너(`test/models/27_fm_run.py`)는 시작할 때 적용된 배치 값을 출력하고,
+배치가 1이면 멈춘다. 확인 근거는 각 모델 카드·저장소 README(2026-10-06 조회)다.
+
+| 모델 | 공식 예시 설정 | 우리 설정 | 차이와 이유 |
+| :--- | :--- | :--- | :--- |
+| TimesFM 2.5 | `ForecastConfig(max_context=1024, max_horizon=256, normalize_inputs=True, ...)`. `per_core_batch_size` 기본값 1(README 예시에 없음) | max_context 512, max_horizon 8, **per_core_batch_size 256**, infer_is_positive False, force_flip_invariance False | 로그 RV는 음수라 양수 가정을 끈다. 배치 1은 초당 약 6건이라 256으로 지정(4,096건 6초) |
+| Chronos-Bolt | `predict_quantiles(context, prediction_length=12)`, 문맥은 1D 텐서 목록 또는 왼쪽 패딩 2D 텐서 | 문맥 512, 한 번에 256개, 분위수 0.5 | 공식 속도 비교도 문맥 512 기준 |
+| TTM r2 | 문맥·예측 길이별 가지(`get_model()` 권장), **분·시간 해상도만 지원(10분·15분·1시간)**, 0 패딩으로 문맥 늘리기 비권장 | main 가지(512-96), 첫 예측 스텝 | **4시간·12시간 블록은 공식 지원 해상도 밖** → 이 두 구간의 TTM은 결론에서 뺀다 |
+| Moirai-2.0 | 문맥 길이 지정, 예측 분위수 출력 | 문맥 512, 한 번에 256개, 중앙 분위수 | - |
+| Sundial | `generate(seqs, max_new_tokens, num_samples=20)`, 문맥 최대 2,880 | 문맥 512, 표본 50개 중앙값, 한 번에 256개 | 표본 잡음을 줄이려 표본 수를 늘림 |
+| Time-MoE | `generate(정규화한 문맥, max_new_tokens)`, 사용자가 직접 정규화, 문맥 최대 4,096 | 문맥 512, 문맥별 평균·표준편차 정규화, 배치 64(메모리 부족 시 자동 절반) | 배치 256은 다른 GPU 작업과 겹칠 때 메모리 부족 |
+| Lag-Llama | 체크포인트의 하이퍼파라미터 사용, context_length 32 + 최대 lag 1,092, 표본 100개 | 같음, gluonts 배치 256 | - |
+| neuralforecast 6종 | 모델마다 기본 `windows_batch_size`가 다름(Autoformer 1,024 등), max_steps 1,000~5,000 | **windows_batch_size 256 통일**, max_steps 1,000, 조기종료 인내 3 | 모델 간 학습 예산을 같게 맞춤 |
+| ModernTCN | 저자 ETTh1 스크립트: batch 512, lr 1e-4, patch 8/4, 큰 커널 51 | 같음 | - |
+| S-Mamba | 저자 ETTh1 스크립트: batch 32, lr 7e-5, d_model 256, d_state 2, 10에폭 | 같음 | - |
+| GRU·LSTM | (자체 학습 루프) | 배치 2,048, bf16 혼합정밀도, 메모리 부족 시 배치 절반 | - |
+
+활용 참고(논문 외): TimesFM 개요·장단점·투자 활용·경쟁 모델 비교 정리 — https://github.com/gameworkerkim/vibe-investing/blob/main/TechDoc/TimesFM/TimesFM_%EB%B6%84%EC%84%9D_%EA%B0%80%EC%9D%B4%EB%93%9C.md
+(이 문서의 코드 예시 `TimesFmHparams(per_core_batch_size=32, ...)`는 1.x·2.0 API이고, 2.5는 `ForecastConfig`를 쓴다)
+
+---
+
 ## 7. 조사했으나 공식 구현 미확정 — 참고만 해 둔다
 
 | 모델 | 처리 방식 | 문헌/비고(상태 · 근거) |

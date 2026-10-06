@@ -124,6 +124,9 @@ INPUT_BLOCKS = {15: 96, 30: 96, 60: 96, 240: 60, 720: 30}   # 입력 길이(블�
 # 26c 모듈의 목록을 신규 모델까지 넓힌다(모든 신규 모델은 로그 타깃이라 정지 확률 π를 받는다)
 M.ALL_MODELS = tuple(M.ALL_MODELS) + NEW_MODELS
 M.LOG_TARGET_MODELS = tuple(M.LOG_TARGET_MODELS) + NEW_MODELS
+# 시드 집합은 모든 무작위 모델에 같게 쓴다. 신경망 6종의 계산량(시드 1개 약 15~20시간) 때문에 0·1·2로 정했고, 26c 모델도
+# 이미 있는 0~4 중 0~2만 쓴다. 환경변수 RUN27_SEEDS로 바꿀 수 있다(예: "0,1,2,3,4").
+SEEDS_USED = tuple(int(x) for x in os.environ.get("RUN27_SEEDS", "0,1,2").split(","))
 STOCHASTIC_NEW = NF_MODELS + CONV_MODELS + SSM_MODELS          # 시드로 흔들리는 신규 모델(파운데이션은 zero-shot이라 학습 시드 없음)
 
 NF_MAX_STEPS, NF_VAL_CHECK, NF_PATIENCE = 1000, 100, 3
@@ -369,10 +372,38 @@ def prepare_job(ticker: str, H: int, quick: bool) -> dict:
     HD = dict(HD)
     HD["va"] = MK["va"]                      # 보정·π 검증 시점을 블록 경계 정시로 한정
     S = M.Scorer(ticker, HD)
-    pi_va, pi_te, zinfo = M.zero_model(D, HD, M.make_features(D), M.zero_features(D), quick)
+    pi_va, pi_te, zinfo = load_or_fit_pi(ticker, H, D, HD, quick)
     S.set_zero(pi_va, pi_te)
     ymu, ysd = standardize(B, MK["k_in"])
     return dict(D=D, HD=HD, B=B, MK=MK, S=S, ymu=ymu, ysd=ysd, zinfo={"종목": ticker, "H": H, **zinfo})
+
+
+PI_DIR = RES / "parts" / "pi_cache"
+
+
+def load_or_fit_pi(ticker: str, H: int, D: dict, HD: dict, quick: bool):
+    """정지 분류기는 26c 시드 0과 같은 설정(random_state=0)이라 시드·모델과 무관하다. 종목×구간마다 한 번만 적합해 저장한다."""
+    import pickle
+    f = PI_DIR / f"{ticker}_{H}{'_quick' if quick else ''}.pkl"
+    if f.exists():
+        return pickle.loads(f.read_bytes())
+    out = M.zero_model(D, HD, M.make_features(D), M.zero_features(D), quick)
+    PI_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = f.with_suffix(".tmp")
+    tmp.write_bytes(pickle.dumps(out))
+    tmp.replace(f)
+    return out
+
+
+def pi_job(ticker: str, H: int, quick: bool) -> str:
+    D = M.build_data(ticker)
+    HD = M.horizon_data(D, H)
+    B = block_data(D, H)
+    MK = block_masks(D, HD, B)
+    HD = dict(HD)
+    HD["va"] = MK["va"]
+    load_or_fit_pi(ticker, H, D, HD, quick)
+    return f"{ticker}_{H}"
 
 
 def finish_job(ticker: str, H: int, P: dict, fails: list, meta: dict, t0: float) -> dict:
@@ -493,7 +524,7 @@ def _read_family(stem: str, seed: int = 0) -> list[tuple[pd.DataFrame, pd.DataFr
     """한 시드의 신규 모델 산출물(nf·conv·fm)을 (rows, rows1, store, store1)로 읽는다. 없는 계열은 건너뛴다."""
     out = []
     pre = f"{STEM}" if seed == 0 else f"{STEM}_seed{seed}"
-    for tag in ("nf", "conv", "ssm", "fm"):
+    for tag in [f"nf-{m_}" for m_ in NF_MODELS] + ["nf", "conv", "ssm", "fm"]:
         f = RES / f"{pre}_{tag}_model_comparison.csv"
         if not f.exists():
             continue
@@ -531,10 +562,13 @@ def combine() -> None:
         shutil.copy(SRC26C / f"26c_recent_twopart_{f}", RES / f"{STEM}_{f}")
     # 시드 묶음
     got = []
-    for sd in (1, 2, 3, 4):
+    for sd in [x for x in SEEDS_USED if x != 0]:
         f26 = SRC26C / f"26c_recent_twopart_seed{sd}_test_predictions.npz"
         fam_s = _read_family(STEM, sd)
-        if not f26.exists() or not fam_s:
+        have = set().union(*[set(r_["모델"]) for r_, _, _, _ in fam_s]) if fam_s else set()
+        missing = [m_ for m_ in STOCHASTIC_NEW if m_ not in have]
+        if not f26.exists() or missing:
+            print(f"  [시드 {sd}] 신규 모델 산출물 부족({', '.join(missing) or '26c 시드 파일 없음'}) → 이 시드는 합치지 않는다", flush=True)
             continue
         pr = {}
         for key, v in M._npz_to_store(f26).items():
@@ -559,7 +593,7 @@ def seed_mean_losses(rd: pd.DataFrame, store: dict, models: list[str]) -> tuple[
     (손실의 평균이며 예측의 평균이 아니다), 나머지 모델은 시드와 무관하므로 같은 값이 평균된다. 반환: (평균 손실표, 모델별 시드 수)."""
     frames = [M.cell_losses(rd, store, models).assign(seed=0)]
     n_seed = {m_: 1 for m_ in models}
-    for sd in (1, 2, 3, 4):
+    for sd in [x for x in SEEDS_USED if x != 0]:
         f_rd, f_np = RES / f"{STEM}_seed{sd}_model_comparison.csv", RES / f"{STEM}_seed{sd}_test_predictions.npz"
         if not (f_rd.exists() and f_np.exists()):
             continue
@@ -746,7 +780,7 @@ def merge_jobs(results: list, store: dict, rows: list, rows1: list, store1: dict
 def main(argv=None) -> None:
     from report_header import study_universe
     ap = argparse.ArgumentParser()
-    ap.add_argument("--family", default="nf", choices=["nf", "conv", "ssm", "fm-prep", "fm-score", "combine", "report"])
+    ap.add_argument("--family", default="nf", choices=["nf", "conv", "ssm", "fm-prep", "fm-score", "combine", "report", "pi"])
     ap.add_argument("--elapsed-note", default="")
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--selftest", action="store_true")
@@ -754,6 +788,7 @@ def main(argv=None) -> None:
     ap.add_argument("--workers", type=int, default=3)
     ap.add_argument("--models", default="", help="콤마 목록(기본: NF 전부)")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--retries", type=int, default=2, help="실패한 작업 재시도 횟수(워커 1개)")
     a = ap.parse_args(argv)
     selftest()
     M.selftest()
@@ -772,15 +807,23 @@ def main(argv=None) -> None:
     if a.family == "report":
         write_report27(a.elapsed_note)
         return
-    default = {"nf": NF_MODELS, "conv": CONV_MODELS, "ssm": SSM_MODELS, "fm-score": FM_MODELS, "fm-prep": ()}[a.family]
+    default = {"nf": NF_MODELS, "conv": CONV_MODELS, "ssm": SSM_MODELS, "fm-score": FM_MODELS, "fm-prep": (), "pi": ()}[a.family]
     models = tuple(m_ for m_ in (a.models.split(",") if a.models else default) if m_)
-    tag = {"nf": "nf", "conv": "conv", "ssm": "ssm", "fm-score": "fm", "fm-prep": "prep"}[a.family]
+    tag = {"nf": "nf", "conv": "conv", "ssm": "ssm", "fm-score": "fm", "fm-prep": "prep", "pi": "pi"}[a.family]
+    if a.family == "nf" and len(models) == 1:
+        tag = f"nf-{models[0]}"                    # 알고리즘 하나씩 순차 실행할 때 산출물을 모델별로 나눈다
     jobs = [(tk, H) for tk in tickers for H in M.HORIZONS_H]
     print(f"[시작] {a.family} {models} · 종목 {len(tickers)} × 구간 {M.HORIZONS_H} = {len(jobs)}작업 · 시드 {SEED} · 워커 {a.workers}",
           flush=True)
     t_start = time.time()
     results, fails, metas, zrows = [], [], [], []
     ctx = mp.get_context("spawn")
+    if a.family == "pi":
+        with ProcessPoolExecutor(max_workers=a.workers, mp_context=ctx) as pool:
+            for i, name in enumerate(pool.map(pi_job, [j[0] for j in jobs], [j[1] for j in jobs], [a.quick] * len(jobs)), 1):
+                print(f"  [π {i}/{len(jobs)}] {name}", flush=True)
+        print(f"[정지 확률 캐시 완료] {(time.time() - t_start) / 60:.1f}분", flush=True)
+        return
     if a.family == "fm-prep":
         with ProcessPoolExecutor(max_workers=a.workers, mp_context=ctx) as pool:
             for i, name in enumerate(pool.map(fm_prepare_job, [j[0] for j in jobs], [j[1] for j in jobs],
@@ -790,20 +833,43 @@ def main(argv=None) -> None:
         return
     fn = run_fm_score_job if a.family == "fm-score" else run_nf_job
     extra = (models,) if a.family == "fm-score" else (models, SEED)
-    with ProcessPoolExecutor(max_workers=a.workers, mp_context=ctx) as pool:
-        futs = {pool.submit(fn, tk, H, a.quick, *extra): (tk, H) for tk, H in jobs}
-        for i, fu in enumerate(as_completed(futs), 1):
-            tk, H = futs[fu]
-            try:
-                r = fu.result()
-            except Exception as e:
-                fails.append({"종목": tk, "모델": "(작업)", "H": H, "예외": type(e).__name__, "메시지": str(e)[:200]})
-                print(f"    ! {tk} H={H} 작업 실패 {type(e).__name__}: {str(e)[:120]}", flush=True)
-                continue
-            results.append(r)
-            metas.append(r["meta"]); zrows.append(r["zinfo"])
+    # 작업 단위 저장·이어하기: 종목×구간 작업이 끝날 때마다 바로 저장하고, 다시 실행하면 끝난 작업은 읽기만 한다.
+    # 모델 하나라도 실패한 작업은 완료로 치지 않고 다음 차례에 다시 돌린다(최대 a.retries번, 재시도는 워커 1개로).
+    import pickle
+    part_dir = RES / "parts" / f"{RUN_STEM}_{tag}"
+    part_dir.mkdir(parents=True, exist_ok=True)
+    part = lambda tk, H: part_dir / f"{tk}_{H}.pkl"
+    done: dict = {}
+    for tk, H in jobs:
+        if part(tk, H).exists():
+            done[(tk, H)] = pickle.loads(part(tk, H).read_bytes())
+    print(f"[이어하기] 저장된 작업 {len(done)}/{len(jobs)}", flush=True)
+    for attempt in range(a.retries + 1):
+        todo = [j for j in jobs if j not in done or done[j]["fails"]]
+        if not todo:
+            break
+        nw = a.workers if attempt == 0 else 1
+        print(f"[{'실행' if attempt == 0 else f'재시도 {attempt}'}] {len(todo)}작업 · 워커 {nw}", flush=True)
+        with ProcessPoolExecutor(max_workers=nw, mp_context=ctx) as pool:
+            futs = {pool.submit(fn, tk, H, a.quick, *extra): (tk, H) for tk, H in todo}
+            for i, fu in enumerate(as_completed(futs), 1):
+                tk, H = futs[fu]
+                try:
+                    r = fu.result()
+                except Exception as e:
+                    print(f"    ! {tk} H={H} 작업 실패 {type(e).__name__}: {str(e)[:120]}", flush=True)
+                    done.setdefault((tk, H), {"fails": [("(작업)", H, type(e).__name__, str(e)[:200])], "_crash": True})
+                    continue
+                done[(tk, H)] = r
+                part(tk, H).write_bytes(pickle.dumps(r))
+                print(f"  [{i}/{len(todo)}] {tk} H={H} ({r['elapsed']:.0f}s) 실패 모델 {len(r['fails'])}", flush=True)
+    for (tk, H), r in done.items():
+        if r.get("_crash"):
             fails.extend({"종목": tk, "모델": f[0], "H": f[1], "예외": f[2], "메시지": f[3]} for f in r["fails"])
-            print(f"  [{i}/{len(jobs)}] {tk} H={H} ({r['elapsed']:.0f}s)", flush=True)
+            continue
+        results.append(r)
+        metas.append(r["meta"]); zrows.append(r["zinfo"])
+        fails.extend({"종목": tk, "모델": f[0], "H": f[1], "예외": f[2], "메시지": f[3]} for f in r["fails"])
     store, store1, rows, rows1 = {}, {}, [], []
     merge_jobs(results, store, rows, rows1, store1)
     pd.DataFrame(rows).to_csv(RES / f"{RUN_STEM}_{tag}_model_comparison.csv", index=False)
