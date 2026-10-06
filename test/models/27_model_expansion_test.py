@@ -528,6 +528,147 @@ def combine() -> None:
     print(f"[합치기 완료] 모델 {len(models)}종(naive 포함) · 행 {len(rd)} · 시드 {got}", flush=True)
 
 
+ROSTER = [
+    # (계열, 모델, 구현, 입력, 학습·추론 방식, 시드 반복)
+    ("통계", "GARCH-t·MS-GARCH·TAR-GARCH", "arch 패키지 / 자체 엔진(`engine/regime_garch.py`)", "15분 수익률", "최대우도, 다단계 재귀 예측", "해당 없음(결정적)"),
+    ("커널", "KernelRidge-RBF·SVR-RBF·Nystroem+Ridge", "scikit-learn", "로그 특성 12개", "내부검증으로 설정 선택 후 전체 재적합", "Nystroem만(근사 난수)"),
+    ("트리", "LightGBM·XGBoost·HistGBM", "공식 패키지", "원 스케일 특성 17개", "조기종료 후 전체 재적합", "예(HistGBM은 결과에 영향 없음)"),
+    ("하이브리드", "GARCH+LightGBM", "위 두 구현의 결합", "트리 특성 + GARCH 예측", "조기종료 후 전체 재적합", "예"),
+    ("순환 딥러닝", "GRU·LSTM", "PyTorch(`engine/models.py`)", "15분봉 96개 (d,|d|)", "내부검증 조기종료, 학습률 3개 비교, 전체 재적합", "예"),
+    ("어텐션", "PatchTST·iTransformer·Autoformer·TimeXer", "neuralforecast 공식 패키지", "H분 블록 로그 RV 이력(iTransformer는 +블록 수익률)", "라이브러리 기본값, 조기종료, 전체 재적합", "예"),
+    ("합성곱", "TCN·TimesNet", "neuralforecast 공식 패키지", "H분 블록 로그 RV 이력", "라이브러리 기본값, 조기종료, 전체 재적합", "예"),
+    ("합성곱", "ModernTCN", "저자 공식 GitHub 코드(`third_party/ModernTCN`)", "H분 블록 로그 RV 이력", "저자 ETTh1 설정, 조기종료, 전체 재적합", "예"),
+    ("파운데이션", "Chronos-Bolt·TimesFM·TTM", "공식 패키지(메인 venv)", "직전 512블록 로그 RV", "zero-shot(재학습 없음), 중앙값 점예측", "해당 없음(결정적)"),
+    ("파운데이션", "Moirai-2·Sundial·Time-MoE", "공식 패키지(격리 venv)", "직전 512블록 로그 RV", "zero-shot, Moirai-2 중앙 분위수 / Sundial 표본 50개 중앙값 / Time-MoE 점예측", "Sundial은 표본 추출(시드 고정, 반복 안 함)"),
+    ("파운데이션", "Lag-Llama", "공식 GitHub 코드(`third_party/lag-llama`)", "직전 1,124블록 로그 RV", "zero-shot, 표본 100개 중앙값", "표본 추출(시드 고정, 반복 안 함)"),
+]
+
+
+def write_report27(elapsed_note: str = "") -> None:
+    """합친 결과로 27번 보고서를 쓴다. 순위·동률·계열 요약은 26c의 함수를 재사용한다."""
+    M.RES, M.STEM, M.IMG = RES, STEM, IMG
+    M._LINES.clear()
+    emit = M.emit
+    rd, store, rd1, store1 = M.load_saved(STEM)
+    models = [m_ for m_ in M.ALL_MODELS if m_ in set(rd["모델"])]
+    tickers = sorted(rd["종목"].unique())
+    new_in = [m_ for m_ in NEW_MODELS if m_ in set(rd["모델"])]
+    new_out = [m_ for m_ in NEW_MODELS if m_ not in set(rd["모델"])]
+    emit("# 27번: 신규 알고리즘 확대(병렬 어텐션·합성곱·파운데이션)")
+    emit()
+    emit("## 0. 이 회차가 한 것")
+    emit()
+    emit(f"26c번의 평가 틀(데이터 창 2023-10-06 ~ 2026-10-05, 분할 2025-11-11, 정시 예측 시점, 5개 예측 구간, 내부검증 보정, 정지 두 부분 모형)을 "
+         f"그대로 두고, 26c의 12종 + naive에 **신규 {len(new_in)}종**을 같은 조건으로 더해 비교했다. 20종목 × 5구간 × {len(models)}모델 = "
+         f"{20 * 5 * len(models)}행이 기대값이고 실제 {len(rd)}행이다.")
+    emit()
+    emit("- **26c 결과는 다시 계산하지 않고 그대로 가져왔다.** 평가 시각과 실제값이 모든 모델에서 같은지 합치는 단계에서 대조했다.")
+    emit(f"- 신규 모델 중 이번 결과에 들어온 것: {', '.join(new_in) or '없음'}. 들어오지 못한 것: {', '.join(new_out) or '없음(전부 포함)'}.")
+    emit("- **S-Mamba는 이번 비교에 없다**: 공식 구현이 `mamba_ssm`(CUDA 컴파일 필요)에 의존하는데 서버에 `nvcc`가 없어 설치에 실패했다"
+         "(`pip` 빌드 오류 확인). 이 계열의 결과는 이번 회차에 해당 없음이다.")
+    emit("- 제외 모델(Linear·Ridge·HAR-RV·DLinear·NLinear 등)의 제외 이유는 `test/research_materials/model_catalog.md`에 있다.")
+    emit(f"- {elapsed_note}" if elapsed_note else "- 소요 시간 기록: 해당 없음(여러 실행으로 나뉘어 합산하지 않았다).")
+    emit()
+    emit("## 1. 비교 대상 구성")
+    emit()
+    emit("| 계열 | 모델 | 구현 | 입력 | 학습·추론 방식 | 시드 반복 |")
+    emit("| :--- | :--- | :--- | :--- | :--- | :--- |")
+    for r in ROSTER:
+        emit("| " + " | ".join(r) + " |")
+    emit()
+    emit("신규 모델은 \"한 시계열의 과거에서 다음 값\"을 예측하는 라이브러리라, 예측 구간 H분 길이의 **블록 시계열**(블록 값 = 그 블록의 "
+         "로그 RV_d, 26c의 타깃과 같음)로 입력을 만들었다. 입력이 15분봉 96개를 그대로 읽는 GRU·LSTM과 다르므로 순환 대 병렬 어텐션의 차이에는 "
+         "입력 표현의 차이가 섞여 있다. 이 한계는 해석에서 다시 언급한다.")
+    emit()
+    emit("## 2. 파운데이션 모델 사전학습 시점과 평가 구간의 겹침 확인")
+    emit()
+    emit("zero-shot 모델의 가중치가 평가 구간(2025-11-11~) 데이터로 학습됐다면 결과가 부풀 수 있다. Hugging Face 저장소에서 가중치 파일이 "
+         "마지막으로 바뀐 날짜를 조회했다(2026-10-06).")
+    emit()
+    try:
+        wd = pd.read_csv(RES / f"{STEM}_fm_weight_dates.csv")
+        emit("| 모델 | 저장소 | 가중치 마지막 변경일 | 평가 시작 전 여유(일) |")
+        emit("| :--- | :--- | :--- | ---: |")
+        for _, x in wd.iterrows():
+            emit(f"| {x['모델']} | {x['Hugging Face 저장소']} | {x['가중치 마지막 변경일']} | {int(x['평가 시작 전 여유(일)'])} |")
+        emit()
+        emit(f"**해석**: 가중치가 평가 시작일보다 늦게 바뀐 모델은 {int((wd['평가 시작 전 여유(일)'] <= 0).sum())}개이고, 가장 가까운 TimesFM 2.5도 "
+             f"{int(wd['평가 시작 전 여유(일)'].min())}일 앞선다. 곧 평가 구간 데이터가 가중치에 들어갈 수 없다. 단, 사전학습 데이터의 구체적 구성"
+             "(업비트 데이터 포함 여부)은 공개되지 않아 확인하지 못했다. 암호화폐 일반 시계열은 포함됐을 수 있으나 평가 기간과는 겹치지 않는다.")
+    except FileNotFoundError:
+        emit("조회 결과 파일이 없다.")
+    emit()
+    rd = rd.copy()
+    rd["rank"] = rd.groupby(["종목", "H"])["QLIKE"].rank()
+    nq = rd[rd["모델"] == "naive"][["종목", "H", "QLIKE"]].rename(columns={"QLIKE": "QLIKE_naive"})
+    rd = rd.merge(nq, on=["종목", "H"], how="left")
+    rd["dQLIKE"] = rd["QLIKE"] - rd["QLIKE_naive"]
+    cl = M.cell_losses(rd, store, models)
+    tt = M.tier_table(cl)
+    tt.to_csv(RES / f"{STEM}_tier_table.csv", index=False)
+    M.family_votes(tt).to_csv(RES / f"{STEM}_tier_family_votes.csv", index=False)
+    emit("## 3. 구간별 결과(전 모델)")
+    emit()
+    emit(f"종목마다 QLIKE 순위를 매겨 평균했다(작을수록 좋음). 격차는 그 구간 최선 모델 대비 QLIKE 차의 종목 평균이다. **A등급은 격차가 {M.TIE} 이하**로, "
+         "GRU 시드 표준편차에서 가져온 실무 기준이며 통계 검정이 아니다. 통계 검정(DM·MCS)은 26b 보고서에 있다.")
+    emit()
+    for H in M.HORIZONS_H:
+        g = tt[(tt["H"] == H) & (tt["구간"] == "전체") & (tt["기준"] == "보정후")].set_index("모델")
+        r = rd[rd["H"] == H].groupby("모델")["rank"].mean()
+        order = g.sort_values("격차").index
+        emit(f"### {M.hlabel(H)}")
+        emit()
+        emit("| 순위 | 모델 | 계열 | 평균 순위 | 격차(최선 대비) | 등급 | 종목 수 |")
+        emit("| ---: | :--- | :--- | ---: | ---: | :--- | ---: |")
+        for i, nm in enumerate(order, 1):
+            emit(f"| {i} | {nm} | {M.FAMILY[nm]} | {r.get(nm, np.nan):.1f} | {g.loc[nm, '격차']:.4f} | {g.loc[nm, '등급']} | {int(g.loc[nm, '종목수'])} |")
+        emit()
+    emit("## 4. 계열별 최선과 격차")
+    emit()
+    emit("각 계열에서 그 구간 최선과의 격차가 가장 작은 모델을 대표로 삼았다. 값이 0.01 이하면 그 구간의 최선과 사실상 동률이다. 계열에 해당 모델이 "
+         "없으면 \"-\"로 표시했다.")
+    emit()
+    fams = ["통계", "하이브리드", "트리", "딥러닝", "커널", "어텐션", "합성곱", "파운데이션"]
+    emit("| 계열 | 모델 수 | " + " | ".join(M.hlabel(H) for H in M.HORIZONS_H) + " |")
+    emit("| :--- | ---: | " + " | ".join(["---:"] * len(M.HORIZONS_H)) + " |")
+    allg = tt[(tt["구간"] == "전체") & (tt["기준"] == "보정후") & (tt["모델"] != "naive")].copy()
+    allg["계열"] = allg["모델"].map(M.FAMILY)
+    for fam in fams:
+        n_f = len([m_ for m_ in models if M.FAMILY.get(m_) == fam])
+        cells = []
+        for H in M.HORIZONS_H:
+            x = allg[(allg["H"] == H) & (allg["계열"] == fam)]
+            cells.append("-" if not len(x) else f"{x['격차'].min():.4f} ({x.loc[x['격차'].idxmin(), '모델']})")
+        emit(f"| {M.FAM_LABEL.get(fam, fam)} | {n_f} | " + " | ".join(cells) + " |")
+    emit()
+    M.emit_profile(tt)
+    emit("## 5. 신규 모델의 위치(보정후, 전체 구간)")
+    emit()
+    emit("신규 모델이 26c의 최선 계열과 얼마나 떨어져 있는지 구간별로 적는다. 격차가 양수면 최선보다 손실이 큰 것이다.")
+    emit()
+    emit("| 모델 | 계열 | " + " | ".join(M.hlabel(H) for H in M.HORIZONS_H) + " |")
+    emit("| :--- | :--- | " + " | ".join(["---:"] * len(M.HORIZONS_H)) + " |")
+    for nm in NEW_MODELS:
+        cells = []
+        for H in M.HORIZONS_H:
+            x = allg[(allg["H"] == H) & (allg["모델"] == nm)]
+            cells.append("미포함" if not len(x) else f"{x['격차'].iloc[0]:.4f} ({x['등급'].iloc[0]})")
+        emit(f"| {nm} | {M.FAMILY[nm]} | " + " | ".join(cells) + " |")
+    emit()
+    emit("## 6. 사전 구간별·분기별 순위와 정지(RV=0) 분해")
+    emit()
+    rk, size = M.regime_tables(store, models)
+    rk.to_csv(RES / f"{STEM}_exante_regime_ranks.csv", index=False)
+    size.to_csv(RES / f"{STEM}_exante_regime_sizes.csv", index=False)
+    M.quarter_table(store, models).to_csv(RES / f"{STEM}_quarter_ranks.csv", index=False)
+    emit("사전 구간(직전 H시간 RV 5분위)별 순위와 달력 분기별 순위는 CSV로 저장했다(`exante_regime_ranks.csv`, `quarter_ranks.csv`). "
+         "구간별 통계적 동률은 26b 보고서 3-2절에 있다.")
+    emit()
+    M.emit_zero_split(store, models)
+    (RES / f"{STEM}_report.md").write_text("\n".join(M._LINES), encoding="utf-8")
+    print(f"[보고서] {RES / (STEM + '_report.md')}", flush=True)
+
+
 def merge_jobs(results: list, store: dict, rows: list, rows1: list, store1: dict) -> None:
     for r in results:
         key = (r["ticker"], r["H"])
@@ -542,7 +683,8 @@ def merge_jobs(results: list, store: dict, rows: list, rows1: list, store1: dict
 def main(argv=None) -> None:
     from report_header import study_universe
     ap = argparse.ArgumentParser()
-    ap.add_argument("--family", default="nf", choices=["nf", "conv", "fm-prep", "fm-score", "combine"])
+    ap.add_argument("--family", default="nf", choices=["nf", "conv", "fm-prep", "fm-score", "combine", "report"])
+    ap.add_argument("--elapsed-note", default="")
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--n-tickers", type=int, default=20)
@@ -563,6 +705,9 @@ def main(argv=None) -> None:
     tickers = tickers[:2] if a.quick else tickers[:a.n_tickers]
     if a.family == "combine":
         combine()
+        return
+    if a.family == "report":
+        write_report27(a.elapsed_note)
         return
     default = {"nf": NF_MODELS, "conv": CONV_MODELS, "fm-score": FM_MODELS, "fm-prep": ()}[a.family]
     models = tuple(m_ for m_ in (a.models.split(",") if a.models else default) if m_)

@@ -53,7 +53,8 @@ for _p in (ROOT, ROOT / "test" / "scripts"):
 
 SRC_KEY = os.environ.get("RUN26B_SRC", "26")
 _SRCS = {"26": ("26_timebased_reeval_20261005", "26_timebased_reeval", "26_timebased_reeval_test.py", "26번", ""),
-         "26c": ("26c_recent_twopart_20261005", "26c_recent_twopart", "26c_recent_twopart_test.py", "26c번", "_26c")}
+         "26c": ("26c_recent_twopart_20261005", "26c_recent_twopart", "26c_recent_twopart_test.py", "26c번", "_26c"),
+         "27": ("27_model_expansion_20261006", "27_model_expansion", "27_model_expansion_test.py", "27번", "_27")}
 _src_tag, SRC_STEM, _src_py, SRC_LABEL, _sfx = _SRCS[SRC_KEY]
 TAG = f"26b_robust_signif{_sfx}_20261005"
 STEM = f"26b_robust_signif{_sfx}"
@@ -66,12 +67,14 @@ def _load_m26():
     spec = importlib.util.spec_from_file_location("m26_for26b", ROOT / "test" / "models" / _src_py)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    return mod
+    return mod.M if SRC_KEY == "27" else mod       # 27번은 목록을 넓힌 26c 모듈(`M`)을 쓴다
 
 
 M26 = _load_m26()
 SEEDS = (0, 1, 2, 3, 4)
 STOCHASTIC = ("LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM", "Nystroem+Ridge", "GRU", "LSTM")
+if SRC_KEY == "27":
+    STOCHASTIC = STOCHASTIC + ("PatchTST", "iTransformer", "TCN", "Autoformer", "TimesNet", "TimeXer", "ModernTCN")
 DET_CHECK = ("GARCH-t",)
 DET_NOT_RERUN = ("MS-GARCH", "TAR-GARCH", "KernelRidge-RBF", "SVR-RBF")
 ALPHA = 0.05
@@ -793,7 +796,7 @@ def main(argv=None) -> None:
         seed_mcs_frequency(store, models)
     agreement_section(mcs, rg)
     linearity_section()
-    if SRC_KEY == "26c":
+    if SRC_KEY in ("26c", "27"):
         twopart_section(store, models)
     fig = plot_tie_map(mcs, rg, models)
     emit(f"![통계적 동률 지도]({os.path.relpath(fig, RES)})")
