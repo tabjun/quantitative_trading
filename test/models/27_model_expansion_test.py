@@ -126,6 +126,8 @@ M.ALL_MODELS = tuple(M.ALL_MODELS) + NEW_MODELS
 M.LOG_TARGET_MODELS = tuple(M.LOG_TARGET_MODELS) + NEW_MODELS
 # 시드 집합은 모든 무작위 모델에 같게 쓴다. 신경망 6종의 계산량(시드 1개 약 15~20시간) 때문에 0·1·2로 정했고, 26c 모델도
 # 이미 있는 0~4 중 0~2만 쓴다. 환경변수 RUN27_SEEDS로 바꿀 수 있다(예: "0,1,2,3,4").
+# TTM r2 모델카드: 분·시간 해상도(10분·15분·1시간)만 지원. 4시간·12시간 블록 결과는 결론·검정에서 뺀다.
+TTM_UNSUPPORTED_H = (240, 720)
 SEEDS_USED = tuple(int(x) for x in os.environ.get("RUN27_SEEDS", "0,1,2").split(","))
 STOCHASTIC_NEW = NF_MODELS + CONV_MODELS + SSM_MODELS          # 시드로 흔들리는 신규 모델(파운데이션은 zero-shot이라 학습 시드 없음)
 
@@ -553,6 +555,14 @@ def combine() -> None:
                 raise AssertionError(f"{key}: 신규 모델과 26c의 평가 시각·실제값이 다르다")
             store[key]["preds"].update(S["preds"])
             store1[key]["preds"].update(sn1[key]["preds"])
+    drop = (rd["모델"] == "TTM") & rd["H"].isin(TTM_UNSUPPORTED_H)
+    drop1 = (rd1["모델"] == "TTM") & rd1["H"].isin(TTM_UNSUPPORTED_H)
+    rd[drop].to_csv(RES / f"{STEM}_excluded_ttm_unsupported_resolution.csv", index=False)
+    rd, rd1 = rd[~drop].reset_index(drop=True), rd1[~drop1].reset_index(drop=True)
+    for (tk, H), S in store.items():
+        if H in TTM_UNSUPPORTED_H:
+            S["preds"].pop("TTM", None)
+            store1[(tk, H)]["preds"].pop("TTM", None)
     rd.to_csv(RES / f"{STEM}_model_comparison.csv", index=False)
     rd1.to_csv(RES / f"{STEM}_onepart_comparison.csv", index=False)
     M.save_npz(RES / f"{STEM}_test_predictions.npz", store, aux=True)
@@ -654,6 +664,8 @@ def write_report27(elapsed_note: str = "") -> None:
     emit("- **S-Mamba**: 공식 구현이 `mamba_ssm`(구버전 `torch==2.0.1` 필요)에 의존하고 서버에 `nvcc`가 없어 처음에는 설치에 실패했다. "
          "저자 요구 버전에 맞춰 미리 컴파일된 wheel로 **격리 venv**(`.venvs/smamba_py310_20261006`)를 구성해 해결했다(시스템 변경 없음). "
          "메인 환경의 torch 버전은 그대로다.")
+    emit("- **TTM의 4시간·12시간 결과는 제외했다**: TTM r2 모델카드가 분·시간 해상도(10분·15분·1시간)만 지원한다고 명시한다. 이 두 구간은 "
+         "공식 지원 범위 밖이라 순위·동률·검정에서 뺐고, 계산값은 `excluded_ttm_unsupported_resolution.csv`에 기록으로만 남겼다.")
     emit("- 제외 모델(Linear·Ridge·HAR-RV·DLinear·NLinear 등)의 제외 이유는 `test/research_materials/model_catalog.md`에 있다.")
     emit(f"- {elapsed_note}" if elapsed_note else "- 소요 시간 기록: 해당 없음(여러 실행으로 나뉘어 합산하지 않았다).")
     emit()
@@ -749,7 +761,10 @@ def write_report27(elapsed_note: str = "") -> None:
         cells = []
         for H in M.HORIZONS_H:
             x = allg[(allg["H"] == H) & (allg["모델"] == nm)]
-            cells.append("미포함" if not len(x) else f"{x['격차'].iloc[0]:.4f} ({x['등급'].iloc[0]})")
+            if nm == "TTM" and H in TTM_UNSUPPORTED_H:
+                cells.append("제외(공식 지원 해상도 밖)")
+            else:
+                cells.append("미포함(산출물 없음)" if not len(x) else f"{x['격차'].iloc[0]:.4f} ({x['등급'].iloc[0]})")
         emit(f"| {nm} | {M.FAMILY[nm]} | " + " | ".join(cells) + " |")
     emit()
     emit("## 6. 사전 구간별·분기별 순위와 정지(RV=0) 분해")
