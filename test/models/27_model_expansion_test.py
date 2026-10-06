@@ -383,6 +383,15 @@ def prepare_job(ticker: str, H: int, quick: bool) -> dict:
 PI_DIR = RES / "parts" / "pi_cache"
 
 
+def run_fingerprint(quick: bool, models: tuple, family: str) -> dict:
+    """작업 저장분을 재사용해도 되는지 판단하는 설정 지문. 결과를 바꾸는 설정이 하나라도 다르면 재사용하지 않는다."""
+    return {"quick": bool(quick), "family": family, "models": list(models), "seed": SEED,
+            "data": [str(M.DATA_START), str(M.DATA_END), str(M.SPLIT), str(M.DB_PATH.name)],
+            "input_blocks": {str(k): v for k, v in INPUT_BLOCKS.items()}, "val_frac": VAL_FRAC,
+            "nf": [NF_MAX_STEPS, NF_VAL_CHECK, NF_PATIENCE, NF_WINDOWS_BATCH],
+            "moderntcn": [MTCN_EPOCHS, MTCN_PATIENCE, MTCN_BATCH, MTCN_LR], "pi": "26c 시드0 설정(random_state=0)"}
+
+
 def load_or_fit_pi(ticker: str, H: int, D: dict, HD: dict, quick: bool):
     """정지 분류기는 26c 시드 0과 같은 설정(random_state=0)이라 시드·모델과 무관하다. 종목×구간마다 한 번만 적합해 저장한다."""
     import pickle
@@ -851,8 +860,19 @@ def main(argv=None) -> None:
     # 작업 단위 저장·이어하기: 종목×구간 작업이 끝날 때마다 바로 저장하고, 다시 실행하면 끝난 작업은 읽기만 한다.
     # 모델 하나라도 실패한 작업은 완료로 치지 않고 다음 차례에 다시 돌린다(최대 a.retries번, 재시도는 워커 1개로).
     import pickle
-    part_dir = RES / "parts" / f"{RUN_STEM}_{tag}"
+    import json
+    # 시험 실행(--quick)은 저장 폴더를 따로 쓰고, 설정 지문이 다르면 저장분을 재사용하지 않고 멈춘다(Codex 리뷰 2026-10-07).
+    part_dir = RES / "parts" / f"{RUN_STEM}_{tag}{'_quick' if a.quick else ''}"
     part_dir.mkdir(parents=True, exist_ok=True)
+    fp = run_fingerprint(a.quick, models, a.family)
+    fp_file = part_dir / "config.json"
+    if fp_file.exists():
+        old = json.loads(fp_file.read_text())
+        if old != fp:
+            diff = {k: (old.get(k), fp.get(k)) for k in set(old) | set(fp) if old.get(k) != fp.get(k)}
+            raise SystemExit(f"[중단] {part_dir.name}의 저장분은 다른 설정으로 만들어졌다: {diff}. 폴더를 옮기거나 지운 뒤 다시 실행하라")
+    else:
+        fp_file.write_text(json.dumps(fp, ensure_ascii=False, indent=1))
     part = lambda tk, H: part_dir / f"{tk}_{H}.pkl"
     done: dict = {}
     for tk, H in jobs:
