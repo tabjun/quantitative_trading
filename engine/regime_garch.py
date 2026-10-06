@@ -61,14 +61,14 @@ def _ms_unpack(theta):
     return omega, (a1s, a2s), (b1s, b2s), p11, p22, nu
 
 
-def ms_filter(eps_signed, theta, loglik_upto=None):
+def ms_filter(eps_signed, theta, loglik_upto=None, unpack=None):
     """Hamilton 필터 + Gray 축약을 전 구간에 한 번에 돌린다.
 
     loglik_upto: 이 인덱스 이전(<)까지만 로그우도에 합산한다(None이면 전체). 검증 구간
     관측치도 필터의 예측 입력으로는 계속 흘러가지만(실제 과거 수익률로 1스텝 재귀하는
     것은 GARCH-t와 동일 관례), 그 구간의 가능도는 추정에 넣지 않는다.
     """
-    (o1, o2), (a1, a2), (b1, b2), p11, p22, nu = _ms_unpack(theta)
+    (o1, o2), (a1, a2), (b1, b2), p11, p22, nu = (unpack or _ms_unpack)(theta)
     n = len(eps_signed)
     denom = 2 - p11 - p22
     pi1 = (1 - p22) / denom if abs(denom) > 1e-8 else 0.5
@@ -145,6 +145,82 @@ def fit_ms_garch(r_pct, split_idx, n_restarts=2, maxiter=1200, max_fit_n=None):
     ll, theta = best
     _, info_full = ms_filter(r_pct, theta, loglik_upto=split_idx)
     return theta, ll, info_full
+
+
+# ── 제약 모수화 MS-GARCH(2026-10-06) ─────────────────────────────────────────
+# 기존 모수화는 ω에 상한이 없고(exp), ν가 2.05 근처까지 내려가며, 국면 지속 확률이 0까지 갈 수 있다. 26c번에서
+# 이 때문에 BOUNTY·TOKAMAK의 내부학습 적합이 경계로 붙었다(ω₂=133은 표본 분산의 250배, α 상한 0.3,
+# ν=2.05, p22=0.006). 원인은 최적화가 허용 영역 밖의 퇴화한 해로 수렴한 것이다. 아래 모수화는 해를 추정 가능한
+# 영역에 가둔다. 국면 1이 항상 낮은 분산 국면이라 레이블 교환도 막는다. 기존 `fit_ms_garch`와 `_ms_unpack`은
+# 23~26번 결과 재현을 위해 그대로 둔다.
+#   무조건부 분산 V_i를 표본 분산 s2 기준으로: V1 = s2·exp(3·tanh(v1)) ∈ [0.05, 20]·s2,
+#                                            V2 = V1·exp(0.05 + 3.95·σ(g)) (V2 > V1)
+#   지속성 ρ_i = α_i + β_i = 0.999·σ(r_i), α_i = ρ_i·0.5·σ(a_i), β_i = ρ_i − α_i, ω_i = (1 − ρ_i)·V_i
+#   국면 유지 확률 p_ii = 0.9 + 0.0999·σ(l_i) (최소 10봉 = 2.5시간 지속), ν = 3.5 + 26.5·σ(z)
+
+def _sig(x):
+    return 1.0 / (1.0 + math.exp(-max(-60.0, min(60.0, x))))
+
+
+def make_ms_unpack_bounded(s2: float):
+    def unpack(theta):
+        v1, g, r1, r2, a1, a2, l11, l22, z = theta
+        V1 = s2 * math.exp(3.0 * math.tanh(max(-60.0, min(60.0, v1))))
+        V2 = V1 * math.exp(0.05 + 3.95 * _sig(g))
+        rho = (0.999 * _sig(r1), 0.999 * _sig(r2))
+        al = (rho[0] * 0.5 * _sig(a1), rho[1] * 0.5 * _sig(a2))
+        be = (rho[0] - al[0], rho[1] - al[1])
+        om = ((1 - rho[0]) * V1, (1 - rho[1]) * V2)
+        return om, al, be, 0.9 + 0.0999 * _sig(l11), 0.9 + 0.0999 * _sig(l22), 3.5 + 26.5 * _sig(z)
+    return unpack
+
+
+_MS_INITS_BOUNDED = [
+    [-0.7, 0.0, 2.5, 3.5, -0.5, -0.5, 2.5, 2.5, -1.0],
+    [-1.0, -1.0, 3.0, 4.0, 0.0, -1.0, 1.0, 1.0, -2.0],
+    [-0.3, 1.0, 2.0, 3.0, -1.0, 0.0, 3.0, 3.0, 0.0],
+]
+
+
+def fit_ms_garch_bounded(r_pct, split_idx, n_inits=2, maxiter=1500, max_rounds=4, max_fit_n=None, tol=0.5):
+    """제약 모수화 MS-GARCH MLE. 개선이 `tol`(로그우도 단위) 미만이 될 때까지 Nelder-Mead를 재시작한다.
+
+    반환: (theta, loglik, info_full, diag). diag에 수렴 여부, 국면 정상확률·기대 지속, 경계 접촉이 들어 있다.
+    진단은 결과를 바꾸지 않는다. 퇴화(한 국면의 정상확률 2% 미만)나 미수렴은 호출자가 기록해야 한다.
+    """
+    fit_r = r_pct[:split_idx]
+    if max_fit_n is not None and split_idx > max_fit_n:
+        fit_r = r_pct[split_idx - max_fit_n: split_idx]
+    unp = make_ms_unpack_bounded(float(np.var(fit_r)) or 1.0)
+    best = None
+    for x0 in _MS_INITS_BOUNDED[:n_inits]:
+        x, prev, conv, rounds = np.array(x0, float), -np.inf, False, 0
+        for rounds in range(1, max_rounds + 1):
+            res = minimize(lambda th: -ms_filter(fit_r, th, unpack=unp)[0], x, method="Nelder-Mead",
+                           options=dict(maxiter=maxiter, xatol=1e-4, fatol=1e-4, adaptive=True))
+            x, ll = res.x, -res.fun
+            if ll - prev < tol:
+                conv = True
+                break
+            prev = ll
+        if best is None or ll > best[0]:
+            best = (ll, x, conv, rounds)
+    if best is None or best[0] < -1e9:
+        raise RuntimeError("MS-GARCH(제약) 수렴 실패")
+    ll, theta, conv, rounds = best
+    _, info = ms_filter(r_pct, theta, loglik_upto=split_idx, unpack=unp)
+    p11, p22 = info["p11"], info["p22"]
+    pi1 = (1 - p22) / (2 - p11 - p22)
+    nu = info["nu"]
+    # 경계 접촉은 원시 모수가 아니라 제약 공간의 값으로 판정한다(포화 영역의 원시 모수는 값이 커도 무의미).
+    V1r = info["omega"][0] / (1 - info["alpha"][0] - info["beta"][0]) / float(np.var(fit_r))
+    rho = (info["alpha"][0] + info["beta"][0], info["alpha"][1] + info["beta"][1])
+    diag = dict(수렴=bool(conv), 재시작=int(rounds), loglik=float(ll), pi1=float(pi1), pi2=float(1 - pi1),
+                지속1=float(1 / (1 - p11)), 지속2=float(1 / (1 - p22)), nu=float(nu),
+                퇴화=bool(min(pi1, 1 - pi1) < 0.02),
+                경계접촉=bool(nu < 3.6 or nu > 29.9 or V1r < 0.06 or V1r > 18 or max(rho) > 0.9985
+                           or max(p11, p22) > 0.9998 or min(p11, p22) < 0.902))
+    return theta, ll, info, diag
 
 
 # ─────────────────────────────────────────────────────────────────────────────

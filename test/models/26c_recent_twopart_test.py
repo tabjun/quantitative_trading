@@ -143,7 +143,7 @@ TREE_THREADS = 4
 KERNEL_MEM_BUDGET_GB = 1.5
 SVR_MAX_N = 8000
 NYSTROEM_COMPONENTS = 2048
-MS_RESTARTS, MS_MAXITER, MS_FIT_N = 3, 1400, 30000
+MS_ROUNDS, MS_MAXITER, MS_FIT_N = 4, 1500, 30000
 TAR_RESTARTS, TAR_MAXITER = 2, 600
 TAR_TAU_Q = (0.5, 0.65, 0.8, 0.9)
 MIN_FREE_RAM_GB = 3.0
@@ -394,6 +394,17 @@ def garch_t_fit(dc: np.ndarray, split_c: int) -> dict:
     drive = om + al * x[split_c - 1:n - 1] ** 2
     cv[split_c:], _ = lfilter([1.0], [1.0, -be], drive, zi=np.array([be * cv[split_c - 1]]))
     return dict(cv=cv, omega=om, alpha=al, beta=be, nu=float(p.get("nu", np.nan)))
+
+
+def fit_ms(dc: np.ndarray, split_c: int, quick: bool) -> tuple[dict, dict]:
+    """제약 모수화 MS-GARCH(engine.regime_garch.fit_ms_garch_bounded). 반환: (info, 진단)."""
+    from engine import regime_garch as rg
+    _, _, info, diag = rg.fit_ms_garch_bounded(
+        dc * 100, split_c, n_inits=2 if not quick else 1, maxiter=MS_MAXITER if not quick else 120,
+        max_rounds=MS_ROUNDS if not quick else 1, max_fit_n=MS_FIT_N if not quick else 8000)
+    if info is None:
+        raise RuntimeError("최종 필터가 발산(info=None)")
+    return info, diag
 
 
 def garch_multistep(G: dict, pos: np.ndarray, m: int) -> np.ndarray:
@@ -669,12 +680,8 @@ def run_cpu_job(ticker: str, quick: bool) -> dict:
     try:
         if seed_mode:
             raise LookupError("seed-skip")
-        _, _, ms_info = rg.fit_ms_garch(dc * 100, split_c, n_restarts=MS_RESTARTS if not quick else 1,
-                                        maxiter=MS_MAXITER if not quick else 120,
-                                        max_fit_n=MS_FIT_N if not quick else 8000)
-        if ms_info is None:
-            raise RuntimeError("최종 필터가 발산(info=None)")
-        meta.update(ms_p11=ms_info["p11"], ms_p22=ms_info["p22"])
+        ms_info, ms_diag = fit_ms(dc, split_c, quick)
+        meta.update(ms_p11=ms_info["p11"], ms_p22=ms_info["p22"], **{f"ms_{k_}": v_ for k_, v_ in ms_diag.items()})
     except Exception as e:
         ms_info = None
         if str(e) != "seed-skip":
@@ -711,12 +718,9 @@ def run_cpu_job(ticker: str, quick: bool) -> dict:
                 fails.append(("GARCH-t", "calib", type(e).__name__, str(e)[:160]))
         if ms_info is not None:
             try:
-                _, _, info_ = rg.fit_ms_garch(dc * 100, ic, n_restarts=MS_RESTARTS if not quick else 1,
-                                              maxiter=MS_MAXITER if not quick else 120,
-                                              max_fit_n=MS_FIT_N if not quick else 8000)
-                if info_ is None:
-                    raise RuntimeError("최종 필터가 발산(info=None)")
+                info_, dg_ = fit_ms(dc, ic, quick)
                 f_["MS-GARCH"] = info_
+                meta[f"ms_inner_diag_{pd.Timestamp(inner).strftime('%Y%m%d')}"] = str(dg_)
             except Exception as e:
                 fails.append(("MS-GARCH", "calib", type(e).__name__, str(e)[:160]))
         if tar_info is not None:
@@ -1858,6 +1862,79 @@ def save_npz(path: Path, store: dict, aux: bool) -> None:
 
 
 # %% [markdown]
+# ## MS-GARCH만 제약 모수화로 다시 적합(2026-10-06)
+#
+# 본 실행의 MS-GARCH는 기존 모수화로 적합했고, BOUNTY·TOKAMAK의 내부학습 적합이 경계로 붙어(ω₂=133 등)
+# 보정계수가 0.04~0.08로 무너졌다. 이 모드는 제약 모수화(`fit_ms_garch_bounded`)로 MS-GARCH 행과 예측만 다시 만들어
+# 저장 결과에 덮어쓴다. 원본 값은 `*_ms_original.*`에 보존하고 비교표를 만든다. 다른 모델은 건드리지 않는다.
+
+# %%
+def ms_refit_job(ticker: str, quick: bool) -> dict:
+    t0 = time.time()
+    D = build_data(ticker)
+    comp, dc, split_c = _compact(D)
+    HDs = {H: horizon_data(D, H) for H in HORIZONS_H}
+    info, diag = fit_ms(dc, split_c, quick)
+    inner_fits = {inner: fit_ms(dc, int(np.searchsorted(D["grid"][comp], inner)), quick)
+                  for inner in sorted({HD["inner"] for HD in HDs.values()})}
+    out = []
+    for H, HD in HDs.items():
+        S = Scorer(ticker, HD)
+        j, te, va, m = HD["j"], HD["te"], HD["va"], HD["m"]
+        pos_all = _origin_pos(comp, j, m)
+        raw, _ = var_to_rv(ms_multistep(info, pos_all[te], m), D["cfac"], j[te])
+        f_in, dg_in = inner_fits[HD["inner"]]
+        rawv, _ = var_to_rv(ms_multistep(f_in, pos_all[va], m), D["cfac"], j[va])
+        c = S.calib(rawv)
+        row = S.score("MS-GARCH", raw, c=c, note="다단계 예측 · 내부학습 재적합으로 보정 · 제약 모수화")
+        out.append(dict(H=H, row=dict(row), pred=S.preds["MS-GARCH"], c=c,
+                        diag={**{f"전체_{k}": v for k, v in diag.items()}, **{f"내부_{k}": v for k, v in dg_in.items()},
+                              "전체_p11": info["p11"], "전체_p22": info["p22"], "내부_p11": f_in["p11"], "내부_p22": f_in["p22"]}))
+    return dict(ticker=ticker, out=out, elapsed=time.time() - t0)
+
+
+def run_ms_refit(quick: bool, workers: int) -> None:
+    import shutil
+    rd, store, rd1, store1 = load_saved()
+    for suf in ("model_comparison.csv", "onepart_comparison.csv", "test_predictions.npz", "onepart_predictions.npz"):
+        src, dst = RES / f"{STEM}_{suf}", RES / f"{STEM}_ms_original_{suf}"
+        if not dst.exists():
+            shutil.copy(src, dst)
+    old = rd[rd["모델"] == "MS-GARCH"].set_index(["종목", "H"])
+    tickers = sorted(rd["종목"].unique())
+    t0 = time.time()
+    drows = []
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        futs = {pool.submit(ms_refit_job, tk, quick): tk for tk in tickers}
+        for k, fu in enumerate(as_completed(futs), 1):
+            res = fu.result()
+            tk = res["ticker"]
+            for o in res["out"]:
+                H = o["H"]
+                for df, st in ((rd, store), (rd1, store1)):
+                    ix = df.index[(df["종목"] == tk) & (df["H"] == H) & (df["모델"] == "MS-GARCH")]
+                    if len(ix) != 1:
+                        raise AssertionError(f"{tk} H={H} MS-GARCH 행 {len(ix)}개")
+                    for c_, v_ in o["row"].items():
+                        if c_ in df.columns:
+                            df.loc[ix, c_] = v_
+                    if len(o["pred"]) != len(st[(tk, H)]["act"]):
+                        raise AssertionError(f"{tk} H={H} 예측 길이 불일치")
+                    st[(tk, H)]["preds"]["MS-GARCH"] = o["pred"]
+                ro = old.loc[(tk, H)]
+                drows.append({"종목": tk, "H": H, "c_원본": ro["보정계수"], "c_제약": o["c"], "QLIKE_원본": ro["QLIKE"],
+                              "QLIKE_제약": o["row"]["QLIKE"], "QLIKE_보정전_원본": ro["QLIKE_보정전"],
+                              "QLIKE_보정전_제약": o["row"]["QLIKE_보정전"], **o["diag"]})
+            print(f"  [MS {k}/{len(tickers)}] {tk} ({res['elapsed']:.0f}s)", flush=True)
+    pd.DataFrame(drows).to_csv(RES / f"{STEM}_ms_refit_diagnostics.csv", index=False)
+    rd.to_csv(RES / f"{STEM}_model_comparison.csv", index=False)
+    rd1.to_csv(RES / f"{STEM}_onepart_comparison.csv", index=False)
+    save_npz(RES / f"{STEM}_test_predictions.npz", store, aux=True)
+    save_npz(RES / f"{STEM}_onepart_predictions.npz", store1, aux=False)
+    print(f"[MS 재적합 완료] {(time.time() - t0) / 60:.1f}분 · {len(drows)}칸", flush=True)
+
+
+# %% [markdown]
 # ## 실행
 
 # %%
@@ -1871,6 +1948,7 @@ def main(argv=None) -> None:
     ap.add_argument("--deadline-h", type=float, default=10.0)
     ap.add_argument("--elapsed-min", type=float, default=0.0, help="본 실행 소요(분), 보고서 기록용")
     ap.add_argument("--report-only", action="store_true", help="저장된 결과로 보고서만 다시 쓴다")
+    ap.add_argument("--ms-refit", action="store_true", help="저장된 결과의 MS-GARCH만 제약 모수화로 다시 적합해 덮어쓴다")
     ap.add_argument("--seed", type=int, default=0, help="0보다 크면 시드 반복 실행(무작위성 있는 모델만, 보고서 없음)")
     a = ap.parse_args(argv)
 
@@ -1881,6 +1959,9 @@ def main(argv=None) -> None:
     if a.seed:
         os.environ["RUN26C_SEED"] = str(a.seed)
         SEED, RUN_STEM = a.seed, f"{STEM}_seed{a.seed}"
+    if a.ms_refit:
+        run_ms_refit(a.quick, a.workers or 5)
+        return
     if a.report_only:
         rd, store, rd1, store1 = load_saved()
         write_report(rd, store, rd1, store1, pd.read_csv(RES / f"{STEM}_fit_failures.csv"),
