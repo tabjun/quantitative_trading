@@ -413,7 +413,8 @@ def section_c(rd: pd.DataFrame | None, store: dict | None) -> None:
     emit("### C3. 예측-실제 겹쳐 그리기(결과를 보기 전에 정한 예시 모델)")
     emit()
     for H, days in ((60, 21), (720, 330)):
-        fig, axes = plt.subplots(len(REP_TICKERS), 1, figsize=(14, 3.0 * len(REP_TICKERS)), sharex=False)
+        fig, axes = plt.subplots(len(REP_TICKERS), 1, figsize=(14, 3.0 * len(REP_TICKERS)), sharex=False,
+                                 gridspec_kw={"hspace": 0.45})   # 칸 제목이 위 칸 x축 눈금과 겹치지 않게
         for ax, tk in zip(axes, REP_TICKERS, strict=True):
             S = store.get((tk, H))
             if S is None:
@@ -432,7 +433,7 @@ def section_c(rd: pd.DataFrame | None, store: dict | None) -> None:
         emit()
     emit("**읽는 법과 해석**: 회색이 실제 RV, 색선이 각 계열 예시 모델의 예측이다(1시간은 평가 마지막 3주, 12시간은 평가 전체). 예측선이 실제의 "
          "오르내림을 따라가면 \"폭 변화 추적력\"이 있고, 평균 높이가 실제와 맞으면 \"평균 폭 정확도\"가 있다. 모든 모델이 급등 직후에야 따라 오르는 "
-         "지연을 보이면 그것은 변동성 예측의 본질적 한계(충격은 예측 불가, 그 뒤의 지속만 예측 가능)다.")
+         "지연을 보이면 그것은 변동성 예측의 본질적 한계(충격은 예측 불가, 그 뒤의 지속만 예측 가능)다. 회색선이 그림 아래로 잘려 내려가는 곳은 RV=0(가격 정지) 시점이다. 로그 축에는 0을 그릴 수 없어 잘린다. 1시간 DOGE·BOUNTY에서 이런 시점이 잦은 것은 A절의 정지 비율과 맞는다.")
     emit()
 
 
