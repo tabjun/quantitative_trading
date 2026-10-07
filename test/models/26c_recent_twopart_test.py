@@ -1273,6 +1273,8 @@ def cell_losses(rd: pd.DataFrame, store: dict, models: list[str]) -> pd.DataFram
         cells = [("전체", np.ones(len(a), bool))] + [(f"Q{q + 1}", b == q) for q in range(5)]
         pi = S.get("pi")
         for nm in models:
+            if (tk, H, nm) not in C.index:     # 이 칸에서 평가하지 않은 모델(27번: TTM 4·12시간 제외)
+                continue
             p1 = S["preds"][nm].astype(float)
             div = float(C[(tk, H, nm)]) * ((1 - pi.astype(float)) if (pi is not None and nm in LOG_TARGET_MODELS) else 1.0)
             p0 = p1 / np.sqrt(div)
@@ -1403,6 +1405,8 @@ def emit_zero_split(store: dict, models: list[str]) -> pd.DataFrame:
         z = a == 0
         base = qlike_vec(a, S["preds"]["GARCH-t"].astype(float))
         for nm in models:
+            if nm not in S["preds"]:           # 이 칸에서 평가하지 않은 모델(27번: TTM 4·12시간 제외)
+                continue
             q = qlike_vec(a, S["preds"][nm].astype(float))
             d = q - base
             rows.append({"종목": tk, "H": H, "모델": nm, "RV0비율": float(z.mean()),
@@ -1423,7 +1427,8 @@ def emit_zero_split(store: dict, models: list[str]) -> pd.DataFrame:
     for H in hs:
         g = zz[(zz["H"] == H) & (zz["모델"] == "LightGBM")]
         cc = np.corrcoef(g["RV0비율"], g["차_전체"])[0, 1] if g["RV0비율"].std() > 0 else np.nan
-        emit(f"| {hlabel(H)} | {r0.get(H, np.nan):.1%} | {cc:+.2f} |")
+        cc_s = f"{cc:+.2f}" if np.isfinite(cc) else "해당 없음(전 종목 RV=0 비율이 같아 상관 정의 불가)"
+        emit(f"| {hlabel(H)} | {r0.get(H, np.nan):.1%} | {cc_s} |")
     emit()
     emit("셀은 `움직인 시점 차 / 정지 시점 차`(GARCH-t 대비, 종목 평균)이다.")
     emit()
@@ -1435,8 +1440,11 @@ def emit_zero_split(store: dict, models: list[str]) -> pd.DataFrame:
         cells = []
         for H in hs:
             g = zz[(zz["H"] == H) & (zz["모델"] == nm)]
+            if g.empty:
+                cells.append("해당 없음(이 구간 평가 제외)")
+                continue
             z_ = g["차_정지"].mean()
-            cells.append(f"{g['차_움직임'].mean():+.3f} / " + ("-" if not np.isfinite(z_) else f"{z_:+.3f}"))
+            cells.append(f"{g['차_움직임'].mean():+.3f} / " + ("해당 없음(RV=0 시점 없음)" if not np.isfinite(z_) else f"{z_:+.3f}"))
         emit(f"| {nm} | " + " | ".join(cells) + " |")
     emit()
     return zz

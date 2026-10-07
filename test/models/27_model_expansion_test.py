@@ -532,15 +532,25 @@ def _read_family(stem: str, seed: int = 0) -> list[tuple[pd.DataFrame, pd.DataFr
     """한 시드의 신규 모델 산출물(nf·conv·fm)을 (rows, rows1, store, store1)로 읽는다. 없는 계열은 건너뛴다."""
     out = []
     pre = f"{STEM}" if seed == 0 else f"{STEM}_seed{seed}"
-    for tag in [f"nf-{m_}" for m_ in NF_MODELS] + ["nf", "conv", "ssm", "fm"]:
+    per_model = [f"nf-{m_}" for m_ in NF_MODELS]
+    split = any((RES / f"{pre}_{t}_model_comparison.csv").exists() for t in per_model)
+    for tag in per_model + ["nf", "conv", "ssm", "fm"]:
         f = RES / f"{pre}_{tag}_model_comparison.csv"
         if not f.exists():
+            continue
+        if tag == "nf" and split:      # 알고리즘별 순차 실행 이전의 6종 동시 실행 산출물. 모델별 산출물이 있으면 그쪽만 쓴다
+            print(f"  [시드 {seed}] 옛 nf 묶음 산출물은 건너뜀(모델별 산출물 사용)", flush=True)
             continue
         rd = pd.read_csv(f)
         rd1 = pd.read_csv(RES / f"{pre}_{tag}_onepart_comparison.csv")
         st = M._npz_to_store(RES / f"{pre}_{tag}_test_predictions.npz")
         st1 = M._npz_to_store(RES / f"{pre}_{tag}_onepart_predictions.npz")
         out.append((rd, rd1, st, st1))
+    if out:
+        allr = pd.concat([r_ for r_, _, _, _ in out], ignore_index=True)
+        dup = allr[allr.duplicated(["종목", "H", "모델"], keep=False)]
+        if len(dup):
+            raise AssertionError(f"시드 {seed}: 계열 산출물 사이에 (종목, H, 모델) 중복 {len(dup)}행 — {sorted(set(dup['모델']))}")
     return out
 
 

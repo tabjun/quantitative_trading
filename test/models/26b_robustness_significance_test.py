@@ -547,7 +547,7 @@ def seed_mcs_frequency(store: dict, models: list[str]) -> pd.DataFrame:
     emit("| 모델 | " + " | ".join(f"{M26.hlabel(int(h))}(/{ns[h]})" for h in pv.columns) + " |")
     emit("| :--- | " + " | ".join(["---:"] * len(pv.columns)) + " |")
     for nm, x in pv.iterrows():
-        emit(f"| {nm} | " + " | ".join(str(int(v)) for v in x.values) + " |")
+        emit(f"| {nm} | " + " | ".join("해당 없음(이 구간 평가 제외)" if pd.isna(v) else str(int(v)) for v in x.values) + " |")
     emit()
     emit("**해석(예측 구간마다)**: 5/5는 시드와 무관하게 최선과 구분되지 않는 모델, 1~4는 시드에 따라 판정이 달라지는 모델, 0은 항상 제외되는 모델이다.")
     emit()
