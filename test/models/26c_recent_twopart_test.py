@@ -1383,9 +1383,10 @@ def emit_profile(tt: pd.DataFrame) -> None:
         for sp in ("top", "right"):
             ax.spines[sp].set_visible(False)
         ax.set_ylim(bottom=-0.005)
-    axes[0].legend(fontsize=8, frameon=False, loc="upper left")
+    hd, lb = axes[0].get_legend_handles_labels()   # 범례를 그림 아래로 빼서 선과 겹치지 않게
+    fig.legend(hd, lb, fontsize=8.5, frameon=False, loc="lower center", ncol=5)
     fig.suptitle("예측 구간이 길어질 때 계열별로 최선과의 격차가 어떻게 변하는가(0에 가까울수록 최선)", fontsize=12, x=0.01, ha="left")
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0.11, 1, 1))
     path = IMG / f"{STEM}_fig1_family_gap_by_horizon.png"
     IMG.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=150)
@@ -1397,7 +1398,7 @@ def emit_profile(tt: pd.DataFrame) -> None:
     emit()
 
 
-def emit_zero_split(store: dict, models: list[str]) -> pd.DataFrame:
+def emit_zero_split(store: dict, models: list[str], onepart_ref: str = "7절") -> pd.DataFrame:
     """가격 정지(RV=0) 시점과 움직인 시점으로 나눈 손실 비교. 기준은 GARCH-t(수익률 0을 그대로 쓰는 분산 모형)."""
     rows = []
     for (tk, H), S in store.items():
@@ -1420,7 +1421,7 @@ def emit_zero_split(store: dict, models: list[str]) -> pd.DataFrame:
          "손실을 GARCH-t와 비교한다(음수면 그 모델이 GARCH-t보다 낫다). RV=0에서는 QLIKE가 log(예측 분산)이 되어 작게 "
          "예측할수록 유리하다. 로그 타깃 모델의 크기 부분은 log(0)을 정의할 수 없어 RV=0 표본을 빼고 학습하고, 이 "
          "회차에서는 정지 확률 π가 그 자리를 맡는다. GARCH 계열은 수익률 0을 그대로 받아 분산을 추정한다. 아래는 주 결과"
-         "(두 부분 모형) 기준이다. 단일 처리 기준은 7절에 있다.")
+         f"(두 부분 모형) 기준이다. 단일 처리 기준은 {onepart_ref}에 있다.")
     emit()
     emit("| 예측 구간 | 평가 RV=0 비율(종목 중앙) | 종목별 RV=0 비율과 (LightGBM−GARCH-t) 격차의 상관 |")
     emit("| :--- | ---: | ---: |")

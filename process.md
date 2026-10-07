@@ -233,33 +233,27 @@ process=Phase/실험 단위 To-Do, history=완료 이력), 실제로는 Phase 1~
       - 가격 정지 EDA(20종목): 15분 구간 정지 비율이 내부검증 11.3% → 평가 26.7%(30분 3.2→11.8%, 1시간
         0.7→3.7%)로 평가 기간에 급증했다. 직전 하루 정지 봉 비율로 다음 구간 정지를 가르는 AUC는
         0.63(15분)·0.69(30분)·0.75(1시간), 직전 구간 RV만 쓰면 0.57. 4·12시간은 정지가 거의 없다.
-- [ ] **27번(모델 로스터 확대, 원래 26번) — 조사·결정 완료, 드라이버 작성 전**: 위 공백(파운데이션 모델
-      0종, `engine/models.py` 미사용 모델 8종)에 대한 조사와 결정을 전부 마쳤다. 모델별
-      특징·논문 근거·현재 채택 상태(비고 칸)는 전부 `test/research_materials/
-      model_catalog.md`(번호 없는 평시 카탈로그, 실험 번호와 무관하게 누적) 한 곳에
-      있다 — 여기 내용을 중복해 적지 않는다. 다음 단계는 27번 드라이버 코드 작성
-      (`test/models/27_model_expansion_test.py`, 아직
-      미착수)이며, 선행 과제 4가지가 남아 있다.
-      - neuralforecast 입력 결측 처리 반영(2026-10-05 방침 변경) — 기존안(학습구간 평균 채움)은
-        폐기: `prepare()`의 `f_mean`은 원 스케일이라 로그 입력에 쓰면 단위 불일치이고, 로그
-        평균으로 고쳐도 재구성 오차가 로그RV 표준편차의 약 1.0배(무작위 수준)였다. 20종목에서
-        일부러 가린 값을 복원해 비교한 결과 직전값 유지(LOCF) 0.62, 칼만 국소수준 필터(인과
-        평활) 0.62로 사실상 동일, EWMA 0.70~0.79, 전역평균 1.01이다(칼만 평활 0.45는 미래값을
-        쓰는 비인과라 입력에 쓸 수 없다). 인과 평활의 최적해가 LOCF로 수렴하므로 **입력은
-        LOCF + `available_mask=0`(손실만 제외)**로 간다. 원인 조사 결과 결측은 둘로 나뉜다:
-        ① 영수익률 RV=0은 호가 단위 이산성(해당 봉 100% 거래량 존재, 24시간 고르게 분포, 시세
-        버그·거래중단 아님)이라 기존 방침(타깃에서 제외, Sucarrat & Escribano 2018) 유지,
-        ② 15건의 시간 공백(분기·연초 등 4~7시간, 전 종목 동시)은 거래소 정기점검이므로 보간하지
-        않고 **공백을 가로지르는 수익률·RV 창을 예외 처리로 제외**한다(현재 `load_close`는
-        이를 한 개의 15분 수익률로 이어붙이고 있어 반영 필요).
-      - ModernTCN·S-Mamba 어댑터 작성 — 두 모델 다 공식 GitHub 코드가 neuralforecast
-        인터페이스를 쓰지 않아, 우리 `(r, |r|)` 2채널 입력·실현변동성 타깃 형식에 맞춰
-        데이터를 넣고 꺼내는 어댑터를 새로 짜야 한다.
-      - 격리 venv 3종(Moirai·Sundial/Time-MoE·Lag-Llama) 결과 통합 설계 — 메인 드라이버
-        밖에서 서브프로세스로 돌려 예측값을 직렬화(npz/csv)해 받아오는 2단계 구조가 필요.
-      - `hist_exog`(외생변수) 지원 확인 — 교체 대상 TCN·DLinear·NLinear·Autoformer·
-        TimesNet·TimeXer가 `hist_exog_list`를 지원하는지 아직 전수 확인하지 않았다
-        (NHITS·TFT만 지원 확인됨, DLinear·PatchTST·iTransformer·TSMixer·TimeMixer는 미지원).
+- [x] **26c번 최신 3년 창 + 가격 정지 두 부분 모형(2026-10-05~06)**: `test/models/26c_recent_twopart_test.py`,
+      DB를 2026-10-05까지 연장한 3년 창에서 정지 확률 π × 움직일 때 크기의 두 부분 모형을 도입하고, MS-GARCH를
+      제약 모수화(`fit_ms_garch_bounded`)로 재적합했다(보정계수 0.04 붕괴 → 0.60~1.22). 27번의 기준 틀이 됐다.
+- [x] **27번 모델 로스터 확대 — 1차 마무리(2026-10-07, 시드 0·1·2)**: 26c 틀(2023-10-06~2026-10-05, 분할
+      2025-11-11, 정지 두 부분 모형)에 신규 15종(neuralforecast PatchTST·iTransformer·TCN·Autoformer·TimesNet·
+      TimeXer, 공식 코드 ModernTCN·S-Mamba, 파운데이션 Chronos-Bolt·TimesFM·TTM·Moirai-2·Sundial·Time-MoE·
+      Lag-Llama)을 더했다. 2,760행(TTM 4·12시간 공식 지원 밖 40행 제외), 신규 모델 실패 0, 26c 공유 1,300칸 값 동일.
+      요약 `test/results/27_model_expansion_20261006/27_summary_for_user.md`, 검정 `test/results/26b_robust_signif_27_20261005/`,
+      EDA·계열 검정 `test/results/27b_eda_verification_20261007/`(드라이버 `test/models/27b_eda_verification_test.py`).
+      - 결론: 신규 모델은 어느 구간에서도 기존 최선을 이기지 못했다. 15분 GARCH 계열, 30분·1시간 트리·GARCH+LightGBM,
+        4시간 트리·GRU·LSTM·Nystroem이 최선권. 신규는 4시간 A등급 3종(PatchTST·TimesFM·ModernTCN)·MCS 7종, 12시간 MCS 3종(TimesFM·Sundial·Time-MoE).
+      - 계열 DM(구성원 평균, Holm): 순환 딥러닝 > 어텐션(30분~12시간), 파운데이션(zero-shot) > 어텐션(30분~12시간),
+        순환 딥러닝 > 파운데이션(30분·1시간만). 단, 순환망과 신규 모델의 입력 표현이 달라 구조 차이만은 아니다.
+      - GARCH-t: 15분 A등급·MCS 3/3, 30분 이상 단독 제외. GARCH+LightGBM은 전 구간 MCS 3/3.
+      - 합성곱(TCN·TimesNet·ModernTCN) 12시간 붕괴는 세 시드 모두 재현(보정계수 정상) → 12시간 블록 표본(약 1,500) 부족으로 해석.
+- [ ] **27번 후속**:
+      - 신경망 시드 3·4 실행 중(대기열 `logs/q27/queue.sh`), 끝나면 final5 자동 집계 → 시드 의존 칸(1시간 LightGBM·HistGBM,
+        12시간 PatchTST·S-Mamba·ModernTCN) 재확인, 요약 갱신.
+      - 입력 표현 통일 비교(순환망 15분봉 96개 대 블록 로그 RV 이력)로 순차 대 병렬의 구조 차이만 분리.
+      - 정지 확률 π 과소예측(15분 π 0.234 대 실제 0.286) 보정 검토, 4·12시간 표본 부족 대응(패널 DM 등).
+      - Claude Design 발표 자료 원고: `test/results/27_model_expansion_20261006/27_claude_design_brief.md`.
 - [ ] **영수익률 비율을 모형 특성으로 승격(#19)**: Bandi 외(2020)·Slim 외(2023) 근거로
       영수익률(0봉) 자체를 유동성 신호 특성으로 투입하는 실험은 아직 미착수.
 - [ ] **문서 갱신 규칙 재확인(2026-09-20)**: `history.md`/`conversation_l2_cache.md`/

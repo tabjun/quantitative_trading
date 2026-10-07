@@ -185,8 +185,9 @@ def design_section() -> None:
     emit("| 3-1a | Diebold-Mariano(대응 t, HAC) | `d_t = (L[A]-L[B]).mean(axis=1)`, 한 예측 구간의 모델 쌍마다 | E[d_t]=0, 두 모델의 기대 QLIKE가 같다 | E[d_t]≠0 | t=평균/SE, SE는 Newey-West(lag=⌊4(n/100)^(2/9)⌋, Bartlett). 구간마다 전 쌍에 Holm | 한쪽이 평균적으로 더 낫다(방향은 평균차의 부호) |")
     emit("| 3-1b | MCS(Hansen·Lunde·Nason 2011) | 한 구간의 시각×모델 평균 손실 행렬 전체 | 현재 집합의 모델들이 모두 동등한 예측 능력 | 집합에 기대 손실이 더 큰 모델이 있다 | 블록 부트스트랩(블록=n^(1/3), 2,000회), 기각되면 가장 나쁜 모델을 빼고 반복 | 기각되어 빠진 모델은 최선과 구분되는 열세, 남은 집합은 \"최선이 아니라고 기각할 수 없는\" 모델 |")
     emit("| 3-2 | 사전 구간별 DM | `(L[m]-L[best]).where(Q==q).mean(axis=1)`, 직전 H시간 RV 5분위(학습 구간 분위수) 칸마다 | 그 칸에서 m과 최선의 기대 손실이 같다 | 다르다 | HAC t, 칸마다 Holm. 기각하지 못한 모델을 통계적 동률로 부른다 | 그 칸에서 m이 최선보다 열세 |")
-    emit("| 3-3 | 시드별 MCS 반복 | 무작위 모델의 예측만 시드 s의 것으로 바꿔 MCS를 5번 | (검정이 아니라 안정성 점검) | | 시드 5개 중 포함 횟수 | 5/5는 시드와 무관한 판정, 1~4는 시드에 따라 달라짐, 0/5는 항상 제외 |")
-    emit("| 1 | 시드 변동 | 시드 5개의 모델×종목×구간 평균 QLIKE 표준편차 | (기술통계) | | 중앙값을 동률 폭 0.01과 비교 | 0.01보다 크면 그 모델끼리의 순위 차이는 시드 잡음일 수 있음 |")
+    n_ = len(SEEDS)
+    emit(f"| 3-3 | 시드별 MCS 반복 | 무작위 모델의 예측만 시드 s의 것으로 바꿔 MCS를 {n_}번 | (검정이 아니라 안정성 점검) | | 시드 {n_}개 중 포함 횟수 | {n_}/{n_}는 시드와 무관한 판정, 1~{n_ - 1}은 시드에 따라 달라짐, 0/{n_}은 항상 제외 |")
+    emit(f"| 1 | 시드 변동 | 시드 {n_}개의 모델×종목×구간 평균 QLIKE 표준편차 | (기술통계) | | 중앙값을 동률 폭 0.01과 비교 | 0.01보다 크면 그 모델끼리의 순위 차이는 시드 잡음일 수 있음 |")
     emit("| 2 | 구분 불가 진단 | 상위 6개 모델 쌍의 |평균차|/SE, 예측 상관, 적합 지표 | (진단) | | 격차/SE<2이고 상관≈1이면 데이터·표본 한계 | 적합 지표가 정상인데 격차/SE가 작으면 \"적합 실패가 아니다\" |")
     emit("| 5 | RESET 선형성 | 학습 표본 5,000개로 OLS(y=log RV_d, X=로그 특성), 적합값²·³ 항 추가 | 선형 모형의 함수형이 옳다(두 항 계수=0) | 비선형 구조가 있다 | F 검정, 종목마다 | 기각이면 선형 모델에 부적합(제외 결정의 근거) |")
     emit("| 5 | BDS 독립성 | 위 OLS 잔차 마지막 3,000개 | 잔차가 i.i.d.다 | 비선형·이분산 의존이 남아 있다 | BDS 통계량(차원 2) | 기각이면 선형 모형이 구조를 놓침(이분산 포함이라 선형성만의 검정은 아님) |")
@@ -406,7 +407,8 @@ def significance_section(rd: pd.DataFrame, store: dict, models: list[str]) -> tu
     mcs.to_csv(RES / f"{STEM}_mcs.csv", index=False)
     emit("### 3-1. 예측 구간별 MCS(모델 신뢰 집합)와 최선 대비 DM")
     emit()
-    emit("MCS 포함은 \"최선이 아니라는 것을 기각할 수 없는 모델\"이다. 최선 대비 열세 p는 Holm 보정 후 값이다.")
+    emit("MCS 포함은 \"최선이 아니라는 것을 기각할 수 없는 모델\"이다. 최선 대비 열세 p는 Holm 보정 후 값이다. "
+         "이 절의 손실은 시드 0 예측 기준이다(시드를 바꿔도 판정이 유지되는지는 3-3절).")
     emit()
     for H in M26.HORIZONS_H:
         mh = mcs[mcs["H"] == H].sort_values("평균손실")
@@ -510,8 +512,8 @@ def seed_mcs_frequency(store: dict, models: list[str]) -> pd.DataFrame:
     from arch.bootstrap import MCS
     emit("### 3-3. 시드를 바꿔도 MCS 판정이 유지되는가")
     emit()
-    emit("무작위 모델(트리·Nystroem·GRU·LSTM)의 예측만 시드 1~4의 것으로 바꾸고, 나머지 모델은 그대로 둔 채 같은 MCS를 "
-         "다시 돌렸다. 셀은 시드 5개 중 MCS에 포함된 횟수다.")
+    emit(f"무작위 모델({'·'.join(STOCHASTIC)})의 예측만 시드 {', '.join(map(str, SEEDS[1:]))}의 것으로 바꾸고, 나머지 모델은 "
+         f"그대로 둔 채 같은 MCS를 다시 돌렸다. 셀은 시드 {len(SEEDS)}개(0 포함) 중 MCS에 포함된 횟수다. 실제로 읽은 시드 수는 표 머리의 분모다.")
     emit()
     seeds = {0: None}
     for sd in SEEDS[1:]:
@@ -549,7 +551,7 @@ def seed_mcs_frequency(store: dict, models: list[str]) -> pd.DataFrame:
     for nm, x in pv.iterrows():
         emit(f"| {nm} | " + " | ".join("해당 없음(이 구간 평가 제외)" if pd.isna(v) else str(int(v)) for v in x.values) + " |")
     emit()
-    emit("**해석(예측 구간마다)**: 5/5는 시드와 무관하게 최선과 구분되지 않는 모델, 1~4는 시드에 따라 판정이 달라지는 모델, 0은 항상 제외되는 모델이다.")
+    emit("**해석(예측 구간마다)**: 분모와 같은 횟수(n/n)는 시드와 무관하게 최선과 구분되지 않는 모델, 1~(n−1)은 시드에 따라 판정이 달라지는 모델, 0은 항상 제외되는 모델이다.")
     emit()
     for h in pv.columns:
         full = [m_ for m_ in pv.index if pv.loc[m_, h] == ns[h]]
@@ -573,6 +575,9 @@ def agreement_section(mcs: pd.DataFrame, rg: pd.DataFrame) -> None:
         Mm = set(mcs[(mcs["H"] == H) & mcs["MCS포함"]]["모델"])
         f = lambda s_: ", ".join(M26.SHORT.get(n, n) for n in sorted(s_)) or "-"
         emit(f"| {M26.hlabel(H)} | {f(A)} | {f(Mm)} | {f(A & Mm)} | {f(A - Mm)} | {f(Mm - A)} |")
+    emit()
+    emit("A등급은 합치기 단계의 `tier_table.csv`(시드 0 기준)에서, MCS는 3-1절(시드 0 기준)에서 가져와 같은 시드끼리 비교했다. "
+         "결과 보고서의 구간별 표는 시드 평균 손실로 등급을 매기므로 경계(격차 0.01 근처) 모델은 등급이 다를 수 있다.")
     emit()
     emit("**해석**: A등급(실무 약속)과 MCS(통계 판정)가 같은 모델을 가리키면 0.01 기준이 통계적으로도 정당하다. 'A등급만'은 격차는 작지만 "
          "통계적으로는 최선과 구분되는 모델이고, 'MCS만'은 격차가 0.01보다 크지만 표본이 적어 구분할 증거가 부족한 모델이다.")
@@ -610,6 +615,8 @@ def plot_tie_map(mcs: pd.DataFrame, rg: pd.DataFrame, models: list[str]) -> Path
     fig, ax = plt.subplots(figsize=(15, 6.2))
     cmap = matplotlib.colors.ListedColormap(["#f1f1ee", "#2a78d6"])
     ax.imshow(Z, aspect="auto", cmap=cmap, vmin=0, vmax=1, interpolation="nearest")
+    for i, j in zip(*np.where(np.isnan(Z))):   # 평가하지 않은 칸(27번 TTM 4·12시간)은 빈칸이 아니라 '제외'로 적는다
+        ax.text(j, i, "제외", ha="center", va="center", fontsize=7, color="#8a8a85")
     ax.set_yticks(range(len(ms)), [f"{m}  ({M26.FAMILY[m]})" for m in ms], fontsize=9)
     ax.set_xticks(range(len(cols)), [c for _, c in cols], fontsize=8)
     for k, H in enumerate(M26.HORIZONS_H):
@@ -621,7 +628,8 @@ def plot_tie_map(mcs: pd.DataFrame, rg: pd.DataFrame, models: list[str]) -> Path
     ax.tick_params(which="minor", length=0)
     for sp in ax.spines.values():
         sp.set_visible(False)
-    ax.set_title("파란 칸 = 그 칸의 최선과 통계적으로 구분되지 않음(전체: MCS 포함, Q1~Q5: 구간 최선 대비 Holm 비유의)",
+    ax.set_title("파란 칸 = 그 칸의 최선과 통계적으로 구분되지 않음(전체: MCS 포함, Q1~Q5: 구간 최선 대비 Holm 비유의), "
+                 "'제외' = 평가하지 않은 칸",
                  loc="left", fontsize=11, pad=28)
     fig.tight_layout()
     IMG.mkdir(parents=True, exist_ok=True)

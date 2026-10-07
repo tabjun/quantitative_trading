@@ -800,7 +800,7 @@ def write_report27(elapsed_note: str = "") -> None:
     emit("사전 구간(직전 H시간 RV 5분위)별 순위와 달력 분기별 순위는 CSV로 저장했다(`exante_regime_ranks.csv`, `quarter_ranks.csv`). "
          "구간별 통계적 동률은 26b 보고서 3-2절에 있다.")
     emit()
-    M.emit_zero_split(store, models)
+    M.emit_zero_split(store, models, onepart_ref="26b 보고서 6절(두 부분 모형 대 단일 처리)")
     (RES / f"{STEM}_report.md").write_text("\n".join(M._LINES), encoding="utf-8")
     print(f"[보고서] {RES / (STEM + '_report.md')}", flush=True)
 
