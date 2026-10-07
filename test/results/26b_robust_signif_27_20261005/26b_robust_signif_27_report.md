@@ -11,8 +11,8 @@
 | 3-1a | Diebold-Mariano(대응 t, HAC) | `d_t = (L[A]-L[B]).mean(axis=1)`, 한 예측 구간의 모델 쌍마다 | E[d_t]=0, 두 모델의 기대 QLIKE가 같다 | E[d_t]≠0 | t=평균/SE, SE는 Newey-West(lag=⌊4(n/100)^(2/9)⌋, Bartlett). 구간마다 전 쌍에 Holm | 한쪽이 평균적으로 더 낫다(방향은 평균차의 부호) |
 | 3-1b | MCS(Hansen·Lunde·Nason 2011) | 한 구간의 시각×모델 평균 손실 행렬 전체 | 현재 집합의 모델들이 모두 동등한 예측 능력 | 집합에 기대 손실이 더 큰 모델이 있다 | 블록 부트스트랩(블록=n^(1/3), 2,000회), 기각되면 가장 나쁜 모델을 빼고 반복 | 기각되어 빠진 모델은 최선과 구분되는 열세, 남은 집합은 "최선이 아니라고 기각할 수 없는" 모델 |
 | 3-2 | 사전 구간별 DM | `(L[m]-L[best]).where(Q==q).mean(axis=1)`, 직전 H시간 RV 5분위(학습 구간 분위수) 칸마다 | 그 칸에서 m과 최선의 기대 손실이 같다 | 다르다 | HAC t, 칸마다 Holm. 기각하지 못한 모델을 통계적 동률로 부른다 | 그 칸에서 m이 최선보다 열세 |
-| 3-3 | 시드별 MCS 반복 | 무작위 모델의 예측만 시드 s의 것으로 바꿔 MCS를 3번 | (검정이 아니라 안정성 점검) | | 시드 3개 중 포함 횟수 | 3/3는 시드와 무관한 판정, 1~2은 시드에 따라 달라짐, 0/3은 항상 제외 |
-| 1 | 시드 변동 | 시드 3개의 모델×종목×구간 평균 QLIKE 표준편차 | (기술통계) | | 중앙값을 동률 폭 0.01과 비교 | 0.01보다 크면 그 모델끼리의 순위 차이는 시드 잡음일 수 있음 |
+| 3-3 | 시드별 MCS 반복 | 무작위 모델의 예측만 시드 s의 것으로 바꿔 MCS를 5번 | (검정이 아니라 안정성 점검) | | 시드 5개 중 포함 횟수 | 5/5는 시드와 무관한 판정, 1~4은 시드에 따라 달라짐, 0/5은 항상 제외 |
+| 1 | 시드 변동 | 시드 5개의 모델×종목×구간 평균 QLIKE 표준편차 | (기술통계) | | 중앙값을 동률 폭 0.01과 비교 | 0.01보다 크면 그 모델끼리의 순위 차이는 시드 잡음일 수 있음 |
 | 2 | 구분 불가 진단 | 상위 6개 모델 쌍의 |평균차|/SE, 예측 상관, 적합 지표 | (진단) | | 격차/SE<2이고 상관≈1이면 데이터·표본 한계 | 적합 지표가 정상인데 격차/SE가 작으면 "적합 실패가 아니다" |
 | 5 | RESET 선형성 | 학습 표본 5,000개로 OLS(y=log RV_d, X=로그 특성), 적합값²·³ 항 추가 | 선형 모형의 함수형이 옳다(두 항 계수=0) | 비선형 구조가 있다 | F 검정, 종목마다 | 기각이면 선형 모델에 부적합(제외 결정의 근거) |
 | 5 | BDS 독립성 | 위 OLS 잔차 마지막 3,000개 | 잔차가 i.i.d.다 | 비선형·이분산 의존이 남아 있다 | BDS 통계량(차원 2) | 기각이면 선형 모형이 구조를 놓침(이분산 포함이라 선형성만의 검정은 아님) |
@@ -22,7 +22,7 @@
 
 ## 1. 시드 견고성(전 모델)
 
-읽은 시드: [0, 1, 2]. 시드 0은 27번 본 실행이다.
+읽은 시드: [0, 1, 2, 3, 4]. 시드 0은 27번 본 실행이다.
 
 **결정적 알고리즘 확인**: 시드를 바꿔 다시 돌린 예측과 시드 0 예측의 최대 절대차(종목·구간 전체).
 
@@ -36,40 +36,40 @@ MS-GARCH·TAR-GARCH(고정 시작점의 Nelder-Mead)·KernelRidge·SVR(고정 �
 
 | 모델 | 15분 | 30분 | 1시간 | 4시간 | 12시간 |
 | :--- | ---: | ---: | ---: | ---: | ---: |
-| Autoformer | 0.0149 | 0.0122 | 0.0083 | 0.0194 | 0.0116 |
-| GARCH+LightGBM | 0.0044 | 0.0018 | 0.0012 | 0.0013 | 0.0025 |
-| GRU | 0.0288 | 0.0097 | 0.0117 | 0.0081 | 0.0072 |
-| HistGBM | 0.0014 | 0.0003 | 0.0001 | 0.0000 | 0.0000 |
-| LSTM | 0.0468 | 0.0203 | 0.0125 | 0.0115 | 0.0132 |
-| LightGBM | 0.0034 | 0.0016 | 0.0010 | 0.0021 | 0.0020 |
-| ModernTCN | 0.0036 | 0.0024 | 0.0013 | 0.0056 | 0.0582 |
-| Nystroem+Ridge | 0.0021 | 0.0013 | 0.0010 | 0.0008 | 0.0008 |
-| PatchTST | 0.0100 | 0.0075 | 0.0052 | 0.0038 | 0.0079 |
-| S-Mamba | 0.0066 | 0.0050 | 0.0031 | 0.0051 | 0.0050 |
-| TCN | 0.0216 | 0.0162 | 0.0184 | 0.0311 | 0.0745 |
-| TimeXer | 0.0664 | 0.0347 | 0.0180 | 0.0092 | 0.0195 |
-| TimesNet | 0.0229 | 0.0154 | 0.0241 | 0.0227 | 0.0391 |
-| XGBoost | 0.0043 | 0.0020 | 0.0012 | 0.0021 | 0.0025 |
-| iTransformer | 0.0360 | 0.0336 | 0.0339 | 0.0156 | 0.0128 |
+| Autoformer | 0.0163 | 0.0121 | 0.0150 | 0.0204 | 0.0206 |
+| GARCH+LightGBM | 0.0051 | 0.0020 | 0.0012 | 0.0016 | 0.0029 |
+| GRU | 0.0379 | 0.0271 | 0.0121 | 0.0135 | 0.0109 |
+| HistGBM | 0.0015 | 0.0005 | 0.0001 | 0.0000 | 0.0000 |
+| LSTM | 0.0567 | 0.0277 | 0.0150 | 0.0115 | 0.0140 |
+| LightGBM | 0.0032 | 0.0017 | 0.0012 | 0.0019 | 0.0025 |
+| ModernTCN | 0.0051 | 0.0032 | 0.0016 | 0.0064 | 0.0549 |
+| Nystroem+Ridge | 0.0026 | 0.0016 | 0.0011 | 0.0007 | 0.0008 |
+| PatchTST | 0.0123 | 0.0078 | 0.0060 | 0.0035 | 0.0074 |
+| S-Mamba | 0.0087 | 0.0049 | 0.0026 | 0.0053 | 0.0066 |
+| TCN | 0.0272 | 0.0193 | 0.0200 | 0.0379 | 0.0889 |
+| TimeXer | 0.0700 | 0.0369 | 0.0193 | 0.0101 | 0.0171 |
+| TimesNet | 0.0230 | 0.0153 | 0.0219 | 0.0235 | 0.0309 |
+| XGBoost | 0.0056 | 0.0019 | 0.0011 | 0.0020 | 0.0031 |
+| iTransformer | 0.0380 | 0.0377 | 0.0387 | 0.0166 | 0.0186 |
 
 동률 폭 0.01와 비교한다. 시드 표준편차가 이보다 작으면 시드는 결론을 바꾸지 않는다. HistGBM은 표본·특성 추출을 쓰지 않는 설정이라(조기종료도 직접 감시) 시드가 결과에 영향을 주지 않는다.
 
 **해석(모델마다)**:
-- Autoformer: 15분, 30분, 4시간, 12시간에서 표준편차가 0.01를 넘는다(최대 0.0194). 이 구간들에서 이 모델과 다른 모델의 순위·동률 판정은 시드 한 개로 확정할 수 없고, 시드 평균과 시드별 MCS 빈도(3-3절)로 봐야 한다.
-- GARCH+LightGBM: 모든 구간에서 시드 표준편차가 0.01 이하(최대 0.0044). 시드는 이 모델의 순위를 바꾸지 않는다.
-- GRU: 15분, 1시간에서 표준편차가 0.01를 넘는다(최대 0.0288). 이 구간들에서 이 모델과 다른 모델의 순위·동률 판정은 시드 한 개로 확정할 수 없고, 시드 평균과 시드별 MCS 빈도(3-3절)로 봐야 한다.
-- HistGBM: 모든 구간에서 시드 표준편차가 0.01 이하(최대 0.0014). 시드는 이 모델의 순위를 바꾸지 않는다.
-- LSTM: 15분, 30분, 1시간, 4시간, 12시간에서 표준편차가 0.01를 넘는다(최대 0.0468). 이 구간들에서 이 모델과 다른 모델의 순위·동률 판정은 시드 한 개로 확정할 수 없고, 시드 평균과 시드별 MCS 빈도(3-3절)로 봐야 한다.
-- LightGBM: 모든 구간에서 시드 표준편차가 0.01 이하(최대 0.0034). 시드는 이 모델의 순위를 바꾸지 않는다.
-- ModernTCN: 12시간에서 표준편차가 0.01를 넘는다(최대 0.0582). 이 구간들에서 이 모델과 다른 모델의 순위·동률 판정은 시드 한 개로 확정할 수 없고, 시드 평균과 시드별 MCS 빈도(3-3절)로 봐야 한다.
-- Nystroem+Ridge: 모든 구간에서 시드 표준편차가 0.01 이하(최대 0.0021). 시드는 이 모델의 순위를 바꾸지 않는다.
-- PatchTST: 15분에서 표준편차가 0.01를 넘는다(최대 0.0100). 이 구간들에서 이 모델과 다른 모델의 순위·동률 판정은 시드 한 개로 확정할 수 없고, 시드 평균과 시드별 MCS 빈도(3-3절)로 봐야 한다.
-- S-Mamba: 모든 구간에서 시드 표준편차가 0.01 이하(최대 0.0066). 시드는 이 모델의 순위를 바꾸지 않는다.
-- TCN: 15분, 30분, 1시간, 4시간, 12시간에서 표준편차가 0.01를 넘는다(최대 0.0745). 이 구간들에서 이 모델과 다른 모델의 순위·동률 판정은 시드 한 개로 확정할 수 없고, 시드 평균과 시드별 MCS 빈도(3-3절)로 봐야 한다.
-- TimeXer: 15분, 30분, 1시간, 12시간에서 표준편차가 0.01를 넘는다(최대 0.0664). 이 구간들에서 이 모델과 다른 모델의 순위·동률 판정은 시드 한 개로 확정할 수 없고, 시드 평균과 시드별 MCS 빈도(3-3절)로 봐야 한다.
-- TimesNet: 15분, 30분, 1시간, 4시간, 12시간에서 표준편차가 0.01를 넘는다(최대 0.0391). 이 구간들에서 이 모델과 다른 모델의 순위·동률 판정은 시드 한 개로 확정할 수 없고, 시드 평균과 시드별 MCS 빈도(3-3절)로 봐야 한다.
-- XGBoost: 모든 구간에서 시드 표준편차가 0.01 이하(최대 0.0043). 시드는 이 모델의 순위를 바꾸지 않는다.
-- iTransformer: 15분, 30분, 1시간, 4시간, 12시간에서 표준편차가 0.01를 넘는다(최대 0.0360). 이 구간들에서 이 모델과 다른 모델의 순위·동률 판정은 시드 한 개로 확정할 수 없고, 시드 평균과 시드별 MCS 빈도(3-3절)로 봐야 한다.
+- Autoformer: 15분, 30분, 1시간, 4시간, 12시간에서 표준편차가 0.01를 넘는다(최대 0.0206). 이 구간들에서 이 모델과 다른 모델의 순위·동률 판정은 시드 한 개로 확정할 수 없고, 시드 평균과 시드별 MCS 빈도(3-3절)로 봐야 한다.
+- GARCH+LightGBM: 모든 구간에서 시드 표준편차가 0.01 이하(최대 0.0051). 시드는 이 모델의 순위를 바꾸지 않는다.
+- GRU: 15분, 30분, 1시간, 4시간, 12시간에서 표준편차가 0.01를 넘는다(최대 0.0379). 이 구간들에서 이 모델과 다른 모델의 순위·동률 판정은 시드 한 개로 확정할 수 없고, 시드 평균과 시드별 MCS 빈도(3-3절)로 봐야 한다.
+- HistGBM: 모든 구간에서 시드 표준편차가 0.01 이하(최대 0.0015). 시드는 이 모델의 순위를 바꾸지 않는다.
+- LSTM: 15분, 30분, 1시간, 4시간, 12시간에서 표준편차가 0.01를 넘는다(최대 0.0567). 이 구간들에서 이 모델과 다른 모델의 순위·동률 판정은 시드 한 개로 확정할 수 없고, 시드 평균과 시드별 MCS 빈도(3-3절)로 봐야 한다.
+- LightGBM: 모든 구간에서 시드 표준편차가 0.01 이하(최대 0.0032). 시드는 이 모델의 순위를 바꾸지 않는다.
+- ModernTCN: 12시간에서 표준편차가 0.01를 넘는다(최대 0.0549). 이 구간들에서 이 모델과 다른 모델의 순위·동률 판정은 시드 한 개로 확정할 수 없고, 시드 평균과 시드별 MCS 빈도(3-3절)로 봐야 한다.
+- Nystroem+Ridge: 모든 구간에서 시드 표준편차가 0.01 이하(최대 0.0026). 시드는 이 모델의 순위를 바꾸지 않는다.
+- PatchTST: 15분에서 표준편차가 0.01를 넘는다(최대 0.0123). 이 구간들에서 이 모델과 다른 모델의 순위·동률 판정은 시드 한 개로 확정할 수 없고, 시드 평균과 시드별 MCS 빈도(3-3절)로 봐야 한다.
+- S-Mamba: 모든 구간에서 시드 표준편차가 0.01 이하(최대 0.0087). 시드는 이 모델의 순위를 바꾸지 않는다.
+- TCN: 15분, 30분, 1시간, 4시간, 12시간에서 표준편차가 0.01를 넘는다(최대 0.0889). 이 구간들에서 이 모델과 다른 모델의 순위·동률 판정은 시드 한 개로 확정할 수 없고, 시드 평균과 시드별 MCS 빈도(3-3절)로 봐야 한다.
+- TimeXer: 15분, 30분, 1시간, 4시간, 12시간에서 표준편차가 0.01를 넘는다(최대 0.0700). 이 구간들에서 이 모델과 다른 모델의 순위·동률 판정은 시드 한 개로 확정할 수 없고, 시드 평균과 시드별 MCS 빈도(3-3절)로 봐야 한다.
+- TimesNet: 15분, 30분, 1시간, 4시간, 12시간에서 표준편차가 0.01를 넘는다(최대 0.0309). 이 구간들에서 이 모델과 다른 모델의 순위·동률 판정은 시드 한 개로 확정할 수 없고, 시드 평균과 시드별 MCS 빈도(3-3절)로 봐야 한다.
+- XGBoost: 모든 구간에서 시드 표준편차가 0.01 이하(최대 0.0056). 시드는 이 모델의 순위를 바꾸지 않는다.
+- iTransformer: 15분, 30분, 1시간, 4시간, 12시간에서 표준편차가 0.01를 넘는다(최대 0.0387). 이 구간들에서 이 모델과 다른 모델의 순위·동률 판정은 시드 한 개로 확정할 수 없고, 시드 평균과 시드별 MCS 빈도(3-3절)로 봐야 한다.
 
 ## 2. 왜 긴 예측 구간에서 모델이 구분되지 않는가: 적합 실패인가, 데이터 특성인가
 
@@ -471,46 +471,46 @@ MCS 포함은 "최선이 아니라는 것을 기각할 수 없는 모델"이다.
 
 ### 3-3. 시드를 바꿔도 MCS 판정이 유지되는가
 
-무작위 모델(LightGBM·XGBoost·HistGBM·GARCH+LightGBM·Nystroem+Ridge·GRU·LSTM·PatchTST·iTransformer·TCN·Autoformer·TimesNet·TimeXer·ModernTCN·S-Mamba)의 예측만 시드 1, 2의 것으로 바꾸고, 나머지 모델은 그대로 둔 채 같은 MCS를 다시 돌렸다. 셀은 시드 3개(0 포함) 중 MCS에 포함된 횟수다. 실제로 읽은 시드 수는 표 머리의 분모다.
+무작위 모델(LightGBM·XGBoost·HistGBM·GARCH+LightGBM·Nystroem+Ridge·GRU·LSTM·PatchTST·iTransformer·TCN·Autoformer·TimesNet·TimeXer·ModernTCN·S-Mamba)의 예측만 시드 1, 2, 3, 4의 것으로 바꾸고, 나머지 모델은 그대로 둔 채 같은 MCS를 다시 돌렸다. 셀은 시드 5개(0 포함) 중 MCS에 포함된 횟수다. 실제로 읽은 시드 수는 표 머리의 분모다.
 
-| 모델 | 15분(/3) | 30분(/3) | 1시간(/3) | 4시간(/3) | 12시간(/3) |
+| 모델 | 15분(/5) | 30분(/5) | 1시간(/5) | 4시간(/5) | 12시간(/5) |
 | :--- | ---: | ---: | ---: | ---: | ---: |
 | naive | 0 | 0 | 0 | 0 | 0 |
-| GARCH-t | 3 | 0 | 0 | 0 | 0 |
-| MS-GARCH | 3 | 0 | 0 | 0 | 0 |
-| TAR-GARCH | 3 | 0 | 0 | 0 | 0 |
+| GARCH-t | 5 | 0 | 0 | 0 | 0 |
+| MS-GARCH | 5 | 0 | 0 | 0 | 0 |
+| TAR-GARCH | 5 | 0 | 0 | 0 | 0 |
 | KernelRidge-RBF | 0 | 0 | 0 | 0 | 0 |
 | SVR-RBF | 0 | 0 | 0 | 0 | 0 |
-| Nystroem+Ridge | 3 | 0 | 0 | 3 | 3 |
-| LightGBM | 2 | 3 | 2 | 3 | 3 |
-| XGBoost | 0 | 3 | 3 | 3 | 3 |
-| HistGBM | 3 | 3 | 2 | 3 | 3 |
-| GARCH+LightGBM | 3 | 3 | 3 | 3 | 3 |
-| GRU | 0 | 0 | 0 | 3 | 3 |
-| LSTM | 0 | 0 | 0 | 3 | 3 |
-| PatchTST | 0 | 0 | 0 | 3 | 2 |
+| Nystroem+Ridge | 5 | 0 | 0 | 5 | 5 |
+| LightGBM | 2 | 5 | 4 | 5 | 5 |
+| XGBoost | 0 | 5 | 5 | 5 | 5 |
+| HistGBM | 5 | 5 | 3 | 5 | 5 |
+| GARCH+LightGBM | 5 | 5 | 5 | 5 | 5 |
+| GRU | 0 | 0 | 0 | 5 | 5 |
+| LSTM | 0 | 0 | 0 | 4 | 5 |
+| PatchTST | 0 | 0 | 0 | 5 | 4 |
 | iTransformer | 0 | 0 | 0 | 0 | 0 |
 | TCN | 0 | 0 | 0 | 0 | 0 |
 | Autoformer | 0 | 0 | 0 | 0 | 0 |
 | TimesNet | 0 | 0 | 0 | 0 | 0 |
-| TimeXer | 0 | 0 | 0 | 0 | 0 |
-| ModernTCN | 0 | 0 | 0 | 3 | 0 |
-| S-Mamba | 0 | 0 | 0 | 0 | 1 |
-| Chronos-Bolt | 0 | 0 | 0 | 3 | 0 |
-| TimesFM | 0 | 0 | 0 | 3 | 3 |
+| TimeXer | 0 | 0 | 0 | 2 | 0 |
+| ModernTCN | 0 | 0 | 0 | 4 | 0 |
+| S-Mamba | 0 | 0 | 0 | 0 | 2 |
+| Chronos-Bolt | 0 | 0 | 0 | 5 | 0 |
+| TimesFM | 0 | 0 | 0 | 5 | 5 |
 | TTM | 0 | 0 | 0 | 해당 없음(이 구간 평가 제외) | 해당 없음(이 구간 평가 제외) |
-| Moirai-2 | 0 | 0 | 0 | 3 | 0 |
-| Sundial | 0 | 0 | 0 | 3 | 3 |
-| Time-MoE | 0 | 0 | 0 | 3 | 3 |
+| Moirai-2 | 0 | 0 | 0 | 5 | 0 |
+| Sundial | 0 | 0 | 0 | 5 | 5 |
+| Time-MoE | 0 | 0 | 0 | 5 | 5 |
 | Lag-Llama | 0 | 0 | 0 | 0 | 0 |
 
 **해석(예측 구간마다)**: 분모와 같은 횟수(n/n)는 시드와 무관하게 최선과 구분되지 않는 모델, 1~(n−1)은 시드에 따라 판정이 달라지는 모델, 0은 항상 제외되는 모델이다.
 
-- 15분: 항상 포함 GARCH-t, MS-GARCH, TAR-GARCH, Nystroem+Ridge, HistGBM, GARCH+LightGBM. 시드 의존 LightGBM(2/3). 항상 제외 naive, KernelRidge-RBF, SVR-RBF, XGBoost, GRU, LSTM, PatchTST, iTransformer, TCN, Autoformer, TimesNet, TimeXer, ModernTCN, S-Mamba, Chronos-Bolt, TimesFM, TTM, Moirai-2, Sundial, Time-MoE, Lag-Llama.
+- 15분: 항상 포함 GARCH-t, MS-GARCH, TAR-GARCH, Nystroem+Ridge, HistGBM, GARCH+LightGBM. 시드 의존 LightGBM(2/5). 항상 제외 naive, KernelRidge-RBF, SVR-RBF, XGBoost, GRU, LSTM, PatchTST, iTransformer, TCN, Autoformer, TimesNet, TimeXer, ModernTCN, S-Mamba, Chronos-Bolt, TimesFM, TTM, Moirai-2, Sundial, Time-MoE, Lag-Llama.
 - 30분: 항상 포함 LightGBM, XGBoost, HistGBM, GARCH+LightGBM. 시드 의존 없음. 항상 제외 naive, GARCH-t, MS-GARCH, TAR-GARCH, KernelRidge-RBF, SVR-RBF, Nystroem+Ridge, GRU, LSTM, PatchTST, iTransformer, TCN, Autoformer, TimesNet, TimeXer, ModernTCN, S-Mamba, Chronos-Bolt, TimesFM, TTM, Moirai-2, Sundial, Time-MoE, Lag-Llama.
-- 1시간: 항상 포함 XGBoost, GARCH+LightGBM. 시드 의존 LightGBM(2/3), HistGBM(2/3). 항상 제외 naive, GARCH-t, MS-GARCH, TAR-GARCH, KernelRidge-RBF, SVR-RBF, Nystroem+Ridge, GRU, LSTM, PatchTST, iTransformer, TCN, Autoformer, TimesNet, TimeXer, ModernTCN, S-Mamba, Chronos-Bolt, TimesFM, TTM, Moirai-2, Sundial, Time-MoE, Lag-Llama.
-- 4시간: 항상 포함 Nystroem+Ridge, LightGBM, XGBoost, HistGBM, GARCH+LightGBM, GRU, LSTM, PatchTST, ModernTCN, Chronos-Bolt, TimesFM, Moirai-2, Sundial, Time-MoE. 시드 의존 없음. 항상 제외 naive, GARCH-t, MS-GARCH, TAR-GARCH, KernelRidge-RBF, SVR-RBF, iTransformer, TCN, Autoformer, TimesNet, TimeXer, S-Mamba, Lag-Llama.
-- 12시간: 항상 포함 Nystroem+Ridge, LightGBM, XGBoost, HistGBM, GARCH+LightGBM, GRU, LSTM, TimesFM, Sundial, Time-MoE. 시드 의존 PatchTST(2/3), S-Mamba(1/3). 항상 제외 naive, GARCH-t, MS-GARCH, TAR-GARCH, KernelRidge-RBF, SVR-RBF, iTransformer, TCN, Autoformer, TimesNet, TimeXer, ModernTCN, Chronos-Bolt, Moirai-2, Lag-Llama.
+- 1시간: 항상 포함 XGBoost, GARCH+LightGBM. 시드 의존 LightGBM(4/5), HistGBM(3/5). 항상 제외 naive, GARCH-t, MS-GARCH, TAR-GARCH, KernelRidge-RBF, SVR-RBF, Nystroem+Ridge, GRU, LSTM, PatchTST, iTransformer, TCN, Autoformer, TimesNet, TimeXer, ModernTCN, S-Mamba, Chronos-Bolt, TimesFM, TTM, Moirai-2, Sundial, Time-MoE, Lag-Llama.
+- 4시간: 항상 포함 Nystroem+Ridge, LightGBM, XGBoost, HistGBM, GARCH+LightGBM, GRU, PatchTST, Chronos-Bolt, TimesFM, Moirai-2, Sundial, Time-MoE. 시드 의존 LSTM(4/5), TimeXer(2/5), ModernTCN(4/5). 항상 제외 naive, GARCH-t, MS-GARCH, TAR-GARCH, KernelRidge-RBF, SVR-RBF, iTransformer, TCN, Autoformer, TimesNet, S-Mamba, Lag-Llama.
+- 12시간: 항상 포함 Nystroem+Ridge, LightGBM, XGBoost, HistGBM, GARCH+LightGBM, GRU, LSTM, TimesFM, Sundial, Time-MoE. 시드 의존 PatchTST(4/5), S-Mamba(2/5). 항상 제외 naive, GARCH-t, MS-GARCH, TAR-GARCH, KernelRidge-RBF, SVR-RBF, iTransformer, TCN, Autoformer, TimesNet, TimeXer, ModernTCN, Chronos-Bolt, Moirai-2, Lag-Llama.
 
 ## 4. 실무 동률(A등급, 0.01)과 통계 판정의 일치
 
@@ -518,9 +518,9 @@ MCS 포함은 "최선이 아니라는 것을 기각할 수 없는 모델"이다.
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | 15분 | GARCH-t, MS-GARCH, Nys, TAR-GARCH | G+LGBM, GARCH-t, HGB, LGBM, MS-GARCH, Nys, TAR-GARCH | GARCH-t, MS-GARCH, Nys, TAR-GARCH | - | G+LGBM, HGB, LGBM |
 | 30분 | G+LGBM, HGB, LGBM, XGB | G+LGBM, HGB, LGBM, XGB | G+LGBM, HGB, LGBM, XGB | - | - |
-| 1시간 | G+LGBM, HGB, LGBM, XGB | G+LGBM, HGB, LGBM, XGB | G+LGBM, HGB, LGBM, XGB | - | - |
+| 1시간 | G+LGBM, HGB, LGBM, Nys, XGB | G+LGBM, HGB, LGBM, XGB | G+LGBM, HGB, LGBM, XGB | Nys | - |
 | 4시간 | G+LGBM, GRU, HGB, LSTM, LGBM, MTCN, Nys, PTST, TFM, XGB | Chr, G+LGBM, GRU, HGB, LSTM, LGBM, MTCN, Moi, Nys, PTST, Sun, TMoE, TFM, XGB | G+LGBM, GRU, HGB, LSTM, LGBM, MTCN, Nys, PTST, TFM, XGB | - | Chr, Moi, Sun, TMoE |
-| 12시간 | G+LGBM, GRU, HGB, LSTM, LGBM, Nys, XGB | G+LGBM, GRU, HGB, LSTM, LGBM, Nys, Sun, TMoE, TFM, XGB | G+LGBM, GRU, HGB, LSTM, LGBM, Nys, XGB | - | Sun, TMoE, TFM |
+| 12시간 | GRU, HGB, LSTM, Nys, XGB | G+LGBM, GRU, HGB, LSTM, LGBM, Nys, Sun, TMoE, TFM, XGB | GRU, HGB, LSTM, Nys, XGB | - | G+LGBM, LGBM, Sun, TMoE, TFM |
 
 A등급은 합치기 단계의 `tier_table.csv`(시드 0 기준)에서, MCS는 3-1절(시드 0 기준)에서 가져와 같은 시드끼리 비교했다. 결과 보고서의 구간별 표는 시드 평균 손실로 등급을 매기므로 경계(격차 0.01 근처) 모델은 등급이 다를 수 있다.
 
@@ -528,9 +528,9 @@ A등급은 합치기 단계의 `tier_table.csv`(시드 0 기준)에서, MCS는 3
 
 - 15분: A등급만 없음, MCS만 G+LGBM, HGB, LGBM. MCS만 있는 모델은 격차가 0.01을 넘지만 평가 시각이 적어 구분할 증거가 부족하다. 
 - 30분: 두 기준이 같은 모델 집합을 가리킨다. 0.01 기준이 통계 판정과 일치한다.
-- 1시간: 두 기준이 같은 모델 집합을 가리킨다. 0.01 기준이 통계 판정과 일치한다.
+- 1시간: A등급만 Nys, MCS만 없음. A등급만 있는 모델은 격차가 0.01 이하지만 통계적으로는 최선과 구분된다(표본이 커서 작은 차이도 잡힌다). 
 - 4시간: A등급만 없음, MCS만 Chr, Moi, Sun, TMoE. MCS만 있는 모델은 격차가 0.01을 넘지만 평가 시각이 적어 구분할 증거가 부족하다. 
-- 12시간: A등급만 없음, MCS만 Sun, TMoE, TFM. MCS만 있는 모델은 격차가 0.01을 넘지만 평가 시각이 적어 구분할 증거가 부족하다. 
+- 12시간: A등급만 없음, MCS만 G+LGBM, LGBM, Sun, TMoE, TFM. MCS만 있는 모델은 격차가 0.01을 넘지만 평가 시각이 적어 구분할 증거가 부족하다. 
 
 ## 5. 예측 구간별 선형성 재검정(선형 모델 제외 결정의 근거 확인)
 
@@ -542,7 +542,7 @@ A등급은 합치기 단계의 `tier_table.csv`(시드 0 기준)에서, MCS는 3
 | 30분 | 5,000 | 0.198 | 0.0035 | 17/20 | 8/20 | 0.000 |
 | 1시간 | 5,000 | 0.272 | 0.0023 | 17/20 | 14/20 | 0.000 |
 | 4시간 | 4,526 | 0.465 | 0.0021 | 16/20 | 18/20 | 0.000 |
-| 12시간 | 1,494 | 0.495 | 0.0012 | 5/20 | 11/20 | 0.005 |
+| 12시간 | 1,494 | 0.495 | 0.0012 | 5/20 | 11/20 | 0.008 |
 
 **해석(예측 구간마다)**: RESET H0 = 선형 회귀의 함수형이 옳다, H1 = 비선형 구조가 있다. BDS H0 = 선형 회귀 잔차가 i.i.d.다, H1 = 잔차에 의존 구조가 남아 있다.
 

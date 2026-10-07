@@ -236,21 +236,23 @@ process=Phase/실험 단위 To-Do, history=완료 이력), 실제로는 Phase 1~
 - [x] **26c번 최신 3년 창 + 가격 정지 두 부분 모형(2026-10-05~06)**: `test/models/26c_recent_twopart_test.py`,
       DB를 2026-10-05까지 연장한 3년 창에서 정지 확률 π × 움직일 때 크기의 두 부분 모형을 도입하고, MS-GARCH를
       제약 모수화(`fit_ms_garch_bounded`)로 재적합했다(보정계수 0.04 붕괴 → 0.60~1.22). 27번의 기준 틀이 됐다.
-- [x] **27번 모델 로스터 확대 — 1차 마무리(2026-10-07, 시드 0·1·2)**: 26c 틀(2023-10-06~2026-10-05, 분할
+- [x] **27번 모델 로스터 확대 — 마무리(2026-10-07 시드 0·1·2, 2026-10-08 시드 0~4 최종)**: 26c 틀(2023-10-06~2026-10-05, 분할
       2025-11-11, 정지 두 부분 모형)에 신규 15종(neuralforecast PatchTST·iTransformer·TCN·Autoformer·TimesNet·
       TimeXer, 공식 코드 ModernTCN·S-Mamba, 파운데이션 Chronos-Bolt·TimesFM·TTM·Moirai-2·Sundial·Time-MoE·
       Lag-Llama)을 더했다. 2,760행(TTM 4·12시간 공식 지원 밖 40행 제외), 신규 모델 실패 0, 26c 공유 1,300칸 값 동일.
       요약 `test/results/27_model_expansion_20261006/27_summary_for_user.md`, 검정 `test/results/26b_robust_signif_27_20261005/`,
       EDA·계열 검정 `test/results/27b_eda_verification_20261007/`(드라이버 `test/models/27b_eda_verification_test.py`).
       - 결론: 신규 모델은 어느 구간에서도 기존 최선을 이기지 못했다. 15분 GARCH 계열, 30분·1시간 트리·GARCH+LightGBM,
-        4시간 트리·GRU·LSTM·Nystroem이 최선권. 신규는 4시간 A등급 3종(PatchTST·TimesFM·ModernTCN)·MCS 7종, 12시간 MCS 3종(TimesFM·Sundial·Time-MoE).
+        4시간 트리·GRU·LSTM·Nystroem, 12시간 Nystroem·LSTM·GRU(시드마다 최선이 바뀌는 동률)가 최선권. 신규는 4시간 A등급 2종
+        (PatchTST·TimesFM; ModernTCN은 시드 5개에서 0.0103으로 B등급)·MCS 7종, 12시간 MCS 3종(TimesFM·Sundial·Time-MoE, 시드에 따라 PatchTST·S-Mamba 추가).
       - 계열 DM(구성원 평균, Holm): 순환 딥러닝 > 어텐션(30분~12시간), 파운데이션(zero-shot) > 어텐션(30분~12시간),
-        순환 딥러닝 > 파운데이션(30분·1시간만). 단, 순환망과 신규 모델의 입력 표현이 달라 구조 차이만은 아니다.
-      - GARCH-t: 15분 A등급·MCS 3/3, 30분 이상 단독 제외. GARCH+LightGBM은 전 구간 MCS 3/3.
-      - 합성곱(TCN·TimesNet·ModernTCN) 12시간 붕괴는 세 시드 모두 재현(보정계수 정상) → 12시간 블록 표본(약 1,500) 부족으로 해석.
+        순환 딥러닝 > 파운데이션(30분·1시간만), 15분만 어텐션 > 파운데이션(p=0.028, 시드 5개에서 새로 유의). 단, 순환망과 신규 모델의 입력 표현이 달라 구조 차이만은 아니다.
+      - GARCH-t: 15분 A등급·MCS 5/5, 30분 이상 단독 제외. GARCH+LightGBM은 전 구간 MCS 5/5.
+      - 합성곱(TCN·TimesNet·ModernTCN) 12시간 붕괴는 다섯 시드 모두 재현(시드별 격차 0.14 이상, 보정계수 정상) → 12시간 블록 표본(약 1,500) 부족으로 해석.
 - [ ] **27번 후속**:
-      - 신경망 시드 3·4 실행 중(대기열 `logs/q27/queue.sh`), 끝나면 final5 자동 집계 → 시드 의존 칸(1시간 LightGBM·HistGBM,
-        12시간 PatchTST·S-Mamba·ModernTCN) 재확인, 요약 갱신.
+      - (완료 2026-10-08) 신경망 시드 3·4 → final5 집계·27b 재실행·요약 갱신. 시드 의존 칸: 15분 LightGBM 2/5, 1시간 LightGBM 4/5·
+        HistGBM 3/5, 4시간 ModernTCN 4/5·TimeXer 2/5, 12시간 PatchTST 4/5·S-Mamba 2/5.
+      - 예측 npz·작업 단위 pkl(결과 폴더 약 836MB) 커밋 여부 결정 필요(사용자 판단, 미커밋 상태).
       - 입력 표현 통일 비교(순환망 15분봉 96개 대 블록 로그 RV 이력)로 순차 대 병렬의 구조 차이만 분리.
       - 정지 확률 π 과소예측(15분 π 0.234 대 실제 0.286) 보정 검토, 4·12시간 표본 부족 대응(패널 DM 등).
       - Claude Design 발표 자료 원고: `test/results/27_model_expansion_20261006/27_claude_design_brief.md`.
