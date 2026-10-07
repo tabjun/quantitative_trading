@@ -45,7 +45,6 @@ RES = ROOT / "test" / "results" / TAG
 IMG = ROOT / "test" / "images" / TAG
 R27 = ROOT / "test" / "results" / "27_model_expansion_20261006"
 R26C = ROOT / "test" / "results" / "26c_recent_twopart_20261005"
-R26B27 = ROOT / "test" / "results" / "26b_robust_signif_27_20261006"
 
 
 def _load(name: str, path: Path):
@@ -505,6 +504,14 @@ def section_d(rd: pd.DataFrame | None, store: dict | None) -> None:
             continue
         emit(f"| {fam} | {n} | " + " | ".join(f"{lvl.loc[fam, H] - lvl[H].min():+.4f}" for H in M.HORIZONS_H) + " |")
     emit()
+    n_fm = {H: len([m_ for m_ in models if M.FAMILY.get(m_) == "파운데이션" and any(m_ in d for (tk, h), d in L.items() if h == H)])
+            for H in M.HORIZONS_H}
+    emit("**읽는 법과 해석**: 셀은 그 계열 구성원 손실의 단순 평균에서 그 구간 최선 계열의 값을 뺀 차이다(0이 최선, 클수록 나쁨). "
+         "구간별 최선 계열은 " + ", ".join(f"{M.hlabel(H)} {lvl[H].idxmin()}" for H in M.HORIZONS_H) + "이다. "
+         "모델 수 칸은 전체 구간 기준이며, 파운데이션 계열은 TTM 제외로 구간별 구성원 수가 "
+         + ", ".join(f"{M.hlabel(H)} {n_fm[H]}" for H in M.HORIZONS_H) + "개다. 계열 평균은 약한 구성원에 끌려 내려가므로, "
+         "계열의 최선 모델이 경쟁력이 있는지는 D3(MCS)와 함께 본다.")
+    emit()
     emit("### D2. 계열 쌍 DM 검정(Holm 보정)")
     emit()
     for H in M.HORIZONS_H:
@@ -523,9 +530,45 @@ def section_d(rd: pd.DataFrame | None, store: dict | None) -> None:
             ok = r["p_holm"] < 0.05
             emit(f"| {fam} | {mu:+.4f} | {r['p_holm']:.3g} | {'H0 기각: 최선 계열보다 유의하게 나쁨' if ok else 'H0 기각 못함: 최선 계열과 구분되지 않음'} |")
         emit()
+        tie = [f_ for f_ in lvl[H].sort_values().index if f_ != best and not (
+            g[((g["A"] == f_) & (g["B"] == best)) | ((g["A"] == best) & (g["B"] == f_))]["p_holm"].iloc[0] < 0.05)]
+        emit(f"**읽는 법과 해석**: 평균차는 (그 계열 − {best}) 손실의 시각 평균이고, 양수면 그 계열이 나쁘다. "
+             f"Holm 보정 후 {best}와 구분되지 않는 계열은 {', '.join(tie) or '없음'}이다. 나머지 계열은 H0(기대 손실 같음)가 "
+             f"기각되어, 그 계열의 전형적인 모델은 {best}의 전형적인 모델보다 평균적으로 손실이 크다.")
+        emit()
+    emit("### D2b. 연구 질문 쌍: 순차(순환 딥러닝) 대 병렬 어텐션 대 파운데이션")
+    emit()
+    emit("비교 집단과 가설은 D2와 같다(H0: 두 계열의 전형적인 모델의 기대 손실이 같다, H1: 다르다). 평균차는 (앞 계열 − 뒤 계열)이고 "
+         "음수면 앞 계열이 낫다. p는 D2와 같은 구간별 전 계열 쌍 Holm 보정값이다.")
+    emit()
+    qs = [("딥러닝", "어텐션"), ("딥러닝", "파운데이션"), ("어텐션", "파운데이션")]
+    emit("| 쌍 | " + " | ".join(M.hlabel(H) for H in M.HORIZONS_H) + " |")
+    emit("| :--- | " + " | ".join([":---"] * len(M.HORIZONS_H)) + " |")
+    verdict = {}
+    for a_, b_ in qs:
+        cells = []
+        for H in M.HORIZONS_H:
+            g = pair[pair["H"] == H]
+            r = g[((g["A"] == a_) & (g["B"] == b_)) | ((g["A"] == b_) & (g["B"] == a_))]
+            if r.empty:
+                cells.append("해당 없음(계열 구성원 없음)")
+                continue
+            r = r.iloc[0]
+            mu = r["평균차(A-B)"] * (1 if r["A"] == a_ else -1)
+            win = (a_ if mu < 0 else b_) if r["p_holm"] < 0.05 else "구분 안 됨"
+            verdict[(a_, b_, H)] = win
+            cells.append(f"{mu:+.4f} (p={r['p_holm']:.2g}, {win})")
+        emit(f"| {a_} − {b_} | " + " | ".join(cells) + " |")
+    emit()
+    emit("**읽는 법과 해석**: 괄호 안 마지막 항목은 Holm 보정 유의수준 0.05에서 손실이 유의하게 작은 계열이고, 유의하지 않으면 "
+         "'구분 안 됨'이다. " + " ".join(
+             f"{a_} 대 {b_}: " + ", ".join(f"{M.hlabel(H)} {verdict.get((a_, b_, H), '해당 없음')}" for H in M.HORIZONS_H) + "."
+             for a_, b_ in qs)
+         + " 순환 딥러닝은 입력이 15분봉 96개이고 어텐션·파운데이션은 H분 블록 이력이므로, 이 차이에는 입력 표현의 차이가 섞여 있다.")
+    emit()
     emit("### D3. 계열별 MCS 포함 수(모델 단위 MCS, 26b 결과)")
     emit()
-    f = R26B27 / "26b_robust_signif_27_mcs.csv"
+    f = B26.RES / f"{B26.STEM}_mcs.csv"           # 26b 모듈이 실제로 쓰는 경로(폴더 날짜가 26b 쪽에 고정돼 있다)
     if not f.exists():
         emit("**결과 대기**: 26b(27) MCS 결과가 아직 없다.")
         emit()

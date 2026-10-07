@@ -614,6 +614,15 @@ def combine() -> None:
     print(f"[합치기 완료] 모델 {len(models)}종(naive 포함) · 행 {len(rd)} · 시드 {got}", flush=True)
 
 
+def _row_gap_note(rd: pd.DataFrame, expected: int) -> str:
+    """기대 행 수와 실제 행 수의 차이를 TTM 제외분과 그 밖의 누락으로 나눠 적는다."""
+    f = RES / f"{STEM}_excluded_ttm_unsupported_resolution.csv"
+    n_ttm = len(pd.read_csv(f)) if f.exists() else 0
+    other = expected - len(rd) - n_ttm
+    return (f"차이 {expected - len(rd)}행 중 {n_ttm}행은 TTM 4시간·12시간 제외분(아래 설명)이고, "
+            + (f"나머지 {other}행은 적합 실패 등으로 빠진 칸이다(`*_fit_failures.csv`)." if other else "그 밖에 빠진 칸은 없다."))
+
+
 def seed_mean_losses(rd: pd.DataFrame, store: dict, models: list[str]) -> tuple[pd.DataFrame, dict]:
     """시드 0~4의 칸별 손실을 평균한 cell_losses. 무작위성이 있는 모델은 시드마다 그 시드의 예측·보정계수로 손실을 구하고
     (손실의 평균이며 예측의 평균이 아니다), 나머지 모델은 시드와 무관하므로 같은 값이 평균된다. 반환: (평균 손실표, 모델별 시드 수)."""
@@ -672,7 +681,7 @@ def write_report27(elapsed_note: str = "") -> None:
     emit()
     emit(f"26c번의 평가 틀(데이터 창 2023-10-06 ~ 2026-10-05, 분할 2025-11-11, 정시 예측 시점, 5개 예측 구간, 내부검증 보정, 정지 두 부분 모형)을 "
          f"그대로 두고, 26c의 12종 + naive에 **신규 {len(new_in)}종**을 같은 조건으로 더해 비교했다. 20종목 × 5구간 × {len(models)}모델 = "
-         f"{20 * 5 * len(models)}행이 기대값이고 실제 {len(rd)}행이다.")
+         f"{20 * 5 * len(models)}행이 기대값이고 실제 {len(rd)}행이다. " + _row_gap_note(rd, 20 * 5 * len(models)))
     emit()
     emit("- **26c 결과는 다시 계산하지 않고 그대로 가져왔다.** 평가 시각과 실제값이 모든 모델에서 같은지 합치는 단계에서 대조했다.")
     emit(f"- 신규 모델 중 이번 결과에 들어온 것: {', '.join(new_in) or '없음'}. 들어오지 못한 것: {', '.join(new_out) or '없음(전부 포함)'}.")
