@@ -344,8 +344,13 @@ def section_b(st: list[dict]) -> None:
 def seed_losses(store: dict, models: list[str]) -> dict:
     """(종목, H) → 모델 → 시각별 QLIKE(시드 평균). 시드 집합은 27번과 같다."""
     out = {}
-    seeds = [s for s in X27.SEEDS_USED if s != 0 and (R27 / f"27_model_expansion_seed{s}_test_predictions.npz").exists()]
+    seeds = [s for s in X27.SEEDS_USED if s != 0]
+    miss = [s for s in seeds if not (R27 / f"27_model_expansion_seed{s}_test_predictions.npz").exists()]
+    if miss:
+        raise RuntimeError(f"[시드 완전성 게이트: 27b] 시드 {miss}의 예측 파일이 없다(RUN27_SEEDS={X27.SEEDS_USED})")
     seed_preds = {s: M._npz_to_store(R27 / f"27_model_expansion_seed{s}_test_predictions.npz") for s in seeds}
+    M.check_seed_preds(store, {s: {k: v["preds"] for k, v in sp.items()} for s, sp in seed_preds.items()},
+                       X27.STOCHASTIC_ALL, "27b")
     for key, S in store.items():
         a = S["act"].astype(float)
         d = {}
@@ -357,6 +362,8 @@ def seed_losses(store: dict, models: list[str]) -> dict:
                 p = seed_preds[s].get(key, {}).get("preds", {}).get(nm)
                 if p is not None:
                     ls.append(M.qlike_vec(a, p.astype(float)))
+            if nm in X27.STOCHASTIC_ALL and len(ls) != 1 + len(seeds):
+                raise RuntimeError(f"{key} {nm}: 시드 {len(ls)}개만 있다(기대 {1 + len(seeds)}개)")
             d[nm] = np.mean(ls, axis=0)
         out[key] = d
     return out

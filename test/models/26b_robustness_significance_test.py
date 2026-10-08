@@ -787,6 +787,16 @@ def main(argv=None) -> None:
             S["preds"].pop(nm, None)
     models = [m for m in M26.ALL_MODELS if m in set(rd["모델"])]
     tickers = sorted(rd["종목"].unique())
+    if not a.skip_seed:
+        # 시드 완전성 게이트: 시드 파일이나 무작위 모델 예측이 하나라도 빠지면 시드 견고성·시드별 MCS를 만들지 않고 멈춘다.
+        gate = getattr(M26, "check_seed_preds", None)
+        if gate is None:      # 26번 모듈에는 게이트가 없어 26c 모듈의 것을 쓴다
+            sp_ = importlib.util.spec_from_file_location("m26c_gate", ROOT / "test" / "models" / "26c_recent_twopart_test.py")
+            g_ = importlib.util.module_from_spec(sp_)
+            sp_.loader.exec_module(g_)
+            gate = g_.check_seed_preds
+        gate(store, {s: (r[1] if (r := load_seed(s)) is not None else None) for s in SEEDS[1:]},
+             tuple(m for m in STOCHASTIC if m in models), f"26b({SRC_LABEL})")
     emit(f"# 26b번: {SRC_LABEL} 결과의 견고성·구분 불가 진단·유의성 검정")
     emit()
     emit(f"입력: `{SRC.relative_to(ROOT)}`({SRC_LABEL}, {len(tickers)}종목 × {len(M26.HORIZONS_H)}구간 × {len(models)}모델, "

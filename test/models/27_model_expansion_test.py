@@ -130,6 +130,8 @@ M.LOG_TARGET_MODELS = tuple(M.LOG_TARGET_MODELS) + NEW_MODELS
 TTM_UNSUPPORTED_H = (240, 720)
 SEEDS_USED = tuple(int(x) for x in os.environ.get("RUN27_SEEDS", "0,1,2").split(","))
 STOCHASTIC_NEW = NF_MODELS + CONV_MODELS + SSM_MODELS          # 시드로 흔들리는 신규 모델(파운데이션은 zero-shot이라 학습 시드 없음)
+STOCHASTIC_26C = ("LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM", "Nystroem+Ridge", "GRU", "LSTM")   # 26b STOCHASTIC과 같다
+STOCHASTIC_ALL = STOCHASTIC_26C + STOCHASTIC_NEW               # 시드 완전성 게이트가 시드마다 요구하는 모델
 
 NF_MAX_STEPS, NF_VAL_CHECK, NF_PATIENCE = 1000, 100, 3
 NF_WINDOWS_BATCH = 256        # 모델마다 기본 배치가 달라(Autoformer 1,024 등) 계산량이 크게 갈려 모두 같은 값으로 맞춘다

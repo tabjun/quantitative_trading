@@ -1,5 +1,5 @@
 # %% [markdown]
-# # 27c번: 순환망(GRU·LSTM)에 신규 모델과 같은 블록 입력을 넣어 순차 대 병렬 구조 차이를 분리
+# # 27c번: 순환망(GRU·LSTM)에 신규 모델과 같은 블록 입력을 넣어 순차 대 병렬 비교에서 입력 차이를 통제
 #
 # 27번에서 순환 딥러닝(GRU·LSTM)이 30분~12시간에 병렬 어텐션 계열보다 유의하게 나았다(27b D2b). 그런데 두 계열은 같은
 # 15분봉 종가에서 출발해도 **모델에 넣는 모양**이 달랐다.
@@ -11,6 +11,13 @@
 #
 # 그래서 "순차 구조가 낫다"인지 "15분봉 입력·많은 표본이 낫다"인지 가를 수 없었다. 이 회차는 GRU·LSTM에 **신규 모델과 같은
 # 블록 입력·같은 블록 표본·같은 보정 구간·같은 정지 확률 π**를 주고, GRU·LSTM 자체의 학습 절차(26c)는 그대로 둔다.
+#
+# ## 통제하지 않은 것(결론의 범위, Codex 리뷰 2026-10-08)
+#
+# 이 회차가 맞춘 것은 입력·학습 표본·보정 구간·π뿐이다. 학습 절차는 각자의 것을 쓴다. 순환망은 학습률 3개 탐색·내부검증 에폭
+# 선택·전체 재적합이고, 신규 모델은 라이브러리 기본값·학습 구간 끝 15% 조기종료(그 15%는 학습에서 빠짐)이며, iTransformer·
+# S-Mamba는 블록 수익률 변수가 하나 더 있다. 따라서 같은 입력에서 남는 차이는 **구조와 학습 절차가 섞인 차이**이고, 순차
+# 구조만의 효과로 단정하지 않는다. 이 회차가 답하는 질문은 "27번의 순환 우위가 입력 차이만으로 생겼는가"이다.
 #
 # ## 바꾸지 않는 것(26c GRU·LSTM 절차)
 #
@@ -172,6 +179,16 @@ def selftest() -> None:
     assert batch_for(61_508, 61_508) == 2048 and batch_for(1266, 60_850) == 43 and batch_for(100, 60_000) == 16, "배치 규칙"
     # 블록 경계·표본 구간은 27번 자체 시험(block_masks·평가 행 정렬)을 그대로 통과해야 한다
     X.selftest()
+    M.selftest_seed_gate()
+    # _seed_mean_losses: 빈 시드 저장본이면 무작위 모델은 멈추고, 결정론 모델은 시드 0 하나로 계속한다(Codex 리뷰 2026-10-08 재현)
+    rng = np.random.default_rng(0)
+    b = {("A", 15): {"act": rng.random(8) + 0.1, "preds": {"GRU": rng.random(8) + 0.1, "TimesFM": rng.random(8) + 0.1}}}
+    try:
+        _seed_mean_losses(b, [{}], ["GRU"], ("GRU",))
+        raise AssertionError("빈 시드 저장본에서 무작위 모델의 1시드 평균을 통과시켰다")
+    except RuntimeError:
+        pass
+    assert _seed_mean_losses(b, [{}], ["TimesFM"], ("GRU",))[("A", 15)]["TimesFM"][1] == 1
     print("[selftest 27c] 모든 시험 통과", flush=True)
 
 
@@ -262,8 +279,9 @@ def emit(t: str = "") -> None:
     _LINES.append(t)
 
 
-def _seed_mean_losses(base: dict, seed_stores: list[dict], models: list[str]) -> dict:
-    """(종목, H) → 모델 → 시각별 QLIKE 시드 평균. base는 시드 0(실제값·시각 포함), seed_stores는 시드 1~4의 예측."""
+def _seed_mean_losses(base: dict, seed_stores: list[dict], models: list[str], stochastic: tuple = ()) -> dict:
+    """(종목, H) → 모델 → 시각별 QLIKE 시드 평균. base는 시드 0(실제값·시각 포함), seed_stores는 시드 1~4의 예측.
+    stochastic에 든 모델은 모든 시드 예측이 있어야 하고, 빠지면 시드 수가 줄어든 평균이 되므로 멈춘다(결정론 모델만 시드 0 하나 허용)."""
     out = {}
     for key, S in base.items():
         a = S["act"].astype(float)
@@ -276,6 +294,8 @@ def _seed_mean_losses(base: dict, seed_stores: list[dict], models: list[str]) ->
                 p = st.get(key, {}).get("preds", {}).get(nm)
                 if p is not None:
                     ls.append(M.qlike_vec(a, p.astype(float)))
+            if nm in stochastic and len(ls) != 1 + len(seed_stores):
+                raise RuntimeError(f"{key} {nm}: 시드 {len(ls)}개만 있다(기대 {1 + len(seed_stores)}개)")
             d[nm] = (np.mean(ls, axis=0), len(ls))
         out[key] = d
     return out
@@ -300,20 +320,28 @@ def write_report() -> None:
     B26 = _load("b26_for27c", ROOT / "test" / "models" / "26b_robustness_significance_test.py")
     r27 = X.RES
     base = M._npz_to_store(r27 / "27_model_expansion_test_predictions.npz")
-    s27 = [M._npz_to_store(r27 / f"27_model_expansion_seed{s}_test_predictions.npz") for s in SEEDS[1:]
-           if (r27 / f"27_model_expansion_seed{s}_test_predictions.npz").exists()]
-    blk = {s: M._npz_to_store(RES / f"{STEM}_seed{s}_test_predictions.npz") for s in SEEDS
-           if (RES / f"{STEM}_seed{s}_test_predictions.npz").exists()}
-    if 0 not in blk:
-        raise RuntimeError("27c 시드 0 산출물이 없다")
-    # 평가 시각·실제값이 27번과 같은지 대조
+    # 시드 완전성: 27번·27c 모두 SEEDS 전부가 있어야 한다. 일부만 있으면 시드 수가 다른 집단끼리 비교하게 되므로 멈춘다.
+    miss = [f.name for s in SEEDS[1:] for f in [r27 / f"27_model_expansion_seed{s}_test_predictions.npz"] if not f.exists()]
+    miss += [f.name for s in SEEDS for f in [RES / f"{STEM}_seed{s}_test_predictions.npz"] if not f.exists()]
+    if miss:
+        raise RuntimeError(f"[시드 완전성 게이트: 27c] 시드 예측 파일 없음: {miss}")
+    s27 = [M._npz_to_store(r27 / f"27_model_expansion_seed{s}_test_predictions.npz") for s in SEEDS[1:]]
+    blk = {s: M._npz_to_store(RES / f"{STEM}_seed{s}_test_predictions.npz") for s in SEEDS}
+    # 평가 시각·실제값이 27번과 같은지 대조(27c 시드 0이 27번의 모든 칸을 가져야 한다)
+    if set(blk[0]) != set(base):
+        raise RuntimeError(f"[시드 완전성 게이트: 27c] 시드 0 칸 불일치: 27c에만 {sorted(set(blk[0]) - set(base))}, "
+                           f"27번에만 {sorted(set(base) - set(blk[0]))}")
     pi_diff = 0.0
     for key, S in blk[0].items():
         if not (np.array_equal(S["T"], base[key]["T"]) and np.allclose(S["act"], base[key]["act"])):
             raise AssertionError(f"{key}: 27c와 27번의 평가 시각·실제값이 다르다")
         pi_diff = max(pi_diff, float(np.abs(S["pi"].astype(float) - base[key]["pi"].astype(float)).max()))
         base[key]["preds"].update(S["preds"])
-    blk_rest = [blk[s] for s in SEEDS[1:] if s in blk]
+    blk_rest = [blk[s] for s in SEEDS[1:]]
+    stoch = X.STOCHASTIC_ALL + tuple(BLOCK_MODELS)
+    M.check_seed_preds(base, {s: {k: {**s27[i].get(k, {}).get("preds", {}), **blk[s].get(k, {}).get("preds", {})}
+                                  for k in base} for i, s in enumerate(SEEDS[1:])},
+                       stoch, "27c", seed_aux={s: blk[s] for s in SEEDS[1:]})
     seeds_blk = sorted(blk)
     rows_b = pd.concat([pd.read_csv(RES / f"{STEM}_seed{s}_model_comparison.csv").assign(시드=s) for s in seeds_blk],
                        ignore_index=True)
@@ -321,8 +349,8 @@ def write_report() -> None:
     meta_b = pd.concat([pd.read_csv(RES / f"{STEM}_seed{s}_meta.csv") for s in seeds_blk], ignore_index=True)
     rnn, rnnb = ("GRU", "LSTM"), tuple(BLOCK_MODELS)
     models27 = sorted({m_ for S in base.values() for m_ in S["preds"]} - set(rnnb) - {"naive"})
-    L = _seed_mean_losses(base, s27, models27)
-    Lb = _seed_mean_losses(base, blk_rest, list(rnnb))
+    L = _seed_mean_losses(base, s27, models27, X.STOCHASTIC_ALL)
+    Lb = _seed_mean_losses(base, blk_rest, list(rnnb), rnnb)
     for key in L:
         L[key].update(Lb.get(key, {}))
     HS = M.HORIZONS_H
@@ -332,7 +360,8 @@ def write_report() -> None:
     emit()
     emit("27번에서 순환 딥러닝(GRU·LSTM)이 30분~12시간에 병렬 어텐션 계열보다 유의하게 나았다(27b D2b). 두 계열은 같은 15분봉 종가에서 "
          "출발하지만 모델에 넣는 모양과 학습 표본이 달랐다. 이 회차는 GRU·LSTM에 신규 모델과 같은 블록 입력·표본을 주고 다시 비교해, "
-         "순환망이 이긴 이유가 **구조**인지 **입력·표본**인지 가른다.")
+         "순환망의 우위가 **입력·표본 차이만으로** 생긴 것인지 확인한다. 학습 절차(아래 표의 학습률·에폭 선택 행)와 변수 수는 "
+         "맞추지 않았으므로, 같은 입력에서 남는 차이는 **구조와 학습 절차가 섞인 차이**이고 순차 구조만의 효과로 단정하지 않는다.")
     emit()
     emit("| 항목 | 26c GRU·LSTM(27번에 쓰인 값) | 블록 입력 GRU·LSTM(이 회차) | 27번 신규 신경망 |")
     emit("| :--- | :--- | :--- | :--- |")
@@ -408,15 +437,15 @@ def write_report() -> None:
          "유리했던 것이고, 비슷하면 입력이 결과를 가르지 않았다는 뜻이다. 통계적 판정은 3절의 검정으로 한다.")
     emit()
     # ---- 3. 검정
-    emit("## 3. 검정: 구조 효과와 입력 효과")
+    emit("## 3. 검정: 입력을 맞춘 뒤 남는 차이와 입력 효과")
     emit()
     emit("**검정 설계**")
     emit()
     emit("| 검정 | 비교 집단(A − B) | H0 | H1 | H0 기각의 의미 |")
     emit("| :--- | :--- | :--- | :--- | :--- |")
-    emit("| S1 구조 효과(같은 입력) | 순환(블록 입력: GRU-block·LSTM-block) − 병렬 어텐션(PatchTST·iTransformer·Autoformer·TimeXer) | 두 계열의 기대 손실이 같다 | 다르다 | 입력·표본을 맞춰도 차이가 남는다 → 구조(순차 대 병렬) 차이다 |")
-    emit("| S2 구조 효과(합성곱) | 순환(블록 입력) − 병렬 합성곱(TCN·TimesNet·ModernTCN) | 같다 | 다르다 | 같은 입력에서 순환과 합성곱 구조가 다르다 |")
-    emit("| S3 구조 효과(상태공간) | 순환(블록 입력) − S-Mamba | 같다 | 다르다 | 같은 입력에서 순환과 선택적 상태공간이 다르다 |")
+    emit("| S1 같은 입력(어텐션) | 순환(블록 입력: GRU-block·LSTM-block) − 병렬 어텐션(PatchTST·iTransformer·Autoformer·TimeXer) | 두 계열의 기대 손실이 같다 | 다르다 | 입력·표본을 맞춰도 차이가 남는다 → 27번 차이는 입력 차이만으로 설명되지 않는다(남는 차이는 구조와 학습 절차가 섞여 있다) |")
+    emit("| S2 같은 입력(합성곱) | 순환(블록 입력) − 병렬 합성곱(TCN·TimesNet·ModernTCN) | 같다 | 다르다 | 같은 입력에서 순환 모델군과 합성곱 모델군(각자의 학습 절차)의 손실이 다르다 |")
+    emit("| S3 같은 입력(상태공간) | 순환(블록 입력) − S-Mamba | 같다 | 다르다 | 같은 입력에서 순환 모델군과 S-Mamba(각자의 학습 절차)의 손실이 다르다 |")
     emit("| I1 입력 효과(같은 구조) | 순환(15분봉 입력: GRU·LSTM) − 순환(블록 입력) | 같다 | 다르다 | 같은 구조에서 입력·표본만 바꿔도 손실이 달라진다 → 27번 차이에 입력 효과가 섞여 있었다 |")
     emit("| R1 참고(27b 재현) | 순환(15분봉 입력) − 병렬 어텐션 | 같다 | 다르다 | 27b D2b의 결과(입력이 다른 상태의 비교) |")
     emit("| R2 참고 | 순환(블록 입력) − 파운데이션(zero-shot) | 같다 | 다르다 | 입력 길이가 다르다(파운데이션은 512블록 이상)는 점이 남은 비교 |")
@@ -478,7 +507,7 @@ def write_report() -> None:
         emit(f"| {tid} | {A} − {Bn} | " + " | ".join(cells) + " |")
     emit()
     # ---- 4. 구간별 판정
-    emit("## 4. 구간별 판정: 27번의 '순환 딥러닝 > 어텐션'은 구조 때문인가")
+    emit("## 4. 구간별 판정: 27번의 '순환 딥러닝 > 어텐션'은 입력 차이 때문인가")
     emit()
     emit("| 구간 | R1 27번 비교(입력 다름) | S1 같은 입력(계열 평균) | M3 같은 입력(GRU 대 PatchTST) | I1 입력 효과 | 판정 |")
     emit("| :--- | :--- | :--- | :--- | :--- | :--- |")
@@ -489,7 +518,7 @@ def write_report() -> None:
         r1_rnn = r1.startswith("순환")
         i1_sig = i1 != "구분 안 됨"
         if r1_rnn and s1_rnn:
-            v = ("구조 효과: 입력·표본을 맞춰도 순환 계열이 낫다" + (" (입력 효과도 함께 있음)" if i1_sig else "")
+            v = ("입력 차이로 설명되지 않음: 입력·표본을 맞춰도 순환 계열이 낫다" + (" (입력 효과도 함께 있음)" if i1_sig else "")
                  + ("" if m3 != "구분 안 됨" else ". 단 최선끼리(GRU 대 PatchTST)는 구분되지 않는다"))
         elif r1_rnn and not s1_rnn:
             v = "입력·표본 효과: 맞추면 순환의 우위가 사라진다" if i1_sig else "판정 보류: 같은 입력에서 우위가 사라졌지만 입력 효과도 유의하지 않다"
@@ -500,7 +529,9 @@ def write_report() -> None:
         emit(f"| {M.hlabel(H)} | {r1} | {s1} | {m3} | {i1} | {v} |")
     emit()
     emit("**읽는 법**: R1이 27번의 결론이고, S1이 입력·표본을 맞춘 뒤의 같은 비교다. I1은 GRU·LSTM의 입력만 바꿨을 때의 차이다. "
-         "R1과 S1이 같은 방향으로 유의하면 순환 구조 자체가 낫다는 근거가 되고(계열 평균, 곧 전형적인 모델끼리의 비교), M3는 각 계열의 대표 모델끼리 같은 입력에서 비교한 결과다. 계열 평균의 우위가 약한 구성원(예: iTransformer·Autoformer) 때문이면 M3가 구분되지 않는다. R1은 유의한데 S1이 구분되지 않고 I1이 유의하면 27번 차이는 "
+         "R1과 S1이 같은 방향으로 유의하면 27번의 순환 우위가 입력 차이만으로 생긴 것은 아니라는 근거가 된다(계열 평균, 곧 전형적인 모델끼리의 비교). "
+         "다만 학습 절차(순환망은 학습률 3개 탐색·에폭 선택·전체 재적합, 신규 모델은 라이브러리 기본값·학습 구간 끝 15% 조기종료)와 변수 수"
+         "(iTransformer·S-Mamba는 2변수)는 맞추지 않았으므로 남는 차이를 순차 구조만의 효과로 단정할 수 없다. M3는 각 계열의 대표 모델끼리 같은 입력에서 비교한 결과다. 계열 평균의 우위가 약한 구성원(예: iTransformer·Autoformer) 때문이면 M3가 구분되지 않는다. R1은 유의한데 S1이 구분되지 않고 I1이 유의하면 27번 차이는 "
          "입력·표본에서 왔다고 본다. H0를 기각하지 못한 것은 같다는 증명이 아니라 차이의 증거가 부족하다는 뜻이다.")
     emit()
     # ---- 5. 시드 변동
@@ -528,6 +559,8 @@ def write_report() -> None:
             for nm, p0 in S["preds"].items():
                 src = blk[s] if nm in rnnb else st27.get(s, {})
                 p_ = src.get(key, {}).get("preds", {}).get(nm) if s else None
+                if s and p_ is None and nm in stoch:
+                    raise RuntimeError(f"시드 {s} {key} {nm}: 무작위 모델의 시드 예측이 없다")
                 d[nm] = (M.qlike_vec(a, (p0 if p_ is None else p_).astype(float)), 1)
             Ls[key] = d
         for H in HS:
@@ -605,7 +638,7 @@ def write_report() -> None:
     emit(f"![입력별 격차]({os.path.relpath(fp, RES)})")
     emit()
     emit("**읽는 법**: 가로축은 예측 구간, 세로축은 2절 표의 격차다(낮을수록 좋음, 점선 아래는 A등급). 같은 색의 진한 선이 블록 입력, "
-         "연한 선이 15분봉 입력이다. 두 선의 간격이 입력 효과이고, 진한 선과 PatchTST 선의 간격이 같은 입력에서의 구조 차이다.")
+         "연한 선이 15분봉 입력이다. 두 선의 간격이 입력 효과이고, 진한 선과 PatchTST 선의 간격이 같은 입력에서 남는 차이(구조와 학습 절차가 섞인 차이)다.")
     emit()
     (RES / f"{STEM}_report.md").write_text("\n".join(_LINES) + "\n", encoding="utf-8")
     print(f"[보고서] {RES / f'{STEM}_report.md'}", flush=True)

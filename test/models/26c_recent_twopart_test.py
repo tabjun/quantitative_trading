@@ -1846,6 +1846,81 @@ def _npz_to_store(path: Path) -> dict:
     return store
 
 
+def check_seed_preds(base: dict, seed_preds: dict, stochastic: tuple, label: str, seed_aux: dict | None = None) -> None:
+    """시드 완전성 게이트: 시드 평균·시드별 검정 전에 무작위 모델의 시드 예측이 빠짐없이 있는지 확인하고, 하나라도 빠지면 멈춘다.
+
+    base: 시드 0 저장본((종목, H) → {"act", "preds", ...}). seed_preds: 시드 → (종목, H) → 모델 → 예측(None이면 그 시드 파일 없음).
+    stochastic: 시드마다 예측이 달라야 하는 모델. 시드 0의 모든 칸에도 있어야 한다(공식 제외 칸이 있는 TTM은 결정론 모델이라 해당 없음).
+    seed_aux: 시드 → (종목, H) → {"T", "act"}. 주면 평가 시각·실제값이 시드 0과 같은지도 대조한다.
+    결정론 모델(통계·커널·파운데이션)은 시드와 무관해 시드 저장본에 없어도 된다. 그 외 모델이 빠지면 조용히 시드 수가 줄어든
+    평균으로 비교하게 되므로(Codex 리뷰 2026-10-08) 보고서를 만들지 않고 멈춘다.
+    """
+    problems = [f"시드 0 {key} {nm}: 기준 예측 없음" for key, S in base.items() for nm in stochastic if nm not in S["preds"]]
+    for s, sp in seed_preds.items():
+        if sp is None:
+            problems.append(f"시드 {s}: 예측 파일 없음")
+            continue
+        for key, S in base.items():
+            n = len(S["act"])
+            got = sp.get(key)
+            if got is None:
+                problems.append(f"시드 {s} {key}: 칸 없음")
+                continue
+            for nm in stochastic:
+                pr = got.get(nm)
+                if pr is None:
+                    problems.append(f"시드 {s} {key} {nm}: 예측 없음")
+                elif len(pr) != n:
+                    problems.append(f"시드 {s} {key} {nm}: 길이 {len(pr)} ≠ {n}")
+                elif not np.all(np.isfinite(np.asarray(pr, dtype=float))):
+                    problems.append(f"시드 {s} {key} {nm}: 비유한 값")
+            ax = (seed_aux or {}).get(s, {}).get(key)
+            if ax is not None:
+                if "T" in ax and "T" in S and not np.array_equal(ax["T"], S["T"]):
+                    problems.append(f"시드 {s} {key}: 평가 시각이 시드 0과 다름")
+                if "act" in ax and not np.allclose(np.asarray(ax["act"], float), np.asarray(S["act"], float)):
+                    problems.append(f"시드 {s} {key}: 실제값이 시드 0과 다름")
+    if problems:
+        raise RuntimeError(f"[시드 완전성 게이트: {label}] {len(problems)}건 — " + "; ".join(problems[:12])
+                           + (" …" if len(problems) > 12 else ""))
+    print(f"[시드 완전성 게이트: {label}] 통과(시드 {sorted(seed_preds)}, 무작위 모델 {len(stochastic)}종, 칸 {len(base)}개)",
+          flush=True)
+
+
+def selftest_seed_gate() -> None:
+    """check_seed_preds synthetic 검사: 완전한 입력은 통과하고, 빠짐·길이·비유한·기준 누락·시각 불일치는 멈춰야 한다."""
+    import copy
+    rng = np.random.default_rng(0)
+    T = np.arange(10).astype("datetime64[h]")
+    base = {(tk, H): {"act": rng.random(10), "T": T, "preds": {"GRU": rng.random(10), "GARCH-t": rng.random(10)}}
+            for tk in ("A", "B") for H in (15, 60)}
+    good = {s: {k: {"GRU": rng.random(10)} for k in base} for s in (1, 2)}     # 결정론 GARCH-t는 시드 저장본에 없어도 된다
+    check_seed_preds(base, good, ("GRU",), "selftest")
+
+    def must_fail(sp, why, b=base, aux=None):
+        try:
+            check_seed_preds(b, sp, ("GRU",), "selftest", seed_aux=aux)
+        except RuntimeError:
+            return
+        raise AssertionError(f"시드 게이트가 {why}을(를) 통과시켰다")
+
+    bad = copy.deepcopy(good); bad[2] = None
+    must_fail(bad, "시드 파일 없음")
+    bad = copy.deepcopy(good); bad[2] = {}
+    must_fail(bad, "빈 시드 저장본")
+    bad = copy.deepcopy(good); del bad[1][("A", 15)]["GRU"]
+    must_fail(bad, "무작위 모델 예측 없음")
+    bad = copy.deepcopy(good); bad[1][("B", 60)]["GRU"] = bad[1][("B", 60)]["GRU"][:9]
+    must_fail(bad, "길이 불일치")
+    bad = copy.deepcopy(good); bad[2][("A", 60)]["GRU"][3] = np.nan
+    must_fail(bad, "NaN 예측")
+    b2 = copy.deepcopy(base); del b2[("B", 15)]["preds"]["GRU"]
+    must_fail(good, "시드 0 기준 예측 없음", b=b2)
+    must_fail(good, "평가 시각 불일치", aux={1: {("A", 15): {"T": T + 1, "act": base[("A", 15)]["act"]}}})
+    must_fail(good, "실제값 불일치", aux={1: {("A", 15): {"T": T, "act": base[("A", 15)]["act"] + 1}}})
+    print("[selftest seed_gate] 모든 시험 통과", flush=True)
+
+
 def load_saved(stem: str = STEM) -> tuple[pd.DataFrame, dict, pd.DataFrame, dict]:
     rd = pd.read_csv(RES / f"{stem}_model_comparison.csv")
     store = _npz_to_store(RES / f"{stem}_test_predictions.npz")
