@@ -495,32 +495,64 @@ def fig_regime_lines(rg: pd.DataFrame) -> Path:
     return p
 
 
+POSTER_COMPARISONS = (  # (비교 이름, 패널 제목)
+    ("순환 신경망 − 병렬(딥러닝)", "순환 신경망(GRU·LSTM) 대 병렬 딥러닝(어텐션·합성곱·파운데이션 15종)"),
+    ("순차 − 병렬(특징 기반)", "순차 5종(GARCH 3종·GRU·LSTM) 대 병렬 특징 기반(트리·커널 7종)"),
+)
+
+
 def fig_seqpar_lines(t: pd.DataFrame) -> Path:
-    """그림 2의 선 그래프판: 비교마다 국면 순서로 묶음 손실차, 선은 예측 구간."""
-    hcol = dict(zip(M.HORIZONS_H, H_LINE_COLORS))
-    fig, axes = plt.subplots(1, len(COMPARISONS), figsize=(19, 5.8), sharey=True)
+    """포스터용 선 그래프: 두 핵심 비교만, 위 = 순차 쪽이 낫다, 선 끝에 예측 구간 이름을 직접 적는다."""
+    hcol = dict(zip(M.HORIZONS_H, ["#c9bdf0", "#9b86dc", "#6f55c4", "#4a3aa7", "#231a5c"]))
+    fig, axes = plt.subplots(1, len(POSTER_COMPARISONS), figsize=(16, 6.6), sharey=True)
     x = np.arange(len(SCOPES) - 1)
-    for ax, (name, _, _) in zip(axes, COMPARISONS):
+    vals = -t[t["국면"] != "전체"]["평균차"]
+    lo, hi = float(vals.min()) - 0.02, float(vals.max()) + 0.02
+    for ax, (name, title) in zip(axes, POSTER_COMPARISONS):
+        ax.axhspan(0, hi, color=GROUP_COLOR["순차"], alpha=0.07, zorder=0)
+        ax.axhspan(lo, 0, color=GROUP_COLOR["병렬(특징 기반)"], alpha=0.07, zorder=0)
+        ax.text(-0.35, hi - 0.006, "▲ 순차 쪽이 낫다", color=GROUP_COLOR["순차"], fontsize=11.5, fontweight="bold", va="top")
+        ax.text(-0.35, lo + 0.006, "▼ 병렬 쪽이 낫다", color=GROUP_COLOR["병렬(특징 기반)"], fontsize=11.5, fontweight="bold", va="bottom")
         g = t[t["비교"] == name]
+        ends = []
         for H in M.HORIZONS_H:
             gh = g[g["H"] == H].set_index("국면").loc[list(SCOPES[1:])]
-            ax.plot(x, gh["평균차"], color=hcol[H], lw=2.2, zorder=2)
-            sig = gh["p_holm"] < ALPHA
-            ax.scatter(x, gh["평균차"], s=60, zorder=3, color=[hcol[H] if v else "white" for v in sig],
-                       edgecolor=hcol[H], linewidth=2)
+            y = -gh["평균차"].to_numpy()
+            ax.plot(x, y, color=hcol[H], lw=2.4, zorder=2)
+            sig = (gh["p_holm"] < ALPHA).to_numpy()
+            ax.scatter(x, y, s=64, zorder=3, color=[hcol[H] if v else "white" for v in sig], edgecolor=hcol[H], linewidth=2)
+            ends.append([y[-1], M.hlabel(H), hcol[H]])
+        ends.sort(key=lambda e: e[0])
+        gap = (hi - lo) * 0.04
+        clusters = [[ends[0] + [ends[0][0]]]]               # 선 끝 이름이 겹치는 묶음은 원래 위치의 평균을 중심으로 위아래로 편다
+        for e in ends[1:]:
+            last = clusters[-1]
+            if e[0] - last[-1][0] < gap:
+                last.append(e + [e[0]])
+            else:
+                clusters.append([e + [e[0]]])
+        for cl in clusters:
+            c0 = np.mean([e[3] for e in cl]) - gap * (len(cl) - 1) / 2
+            for k, e in enumerate(cl):
+                e[0] = c0 + gap * k
+        ends = [e for cl in clusters for e in cl]
+        for yv, lab, c, _ in ends:
+            ax.text(x[-1] + 0.12, yv, lab, color=c, fontsize=11, fontweight="bold", va="center")
         ax.axhline(0, color=MUTED, lw=1.2)
-        ax.set_xticks(x, ["Q1\n잔잔", "Q2", "Q3", "Q4", "Q5\n요동"])
-        ax.set_title(name, fontsize=12, loc="left", color=INK)
+        ax.set_xlim(-0.4, len(x) - 1 + 0.75)
+        ax.set_ylim(lo, hi)
+        ax.set_xticks(x, ["Q1\n가장 잔잔", "Q2", "Q3", "Q4", "Q5\n가장 요동"], fontsize=11)
+        ax.set_title(title, fontsize=12.5, loc="left", color=INK)
         ax.grid(axis="y", color=GRID)
         for s_ in ("top", "right"):
             ax.spines[s_].set_visible(False)
-    fig.supylabel("묶음 평균 QLIKE 차(순차 쪽 − 병렬 쪽), 0 아래 = 순차 쪽이 낫다", fontsize=11.5, x=0.0)
-    handles = [plt.Line2D([], [], color=hcol[H], lw=2.2, marker="o", markersize=8, label=M.hlabel(H)) for H in M.HORIZONS_H]
-    handles += [plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=8, label="채운 점 = Holm p < 0.05"),
-                plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=8, markerfacecolor="white", label="빈 점 = 구분 안 됨")]
-    fig.legend(handles=handles, loc="lower center", ncol=7, frameon=False, fontsize=10.5, bbox_to_anchor=(0.5, -0.02))
-    fig.suptitle("순차 대 병렬 묶음 손실차의 국면별 변화(시드 5개 평균, 비교마다 30칸 Holm)", fontsize=13.5, x=0.01, ha="left", color=INK)
-    fig.tight_layout(rect=(0, 0.07, 1, 0.94))
+    axes[0].set_ylabel("병렬 묶음 손실 − 순차 묶음 손실(QLIKE)\n0보다 위 = 순차 묶음이 그만큼 손실이 작다", fontsize=11)
+    handles = [plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=9, label="채운 점 = 차이가 유의함(Holm p < 0.05)"),
+               plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=9, markerfacecolor="white", label="빈 점 = 구분 안 됨")]
+    fig.legend(handles=handles, loc="lower center", ncol=2, frameon=False, fontsize=11, bbox_to_anchor=(0.5, -0.01))
+    fig.suptitle("변동성 국면별 순차 대 병렬 묶음 비교(묶음 구성원 손실의 단순 평균, 시드 5개 평균, 선 = 예측 구간)",
+                 fontsize=13.5, x=0.01, ha="left", color=INK)
+    fig.tight_layout(rect=(0, 0.06, 1, 0.94))
     p = IMG / f"{STEM}_fig2b_seqpar_lines.png"
     fig.savefig(p, dpi=160, bbox_inches="tight")
     plt.close(fig)
@@ -763,8 +795,10 @@ def write_report(ns: pd.DataFrame, rg: pd.DataFrame, sd: pd.DataFrame, t: pd.Dat
     emit()
     emit(f"![순차 대 병렬 선 그래프]({rel(figs['seqpar_lines'])})")
     emit()
-    emit("**선 그래프판 읽는 법**: 위 표 그림과 같은 값이다. 비교마다 가로축은 국면(Q1 잔잔 → Q5 요동), 선은 예측 구간이고, 세로축은 묶음 평균 손실차(순차 쪽 − "
-         "병렬 쪽)다. 0 아래면 순차 쪽이 낫다. 채운 점은 Holm 보정 후 유의, 빈 점은 구분 안 됨이다. 전체 기간 값은 위 표 그림에 있다.")
+    emit("**선 그래프판 읽는 법(포스터용)**: 위 표 그림의 네 비교 중 핵심 두 개(순환 신경망 대 병렬 딥러닝, 순차 대 병렬 특징 기반)만 그렸다. 가로축은 "
+         "국면(Q1 가장 잔잔 → Q5 가장 요동), 선 하나는 예측 구간 하나(선 끝에 이름)다. 세로축은 표 그림의 부호를 뒤집은 값(병렬 묶음 손실 − 순차 묶음 손실)이라 "
+         "0보다 위(파란 바탕)면 순차 묶음이 낫고, 아래(주황 바탕)면 병렬 묶음이 낫다. 채운 점은 Holm 보정 후 유의, 빈 점은 구분 안 됨이다. 전체 기간 값과 "
+         "나머지 두 비교는 위 표 그림에 있다.")
     emit()
     emit("**읽는 법**: 네 비교마다 행은 범위(전체 기간, 국면 Q1~Q5), 열은 예측 구간이다. 숫자는 묶음 평균 QLIKE 차(A − B)로 음수면 순차 쪽이 낫다. "
          "파랑 = 순차가 유의하게 낫다, 주황 = 병렬이 유의하게 낫다, 회색 = 구분되지 않는다(Holm p ≥ 0.05). \"시드 k/5\"는 시드마다 다시 검정해 "
