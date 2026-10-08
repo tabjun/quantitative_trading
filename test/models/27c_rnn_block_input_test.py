@@ -512,8 +512,68 @@ def write_report() -> None:
     for m_ in rnnb:
         emit(f"| {m_} | " + " | ".join(f"{sd.loc[H, m_]:.4f}" for H in HS) + " |")
     emit()
-    emit(f"**읽는 법**: 종목·구간마다 시드 {len(seeds_blk)}개의 QLIKE 표준편차를 구해 구간별 중앙값을 보였다. 0.01(27번 동률 폭)보다 작으면 "
-         "시드가 위 판정을 바꾸지 않는다.")
+    emit(f"**읽는 법**: 종목·구간마다 시드 {len(seeds_blk)}개의 QLIKE 표준편차를 구해 구간별 중앙값을 보였다. 0.01(27번 동률 폭)보다 크면 "
+         "시드 하나만으로는 판정이 흔들릴 수 있으므로, 아래 표에서 시드마다 따로 검정해 판정이 유지되는지 확인한다.")
+    emit()
+    # 시드별 판정: 시드 s 하나의 예측만으로 같은 검정을 다시 한다. 27번 시드 s 저장본에 없는 모델은 결정론 모델
+    # (통계·커널·파운데이션, 시드와 무관)이라 시드 0 예측을 그대로 쓴다.
+    st27 = {0: {}, **{s: st for s, st in zip([s for s in SEEDS[1:] if (r27 / f"27_model_expansion_seed{s}_test_predictions.npz").exists()], s27)}}
+    key_tests = [t for t in tests if t[0] in ("R1", "S1", "I1")] + [t for t in mtests if t[0] in ("M1", "M3")]
+    per = []
+    for s in seeds_blk:
+        Ls = {}
+        for key, S in base.items():
+            a = S["act"].astype(float)
+            d = {}
+            for nm, p0 in S["preds"].items():
+                src = blk[s] if nm in rnnb else st27.get(s, {})
+                p_ = src.get(key, {}).get("preds", {}).get(nm) if s else None
+                d[nm] = (M.qlike_vec(a, (p0 if p_ is None else p_).astype(float)), 1)
+            Ls[key] = d
+        for H in HS:
+            gs_ = pd.DataFrame({g: _group_series(Ls, base, H, mem) for g, mem in groups.items()}).dropna()
+            ms_ = pd.DataFrame({m_: _group_series(Ls, base, H, (m_,)) for m_ in ("GRU", "LSTM", "GRU-block", "LSTM-block", "PatchTST")}).dropna()
+            part = []
+            for tid, A, Bn in key_tests:
+                fr = ms_ if tid.startswith("M") else gs_
+                mu, se, pv = B26.hac_mean_test((fr[A] - fr[Bn]).to_numpy())
+                part.append({"시드": s, "H": H, "검정": tid, "A": A, "B": Bn, "평균차(A-B)": mu, "p": pv})
+            # 본 검정과 같은 Holm 묶음을 맞추려고 계열 3개·모델 2개를 따로 보정한다(본 검정보다 묶음이 작아 덜 보수적이다)
+            for grp in (("R1", "S1", "I1"), ("M1", "M3")):
+                idx = [i for i, r in enumerate(part) if r["검정"] in grp]
+                for i, q in zip(idx, B26.holm(np.array([part[i]["p"] for i in idx]))):
+                    part[i]["p_holm"] = q
+            per.extend(part)
+    P = pd.DataFrame(per)
+    P["판정"] = P.apply(verdict, axis=1)
+    P.to_csv(RES / f"{STEM}_per_seed_verdicts.csv", index=False)
+    emit(f"### 5-1. 시드별 판정 일치(시드 {len(seeds_blk)}개 중 시드 평균 판정과 같은 시드 수)")
+    emit()
+    emit("| 검정 | 비교(A − B) | " + " | ".join(M.hlabel(H) for H in HS) + " |")
+    emit("| :--- | :--- | " + " | ".join([":---"] * len(HS)) + " |")
+    for tid, A, Bn in key_tests:
+        cells = []
+        for H in HS:
+            ref = verdict(T[(T["H"] == H) & (T["검정"] == tid)].iloc[0])
+            vs = P[(P["H"] == H) & (P["검정"] == tid)]["판정"]
+            cells.append(f"{int((vs == ref).sum())}/{len(vs)} ({ref})")
+        emit(f"| {tid} | {A} − {Bn} | " + " | ".join(cells) + " |")
+    emit()
+    emit("**읽는 법**: 시드 하나의 예측만으로 같은 HAC 검정을 다시 하고(Holm은 R1·S1·I1 3개, M1·M3 2개 묶음), 그 판정이 괄호 안의 "
+         "시드 평균 판정과 같은 시드 수를 셌다. 시드 하나는 시드 평균보다 잡음이 커서 '구분 안 됨'이 늘어나는 것이 정상이다. "
+         "결정론 모델(통계·커널·파운데이션)은 시드와 무관해 모든 시드에서 같은 예측을 쓴다. 시드별 판정 전체는 "
+         f"`{STEM}_per_seed_verdicts.csv`에 있다.")
+    emit()
+    # 반대 방향으로 유의한 시드: 시드 평균이 'A 우세'(또는 구분 안 됨)인데 어떤 시드는 반대쪽이 유의하게 나은 칸
+    flips = []
+    for tid, A, Bn in key_tests:
+        for H in HS:
+            ref = verdict(T[(T["H"] == H) & (T["검정"] == tid)].iloc[0])
+            sub = P[(P["H"] == H) & (P["검정"] == tid) & (P["판정"] != "구분 안 됨") & (P["판정"] != ref)]
+            if len(sub):
+                flips.append(f"{tid} {M.hlabel(H)}(시드 평균 '{ref}', 시드 {'·'.join(map(str, sub['시드']))}에서 '{sub['판정'].iloc[0]}')")
+    emit("**반대 방향으로 유의한 시드**: " + ("; ".join(flips) + "." if flips else
+         "해당 없음(어느 칸에서도 시드 평균 판정과 반대 방향으로 유의한 시드가 없다)."))
     emit()
     # ---- 그림
     fig, ax = plt.subplots(figsize=(7.2, 4.0))
