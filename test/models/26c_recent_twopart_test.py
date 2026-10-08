@@ -61,7 +61,7 @@ matplotlib.rcParams["axes.unicode_minus"] = False
 
 def _project_root(start: Path) -> Path:
     for p in [start, *start.parents]:
-        if (p / "engine").is_dir() and (p / "AGENTS.md").exists():
+        if (p / "engine").is_dir() and (p / "test" / "models").is_dir():
             return p
     return start
 

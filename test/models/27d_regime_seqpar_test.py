@@ -42,9 +42,9 @@ matplotlib.rcParams["axes.unicode_minus"] = False
 
 def _project_root(start: Path) -> Path:
     for p in [start, *start.parents]:
-        if (p / "engine").is_dir() and (p / "AGENTS.md").exists():
+        if (p / "engine").is_dir() and (p / "test" / "models").is_dir():
             return p
-    return start
+    raise RuntimeError(f"프로젝트 루트(engine/·test/models/)를 찾지 못했다: {start}")
 
 
 ROOT = _project_root(Path(__file__).resolve())
@@ -88,10 +88,32 @@ COMPARISONS = (  # (이름, A 구성원, B 구성원). 손실차 = A − B, 음�
 SCOPES = ("전체", "Q1", "Q2", "Q3", "Q4", "Q5")
 SHORT = {**M.SHORT, "KernelRidge-RBF": "KRR", "SVR-RBF": "SVR"}
 _LINES: list[str] = []
+GATE: dict = {}          # 재현 게이트 값(보고서에 기록)
+ZERO_Q15: list[str] = []  # 15분 학습 20% 분위수가 0인 종목(가격 정지가 Q1·Q2 경계에 걸림)
 
 
 def emit(t: str = "") -> None:
     _LINES.append(t)
+
+
+def standard_header(tickers: list[str], transforms: list[tuple[str, str]]) -> str:
+    """AGENTS.md 2.9g 표준 헤더 6항목(26c와 같은 데이터 원천·창·분할)."""
+    from report_header import render_standard_header, use_source
+    split_frac = float(np.mean(M.load_close("KRW-BTC").index < M.SPLIT))
+    use_source(M.DB_PATH, M.DATA_START, M.DATA_END)
+    try:
+        return render_standard_header(tickers=tickers, train_frac=split_frac, rep_ticker="KRW-BTC",
+                                      analyzed_tickers=tickers, transforms=transforms)
+    finally:
+        use_source()
+
+
+BASE_TRANSFORMS = [
+    ("15분 시간 격자 복원·점검 구간 제외·로그수익률", "26c와 같다. 업비트는 무체결 구간에 캔들을 만들지 않고, 거래소 전체 중단 시각은 보간하지 않는다"),
+    ("타깃 = 다음 H분 실현변동성(RV), 손실 QLIKE", "26c와 같다. 가격 정지(RV=0)는 두 부분 모형(정지 확률 × 크기)으로 처리"),
+    ("변동성 국면 = 직전 H분 RV의 종목별 학습 구간 5분위", "예측 시점에 아는 값으로 미리 나눈다(사후 실현 RV 분할은 예측자의 딜레마)"),
+    ("시드 5개 손실 평균", "학습 시드로 흔들리는 15종은 시드별 예측의 손실을 평균, 결정론 모델은 시드와 무관"),
+]
 
 
 def sname(m: str) -> str:
@@ -159,9 +181,18 @@ def scope_mask(Qf: pd.DataFrame, scope: str) -> pd.DataFrame:
 # ## 국면별 최선과 동률(26b 3-2절과 같은 정의)
 
 # %%
-def best_and_ties(L: dict, mask: pd.DataFrame) -> pd.DataFrame:
-    """국면 최선 대비 열세 검정. 시각마다 그 국면에 든 종목의 손실차 평균 → HAC, 모델 전체에 Holm."""
-    mean_l = {m: L[m].where(mask.reindex_like(L[m]).fillna(False)).stack().mean() for m in L}
+def model_means(L: dict, mask: pd.DataFrame, weight: str = "time") -> dict:
+    """국면 평균 손실. "time" = 시각마다 그 국면에 든 종목 평균을 낸 뒤 시각 평균(DM 검정과 같은 가중),
+    "pooled" = (시각 × 종목) 관측 전체 평균(26b 3-2절의 최선 선정, 재현 게이트에만 쓴다)."""
+    if weight == "time":
+        return {m: L[m].where(mask.reindex_like(L[m]).fillna(False)).mean(axis=1).mean() for m in L}
+    return {m: L[m].where(mask.reindex_like(L[m]).fillna(False)).stack().mean() for m in L}
+
+
+def best_and_ties(L: dict, mask: pd.DataFrame, weight: str = "time") -> pd.DataFrame:
+    """국면 최선 대비 열세 검정. 시각마다 그 국면에 든 종목의 손실차 평균 → HAC, 모델 전체에 Holm.
+    최선은 검정과 같은 가중(시각 동일 가중)으로 고른다(Codex 리뷰 2026-10-09: 선정과 검정의 가중 불일치)."""
+    mean_l = model_means(L, mask, weight)
     best = min((m for m in mean_l if m != "naive"), key=lambda m: mean_l[m])
     rows = []
     for nm in L:
@@ -193,9 +224,9 @@ def regime_analysis(base: dict, seeds: dict) -> tuple[pd.DataFrame, pd.DataFrame
             for s in SEEDS:
                 ts = best_and_ties(Ls[s], mask)
                 seed_rows.append(ts.assign(H=H, 국면=scope, 시드=s)[["H", "국면", "시드", "모델", "최선", "통계적동률"]])
-                if s == 0 and scope != "전체":   # 재현 게이트: 시드 0은 26b 3-2절과 같아야 한다
+                if s == 0 and scope != "전체":   # 재현 게이트: 시드 0을 26b의 선정 가중으로 돌리면 26b 3-2절과 같아야 한다
                     r = ref[(ref["H"] == H) & (ref["구간"] == scope)].set_index("모델")
-                    g = ts.set_index("모델")
+                    g = best_and_ties(Ls[s], mask, weight="pooled").set_index("모델")
                     if r["최선"].iloc[0] != g["최선"].iloc[0] or set(r.index) != set(g.index) \
                             or not (r["통계적동률"] == g.loc[r.index, "통계적동률"]).all():
                         raise RuntimeError(f"[재현 게이트] 시드 0 {H} {scope}가 26b 3-2절과 다르다")
@@ -204,6 +235,8 @@ def regime_analysis(base: dict, seeds: dict) -> tuple[pd.DataFrame, pd.DataFrame
     if worst > 1e-9:
         raise RuntimeError(f"[재현 게이트] 시드 0 p_holm이 26b와 다르다(최대차 {worst:.3g})")
     print(f"[재현 게이트] 시드 0 국면 검정이 26b 3-2절과 일치(p_holm 최대차 {worst:.1g})", flush=True)
+    GATE["p_holm_max"] = worst
+    ZERO_Q15[:] = sorted(k[0] for k, S in base.items() if k[1] == 15 and np.quantile(S["nai_tr"], 0.2) == 0)
     rg = pd.concat(rows, ignore_index=True)
     sd = pd.concat(seed_rows, ignore_index=True)
     rg.to_csv(RES / f"{STEM}_regime_best_ties.csv", index=False)
@@ -355,10 +388,11 @@ def fig_regime_map(rg: pd.DataFrame, sd: pd.DataFrame) -> Path:
             n_new = len(tie & set(PAR_DEEP))
             n_all = len(set(g["모델"]) & set(PAR_DEEP))
             seq_in = len(tie & set(SEQ))
+            feat_in = len(tie & set(PAR_FEAT))
             ax.text(j + 0.5, i + 0.36, sname(best) + (" *" if best == "GARCH+LightGBM" else ""), ha="center",
                     va="center", fontsize=12.5, fontweight="bold", color=INK)
             ax.text(j + 0.5, i + 0.62, f"시드 최선: 모델 {k}/5 · 방식 {kg}/5", ha="center", va="center", fontsize=9.5, color=MUTED)
-            ax.text(j + 0.5, i + 0.83, f"동률: 순차 {seq_in}/5 · 병렬 딥러닝 {n_new}/{n_all}", ha="center",
+            ax.text(j + 0.5, i + 0.83, f"동률 순차 {seq_in}/5 · 특징 {feat_in}/7 · 딥러닝 {n_new}/{n_all}", ha="center",
                     va="center", fontsize=9, color=MUTED)
     ax.set_xlim(0, len(Hs))
     ax.set_ylim(len(SCOPES), 0)
@@ -371,7 +405,7 @@ def fig_regime_map(rg: pd.DataFrame, sd: pd.DataFrame) -> Path:
     ax.axhline(1, color=INK, lw=1.2)
     ax.set_xlabel("예측 구간", fontsize=12)
     ax.set_ylabel("직전 변동성 국면(종목별 학습 구간 5분위)", fontsize=12)
-    ax.set_title("예측 구간 × 변동성 국면별 최선 모델(시드 5개 평균 QLIKE)\n칸 색 = 최선 모델의 처리 방식 · 시드 최선 = 시드별로 다시 골랐을 때 같은 모델 / 같은 처리 방식이 최선인 횟수", fontsize=13,
+    ax.set_title("예측 구간 × 변동성 국면별 최선 모델(시드 5개 평균 QLIKE)\n칸 색 = 최선 모델의 처리 방식 · 시드 최선 = 시드별로 다시 골랐을 때 같은 모델 / 같은 처리 방식이 최선인 횟수\n동률 = 최선과 통계적으로 구분되지 않는 모델 수(Holm p ≥ 0.05, 최선 자신 포함) · 최선 선정과 검정 모두 시각별 종목 평균 손실의 시각 평균", fontsize=13,
                  loc="left", color=INK)
     ax.legend(handles=[Patch(facecolor=GROUP_COLOR[g_], alpha=0.5, label=lb) for g_, lb in
                        zip(GROUP_ORDER, ["순차(재귀형: GARCH·GRU·LSTM)", "병렬(특징 기반: 트리·커널, * GARCH 특징을 쓰는 혼합형)",
@@ -415,6 +449,79 @@ def fig_seqpar(t: pd.DataFrame) -> Path:
                  "칸 아래 숫자 = 시드별로 다시 검정해 같은 방향으로 유의했던 시드 수", fontsize=13.5, x=0.02, ha="left", color=INK)
     fig.tight_layout(rect=(0, 0.04, 1, 0.94))
     p = IMG / f"{STEM}_fig2_seqpar_dm.png"
+    fig.savefig(p, dpi=160, bbox_inches="tight")
+    plt.close(fig)
+    return p
+
+
+H_LINE_COLORS = ["#b9a9e6", "#9079d4", "#6a50bd", "#4a3aa7", "#2a1f6b"]   # 예측 구간: 짧을수록 연한 보라(순차 파랑·병렬 주황과 겹치지 않음)
+
+
+def fig_regime_lines(rg: pd.DataFrame) -> Path:
+    """그림 1의 선 그래프판: 구간마다 처리 방식 묶음별 최선 구성원의 최선 대비 격차를 국면 순서로 잇는다."""
+    Hs = list(M.HORIZONS_H)
+    fig, axes = plt.subplots(1, len(Hs), figsize=(19, 5.6), sharey=False)
+    x = np.arange(len(SCOPES) - 1)
+    for ax, H in zip(axes, Hs):
+        for grp in GROUP_ORDER:
+            ys, tie = [], []
+            for scope in SCOPES[1:]:
+                g = rg[(rg["H"] == H) & (rg["국면"] == scope) & rg["모델"].map(GROUP_OF).eq(grp)]
+                b = g.loc[g["격차"].idxmin()]
+                ys.append(max(float(b["격차"]), 0.0))
+                tie.append(bool(g["통계적동률"].any()))   # 묶음에 최선과 동률인 모델이 하나라도 있으면 채운 점
+            ax.plot(x, ys, color=GROUP_COLOR[grp], lw=2.4, zorder=2)
+            for xi, yi, ti in zip(x, ys, tie):
+                ax.scatter(xi, yi, s=70, zorder=3, color=GROUP_COLOR[grp] if ti else "white",
+                           edgecolor=GROUP_COLOR[grp], linewidth=2)
+        ax.axhline(0, color=MUTED, lw=1)
+        ax.set_xticks(x, ["Q1\n잔잔", "Q2", "Q3", "Q4", "Q5\n요동"])
+        ax.set_title(M.hlabel(H), fontsize=13, loc="left", color=INK, fontweight="bold")
+        ax.grid(axis="y", color=GRID)
+        for s_ in ("top", "right"):
+            ax.spines[s_].set_visible(False)
+    fig.supylabel("칸 최선 대비 QLIKE 격차(0 = 그 묶음이 최선, 낮을수록 좋음)", fontsize=11.5, x=0.0)
+    handles = [plt.Line2D([], [], color=GROUP_COLOR[g_], lw=2.4, marker="o", markersize=8, label=lb) for g_, lb in
+               zip(GROUP_ORDER, ["순차(GARCH·GRU·LSTM)", "병렬 특징 기반(트리·커널)", "병렬 딥러닝(어텐션·합성곱·파운데이션)"])]
+    handles += [plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=8, label="채운 점 = 그 묶음에 최선과 동률인 모델이 있음(Holm p ≥ 0.05)"),
+                plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=8, markerfacecolor="white", label="빈 점 = 그 묶음 모델이 모두 최선보다 유의하게 나쁨")]
+    fig.legend(handles=handles, loc="lower center", ncol=3, frameon=False, fontsize=10.5, bbox_to_anchor=(0.5, -0.02))
+    fig.suptitle("변동성 국면별로 각 처리 방식의 가장 나은 모델이 칸 최선에서 얼마나 떨어져 있는가(시드 5개 평균, 구간마다 세로축 다름)",
+                 fontsize=13.5, x=0.01, ha="left", color=INK)
+    fig.tight_layout(rect=(0, 0.1, 1, 0.94))
+    p = IMG / f"{STEM}_fig1b_regime_lines.png"
+    fig.savefig(p, dpi=160, bbox_inches="tight")
+    plt.close(fig)
+    return p
+
+
+def fig_seqpar_lines(t: pd.DataFrame) -> Path:
+    """그림 2의 선 그래프판: 비교마다 국면 순서로 묶음 손실차, 선은 예측 구간."""
+    hcol = dict(zip(M.HORIZONS_H, H_LINE_COLORS))
+    fig, axes = plt.subplots(1, len(COMPARISONS), figsize=(19, 5.8), sharey=True)
+    x = np.arange(len(SCOPES) - 1)
+    for ax, (name, _, _) in zip(axes, COMPARISONS):
+        g = t[t["비교"] == name]
+        for H in M.HORIZONS_H:
+            gh = g[g["H"] == H].set_index("국면").loc[list(SCOPES[1:])]
+            ax.plot(x, gh["평균차"], color=hcol[H], lw=2.2, zorder=2)
+            sig = gh["p_holm"] < ALPHA
+            ax.scatter(x, gh["평균차"], s=60, zorder=3, color=[hcol[H] if v else "white" for v in sig],
+                       edgecolor=hcol[H], linewidth=2)
+        ax.axhline(0, color=MUTED, lw=1.2)
+        ax.set_xticks(x, ["Q1\n잔잔", "Q2", "Q3", "Q4", "Q5\n요동"])
+        ax.set_title(name, fontsize=12, loc="left", color=INK)
+        ax.grid(axis="y", color=GRID)
+        for s_ in ("top", "right"):
+            ax.spines[s_].set_visible(False)
+    fig.supylabel("묶음 평균 QLIKE 차(순차 쪽 − 병렬 쪽), 0 아래 = 순차 쪽이 낫다", fontsize=11.5, x=0.0)
+    handles = [plt.Line2D([], [], color=hcol[H], lw=2.2, marker="o", markersize=8, label=M.hlabel(H)) for H in M.HORIZONS_H]
+    handles += [plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=8, label="채운 점 = Holm p < 0.05"),
+                plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=8, markerfacecolor="white", label="빈 점 = 구분 안 됨")]
+    fig.legend(handles=handles, loc="lower center", ncol=7, frameon=False, fontsize=10.5, bbox_to_anchor=(0.5, -0.02))
+    fig.suptitle("순차 대 병렬 묶음 손실차의 국면별 변화(시드 5개 평균, 비교마다 30칸 Holm)", fontsize=13.5, x=0.01, ha="left", color=INK)
+    fig.tight_layout(rect=(0, 0.07, 1, 0.94))
+    p = IMG / f"{STEM}_fig2b_seqpar_lines.png"
     fig.savefig(p, dpi=160, bbox_inches="tight")
     plt.close(fig)
     return p
@@ -491,6 +598,8 @@ def write_report(ns: pd.DataFrame, rg: pd.DataFrame, sd: pd.DataFrame, t: pd.Dat
     rel = lambda p: os.path.relpath(p, RES)
     emit("# 27d번: 변동성 국면별 최선·순차 대 병렬 묶음 검정·비정상성 검정(시드 5개)")
     emit()
+    emit(standard_header(sorted(ns["종목"].unique()), BASE_TRANSFORMS))
+    emit()
     emit("27번의 저장된 평가 예측(시드 0~4)만 읽고 재학습하지 않았다. 27번 1차 마무리 원고에서 빠져 있던 변동성 국면 결과와 "
          "비정상성 근거를 채우고, 26b 3-2절(시드 0만 사용)의 국면 검정을 시드 5개로 다시 했다.")
     emit()
@@ -508,12 +617,14 @@ def write_report(ns: pd.DataFrame, rg: pd.DataFrame, sd: pd.DataFrame, t: pd.Dat
          "결정론 모델은 시드와 무관하다(GARCH-t 시드 예측이 시드 0과 같음을 확인).")
     emit("- **국면 최선 검정**: 비교 집단은 국면 최선 모델 대 나머지 각 모델이다. H0: 두 모델의 기대 QLIKE가 같다. H1: 같지 않다(양측). "
          "시각마다 그 국면에 든 종목의 손실차를 평균한 시계열에 DM 검정(Newey-West HAC)을 하고, 모델 전체에 Holm 보정을 건다. "
-         "H0를 기각하지 못하면 통계적 동률(최선과 구분되지 않음), 기각하면 열세다.")
+         "H0를 기각하지 못하면 통계적 동률(최선과 구분되지 않음), 기각하면 열세다. 최선도 검정과 같은 가중으로 고른다: 시각마다 그 국면에 든 종목의 "
+         "평균 손실을 내고 그 시각 평균이 가장 작은 모델이다(시각 동일 가중). 기준 모델 naive는 최선 후보에서 빠지지만 동률 검정에는 들어 있다.")
     emit("- **순차 대 병렬 묶음 검정**: 비교 집단은 묶음 구성원 손실의 단순 평균끼리다(묶음 안에서 잘한 모델만 고르는 선택 편향을 피한다). "
          "H0: 두 묶음의 기대 QLIKE가 같다. H1: 같지 않다(양측). 비교마다 30칸(예측 구간 5 × 범위 6)에 Holm 보정을 건다. "
          "시드마다 같은 검정을 다시 해 같은 방향으로 유의했던 시드 수를 함께 적는다.")
-    emit("- **게이트**: 시드 1~4 예측 파일과 무작위 모델 17종의 예측이 모두 있어야 하고, 시드 0으로 돌린 국면 검정이 26b 3-2절을 "
-         "그대로 재현해야(최선·동률 판정 일치, p 일치) 이후 결과를 만든다. 이번 실행은 두 게이트를 모두 통과했다.")
+    emit("- **게이트**: 시드 1~4 예측 파일과 무작위 모델 15종(학습 시드로 흔들리는 모델)의 예측이 모두 있어야 하고, 시드 0을 26b의 최선 선정 가중"
+         "((시각 × 종목) 관측 전체 평균)으로 돌린 국면 검정이 26b 3-2절을 그대로 재현해야(최선·동률 판정 일치, p 일치) 이후 결과를 만든다. "
+         f"이번 실행은 두 게이트를 모두 통과했다(재현 p_holm 최대차 {GATE.get('p_holm_max', float('nan')):.1g}). 본 결과는 위의 시각 동일 가중으로 최선을 고르므로 26b 3-2절과 최선이 다른 칸이 있다(2절 끝).")
     emit()
 
     # 1. 비정상성
@@ -564,7 +675,8 @@ def write_report(ns: pd.DataFrame, rg: pd.DataFrame, sd: pd.DataFrame, t: pd.Dat
     emit()
     emit(f"![분포 이동]({rel(figs['shift'])})")
     emit()
-    emit("**읽는 법**: 왼쪽은 종목 × 예측 구간마다 학습 구간과 평가 구간의 로그 RV 분포가 얼마나 다른지(KS 통계량 D, 0~1)다. 시계열은 자기상관이 "
+    emit("**읽는 법**: 왼쪽은 종목 × 예측 구간마다 학습 구간과 평가 구간의 RV 분포(가격 정지 0 포함)가 얼마나 다른지(KS 통계량 D, 0~1)다. "
+         "0을 포함하므로 15분의 D는 정지 비율 변화 폭보다 작을 수 없고, 15분 D의 상당 부분은 정지 비율 증가에서 온다. 시계열은 자기상관이 "
          "있어 KS 검정의 p값(독립 가정)은 과소평가되므로 p 대신 D를 효과 크기로 읽는다. 오른쪽은 15분 블록의 가격 정지 비율이 학습에서 평가로 "
          "어떻게 바뀌었는지다.")
     emit()
@@ -588,12 +700,18 @@ def write_report(ns: pd.DataFrame, rg: pd.DataFrame, sd: pd.DataFrame, t: pd.Dat
     emit()
     emit(f"![국면별 최선 지도]({rel(figs['map'])})")
     emit()
+    emit(f"![국면별 최선 선 그래프]({rel(figs['map_lines'])})")
+    emit()
+    emit("**선 그래프판 읽는 법**: 위 지도와 같은 결과를 처리 방식 묶음별로 다시 그렸다. 예측 구간마다 칸(국면)별로 각 묶음에서 가장 나은 모델이 그 칸 최선보다 "
+         "QLIKE가 얼마나 큰지(격차, 0이면 그 묶음 모델이 최선)를 잇는다. 채운 점은 최선과 통계적 동률, 빈 점은 최선보다 유의하게 나쁜 경우다. 각 묶음의 "
+         "최선 구성원을 고른 값이라 묶음 전체의 평균 성능은 아니다(묶음 평균 비교는 3절).")
+    emit()
     emit("**읽는 법**: 칸마다 시드 5개 평균 QLIKE가 가장 작은 모델(굵은 글씨)이고, 칸 색은 그 모델의 처리 방식이다. \"시드별 최선: 같은 모델 k/5 · 같은 처리 방식 m/5\"는 시드마다 "
          "따로 골랐을 때 같은 모델이 최선이었던 횟수와 같은 처리 방식 묶음의 모델이 최선이었던 횟수, \"동률\"은 최선과 통계적으로 구분되지 않은(Holm p ≥ 0.05) 모델 수를 묶음별로 센 것이다. "
-         "맨 윗줄(전체 기간)은 국면을 나누지 않은 결과다. 이 줄은 (시각 × 종목) 손실 전체의 평균으로 최선을 고르므로, 종목별 평균을 "
-         "다시 평균한 27번 보고서의 순위와 상장폐지 종목(평가 시각 수가 적음) 때문에 드물게 다를 수 있다.")
+         "맨 윗줄(전체 기간)은 국면을 나누지 않은 결과다. 이 줄은 시각별 종목 평균 손실의 시각 평균으로 최선을 고르므로, 종목별 평균을 "
+         "다시 평균한 27번 보고서의 순위와 상장폐지 종목(평가 시각 수가 적음) 때문에 드물게 다를 수 있다. 동률 수는 최선 모델 자신을 포함한다.")
     emit()
-    emit("| 예측 구간 | 국면 | 관측 수(시각×종목) | 최선(처리 방식) | 시드별 최선: 같은 모델 · 같은 처리 방식 | 통계적 동률 | 동률 중 순차 | 동률 중 병렬(딥러닝) |")
+    emit("| 예측 구간 | 국면 | 관측 수(시각×종목) | 최선(처리 방식) | 시드별 최선: 같은 모델 · 같은 처리 방식 | 통계적 동률 | 동률 중 순차(최선 포함) | 동률 중 병렬(딥러닝)(최선 포함) |")
     emit("| :--- | :--- | ---: | :--- | ---: | :--- | ---: | ---: |")
     for H in M.HORIZONS_H:
         for scope in SCOPES:
@@ -634,13 +752,19 @@ def write_report(ns: pd.DataFrame, rg: pd.DataFrame, sd: pd.DataFrame, t: pd.Dat
             b0 = ref[(ref["H"] == H) & (ref["구간"] == scope)]["최선"].iloc[0]
             if b5 != b0:
                 ch.append(f"{M.hlabel(H)} {scope}: {b0} → {b5}")
-    emit(f"**시드 0(26b 3-2절) 대비 바뀐 최선**: {'; '.join(ch) if ch else '해당 없음(25칸 모두 같은 모델이 최선)'}.")
+    emit(f"**26b 3-2절(시드 0, 관측 전체 평균으로 선정) 대비 바뀐 최선(시드 5개 평균, 시각 동일 가중으로 선정)**: "
+         f"{'; '.join(ch) if ch else '해당 없음(25칸 모두 같은 모델이 최선)'}. 바뀐 칸은 시드를 늘린 효과와 선정 가중을 검정과 맞춘 효과가 함께 들어 있다.")
     emit()
 
     # 3. 순차 대 병렬
     emit("## 3. 순차(재귀형) 대 병렬 묶음 검정(시드 5개)")
     emit()
     emit(f"![순차 대 병렬]({rel(figs['seqpar'])})")
+    emit()
+    emit(f"![순차 대 병렬 선 그래프]({rel(figs['seqpar_lines'])})")
+    emit()
+    emit("**선 그래프판 읽는 법**: 위 표 그림과 같은 값이다. 비교마다 가로축은 국면(Q1 잔잔 → Q5 요동), 선은 예측 구간이고, 세로축은 묶음 평균 손실차(순차 쪽 − "
+         "병렬 쪽)다. 0 아래면 순차 쪽이 낫다. 채운 점은 Holm 보정 후 유의, 빈 점은 구분 안 됨이다. 전체 기간 값은 위 표 그림에 있다.")
     emit()
     emit("**읽는 법**: 네 비교마다 행은 범위(전체 기간, 국면 Q1~Q5), 열은 예측 구간이다. 숫자는 묶음 평균 QLIKE 차(A − B)로 음수면 순차 쪽이 낫다. "
          "파랑 = 순차가 유의하게 낫다, 주황 = 병렬이 유의하게 낫다, 회색 = 구분되지 않는다(Holm p ≥ 0.05). \"시드 k/5\"는 시드마다 다시 검정해 "
@@ -650,7 +774,7 @@ def write_report(ns: pd.DataFrame, rg: pd.DataFrame, sd: pd.DataFrame, t: pd.Dat
         g = t[t["비교"] == name]
         emit(f"### {name}")
         emit()
-        emit(f"비교 집단: A = {', '.join(A)} / B = {len(Bm)}종({'TTM은 4·12시간 평가 제외라 그 구간은 14종' if 'TTM' in Bm else '해당 없음(TTM 미포함)'}). "
+        emit(f"비교 집단: A = {', '.join(A)} / B = {len(Bm)}종({f'TTM은 4·12시간 평가 제외라 그 구간은 {len(Bm) - 1}종' if 'TTM' in Bm else '해당 없음(TTM 미포함)'}). "
              "H0: 두 묶음 평균의 기대 QLIKE가 같다. H1: 같지 않다.")
         emit()
         emit("| 범위 | " + " | ".join(M.hlabel(H) for H in M.HORIZONS_H) + " |")
@@ -677,6 +801,9 @@ def write_report(ns: pd.DataFrame, rg: pd.DataFrame, sd: pd.DataFrame, t: pd.Dat
     emit("## 4. 한계")
     emit()
     emit("1. 국면별 관측 수는 전체의 약 1/5이라 4·12시간 국면 검정은 표본이 작다(2절 표의 관측 수).")
+    emit(f"1-1. 15분 국면 경계: {', '.join(t_.replace('KRW-', '') for t_ in ZERO_Q15) or '해당 없음(없음)'}은 15분 학습 구간 직전 RV의 20% 분위수가 0이라 "
+         "가격 정지(직전 RV=0) 시점이 Q2로 가고 Q1이 비어 있다. 반대로 정지가 많은 다른 종목은 Q1이 정지 시점뿐이다. 따라서 15분 Q1·Q2는 종목에 따라 "
+         "'가격 정지'와 '잔잔함'이 섞인 집단이다. 30분 이상은 빈 Q1이 없다.")
     emit("2. 순차 대 병렬은 학습 절차를 통제하지 않았다(27c와 같은 한계).")
     emit("3. 비정상성 검정은 전체 기간 하나로 했다. 구조 변화 시점 검정은 하지 않았다.")
     emit("4. KS 통계량의 p값은 자기상관 때문에 쓰지 않았고, D를 효과 크기로만 읽었다.")
@@ -713,7 +840,8 @@ def main(argv=None) -> None:
     rg, sd, cache = regime_analysis(base, seeds)
     t = seqpar_tests(cache)
     print("[순차 대 병렬] 완료", flush=True)
-    figs = {"ns": fig_nonstationarity(ns), "shift": fig_shift(ns), "map": fig_regime_map(rg, sd), "seqpar": fig_seqpar(t)}
+    figs = {"ns": fig_nonstationarity(ns), "shift": fig_shift(ns), "map": fig_regime_map(rg, sd), "seqpar": fig_seqpar(t),
+            "map_lines": fig_regime_lines(rg), "seqpar_lines": fig_seqpar_lines(t)}
     write_report(ns, rg, sd, t, figs)
     print(f"[27d 완료] {RES / (STEM + '_report.md')}", flush=True)
 

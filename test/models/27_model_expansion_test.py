@@ -63,7 +63,7 @@ for _l in ("pytorch_lightning", "lightning_fabric", "lightning", "neuralforecast
 
 def _project_root(start: Path) -> Path:
     for p in [start, *start.parents]:
-        if (p / "engine").is_dir() and (p / "AGENTS.md").exists():
+        if (p / "engine").is_dir() and (p / "test" / "models").is_dir():
             return p
     return start
 
