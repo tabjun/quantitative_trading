@@ -249,7 +249,6 @@ def section_a(st: list[dict]) -> None:
 
 # %%
 def section_b(st: list[dict]) -> None:
-    import pickle
     emit("## B. 적용한 처리가 의도대로 작동했는가")
     emit()
     emit("### B1. 시간 격자 복원: 옛 '행 4개 = 1시간' 창의 실제 시간 길이")
@@ -268,18 +267,19 @@ def section_b(st: list[dict]) -> None:
     emit("### B2. 정지 확률의 신뢰도(예측한 정지 확률 대 실제 정지 비율)")
     emit()
     z = np.load(R26C / "26c_recent_twopart_test_predictions.npz")
+    zp = np.load(X27.PI_NPZ)
     rows = []
     for H in (15, 30, 60):
         P, A = [], []
         for x in st:
-            f = X27.PI_DIR / f"{x['tk']}_{H}.pkl"
-            if not f.exists():
-                continue
-            pv, pt, info = pickle.loads(f.read_bytes())
+            k = f"{x['tk']}|{H}|π_평가"
+            if k not in zp.files:
+                raise KeyError(f"정지 확률 묶음에 {k}가 없다: {X27.PI_NPZ.name}. 27번을 --family pi로 다시 돌려 묶음을 만들라")
+            pt = zp[k]
             a = z[f"{x['tk']}|{H}|실제"].astype(float)
+            if len(pt) != len(a):
+                raise RuntimeError(f"정지 확률과 실제값의 길이가 다르다: {k} {len(pt)} 대 {len(a)}")
             P.append(pt); A.append((a == 0).astype(float))
-        if not P:
-            continue
         P, A = np.concatenate(P), np.concatenate(A)
         bins = np.array([0, .02, .05, .1, .2, .3, .4, .5, .7, 1.0])
         b = np.digitize(P, bins[1:-1])

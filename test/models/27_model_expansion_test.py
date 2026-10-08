@@ -383,6 +383,24 @@ def prepare_job(ticker: str, H: int, quick: bool) -> dict:
 
 
 PI_DIR = RES / "parts" / "pi_cache"
+PI_NPZ = RES / f"{STEM}_pi_predictions.npz"   # 커밋용 묶음. 작업 캐시(PI_DIR)는 커밋하지 않는다
+
+
+def export_pi(tickers: list) -> None:
+    """정지 확률 작업 캐시를 출처가 드러나는 npz 하나로 묶는다(27b B2가 읽는다). 빠진 칸이 있으면 멈춘다."""
+    import pickle
+    out, missing = {}, []
+    for tk in tickers:
+        for H in M.HORIZONS_H:
+            f = PI_DIR / f"{tk}_{H}.pkl"
+            if not f.exists():
+                missing.append(f.name); continue
+            pv, pt, _ = pickle.loads(f.read_bytes())
+            out[f"{tk}|{H}|π_내부검증"], out[f"{tk}|{H}|π_평가"] = np.asarray(pv, float), np.asarray(pt, float)
+    if missing:
+        raise RuntimeError(f"정지 확률 저장분 {len(missing)}개가 없다: {missing[:5]}")
+    np.savez_compressed(PI_NPZ, **out)
+    print(f"[정지 확률 묶음] {PI_NPZ.name}: {len(out) // 2}칸", flush=True)
 
 
 def run_fingerprint(quick: bool, models: tuple, family: str) -> dict:
@@ -864,6 +882,8 @@ def main(argv=None) -> None:
             for i, name in enumerate(pool.map(pi_job, [j[0] for j in jobs], [j[1] for j in jobs], [a.quick] * len(jobs)), 1):
                 print(f"  [π {i}/{len(jobs)}] {name}", flush=True)
         print(f"[정지 확률 캐시 완료] {(time.time() - t_start) / 60:.1f}분", flush=True)
+        if not a.quick:
+            export_pi(tickers)
         return
     if a.family == "fm-prep":
         with ProcessPoolExecutor(max_workers=a.workers, mp_context=ctx) as pool:
