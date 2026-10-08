@@ -648,11 +648,22 @@ def seed_mean_losses(rd: pd.DataFrame, store: dict, models: list[str]) -> tuple[
     (손실의 평균이며 예측의 평균이 아니다), 나머지 모델은 시드와 무관하므로 같은 값이 평균된다. 반환: (평균 손실표, 모델별 시드 수)."""
     frames = [M.cell_losses(rd, store, models).assign(seed=0)]
     n_seed = {m_: 1 for m_ in models}
-    for sd in [x for x in SEEDS_USED if x != 0]:
+    rest = [x for x in SEEDS_USED if x != 0]
+    # 시드 완전성 게이트(Codex 리뷰 2026-10-08): 파일이 없거나 무작위 모델 예측이 빠지면 시드 0 예측으로 대신 채워
+    # 반복 수가 다른 평균이 되므로, 평균을 내기 전에 멈춘다.
+    miss = [f.name for sd in rest for f in (RES / f"{STEM}_seed{sd}_model_comparison.csv", RES / f"{STEM}_seed{sd}_test_predictions.npz")
+            if not f.exists()]
+    if miss:
+        raise RuntimeError(f"[시드 완전성 게이트: 27 보고서] 시드 파일 없음: {miss}")
+    stoch = tuple(m_ for m_ in STOCHASTIC_ALL if m_ in models)
+    M.check_seed_preds(store, {sd: {k: v["preds"] for k, v in M._npz_to_store(RES / f"{STEM}_seed{sd}_test_predictions.npz").items()}
+                               for sd in rest}, stoch, "27 보고서")
+    for sd in rest:
         f_rd, f_np = RES / f"{STEM}_seed{sd}_model_comparison.csv", RES / f"{STEM}_seed{sd}_test_predictions.npz"
-        if not (f_rd.exists() and f_np.exists()):
-            continue
         rds = pd.read_csv(f_rd)
+        lack = sorted(set(stoch) - set(rds["모델"]))
+        if lack:
+            raise RuntimeError(f"[시드 완전성 게이트: 27 보고서] 시드 {sd} 결과표에 무작위 모델 없음: {lack}")
         pr = {}
         for key, v in M._npz_to_store(f_np).items():
             pr[key] = v["preds"]
@@ -664,6 +675,9 @@ def seed_mean_losses(rd: pd.DataFrame, store: dict, models: list[str]) -> tuple[
         for m_ in models:
             if m_ in have and m_ in set(M.LOG_TARGET_MODELS) and m_ not in FM_MODELS:
                 n_seed[m_] += 1
+    bad = {m_: n for m_, n in n_seed.items() if m_ in stoch and n != len(SEEDS_USED)}
+    if bad:
+        raise RuntimeError(f"[시드 완전성 게이트: 27 보고서] 시드 수가 {len(SEEDS_USED)}개가 아닌 무작위 모델: {bad}")
     cl = pd.concat(frames, ignore_index=True)
     cl = cl.groupby(["종목", "H", "구간", "기준", "모델"], as_index=False)["QLIKE"].mean()
     return cl, n_seed
