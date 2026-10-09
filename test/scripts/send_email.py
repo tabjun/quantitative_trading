@@ -1284,6 +1284,36 @@ def pipeline_plan_email(commit_hash: str) -> tuple[str, str, list[Path]]:
     return subject, body, []
 
 
+def regime_seqpar_poster_email(commit_hash: str) -> tuple[str, str, list[Path]]:
+    """2026-10-10: 27번(순차 대 병렬, 변동성 국면별 비교) 결과 정리 + 학회 포스터·초록·신청서 공유.
+
+    포스터 PPTX는 저장소 밖(사용자 업로드)에 있어 `--attach`로 붙인다. .md 원본은 첨부하지 않고 렌더링 링크만 둔다.
+    """
+    report_url = github_blob("test/results/27_model_expansion_20261006/27_summary_for_user.md")
+
+    body = f"""교수님, 안녕하세요.
+
+암호화폐 변동성 예측 연구(업비트 20종목, 15분~12시간 뒤 변동성)를 순차 대 병렬 알고리즘 비교로 정리하고, 학회 초록과 학생논문발표대회 신청서, 포스터까지 마무리해 공유드립니다.
+
+연구 질문은 "어느 모델이 가장 좋은가"가 아니라 "어떤 상황(예측 구간과 변동성 국면)에서 어느 처리 방식이 왜 좋은가"로 잡았습니다. 데이터 자체가 비정상 시계열이어서(20종목 중 18종목 가격에 단위근, 변동성 수준이 몇 달 단위로 바뀜) 전체 기간 평균 하나로 비교하지 않고, 예측 시점에 이미 아는 직전 변동성으로 국면을 5단계로 나눠 27개 모델을 비교했습니다. 평가는 QLIKE 손실에 DM 검정과 Holm 보정을 썼고, 학습하는 모델은 시드 5개 평균입니다.
+
+주요 결과는 세 가지입니다. 첫째, 잔잔하거나 보통인 국면에서는 트리·커널 모델이 주로 1위였고(Q1~Q4 20칸 중 16칸), 가장 요동칠 때 1시간·4시간·12시간에서는 순환 신경망(GRU·LSTM)이 1위였습니다(트리·커널과는 통계적으로 구분되지 않음). 둘째, 가장 요동칠 때 병렬 딥러닝(트랜스포머·파운데이션 모델 등 15종)은 73번 비교 모두 1위보다 유의하게 나빴고, 전체 기간에서는 1위와 구분되지 않던 4시간·12시간 모델 8종씩도 여기에 포함됩니다. 셋째, 순환 신경망에 병렬 딥러닝과 같은 입력을 줘도 30칸 중 29칸에서 순환 신경망 묶음이 앞서, 차이가 입력 형태만으로 생긴 것은 아니었습니다.
+
+한계도 함께 말씀드립니다. 전체 기간 1위 모델도 가장 요동칠 때 그 국면 1위와 구분되지 않아서, 국면마다 모델을 바꿔 쓰는 이득은 아직 확인하지 못했습니다. 또 학습 방식을 모델마다 맞추지 않았기 때문에 순차 구조 자체의 효과로 단정할 수는 없고, 가장 요동칠 때 4시간·12시간 1위 모델은 시드에 따라 바뀝니다.
+
+초록(국문·영문)과 신청서는 수정을 마쳤고, 포스터 파일을 첨부했습니다. 구간별 결과와 데이터 탐색 근거, 참고문헌은 아래 상세 보고서에 정리했습니다.
+
+■ 상세 보고서:
+{report_url}
+
+검토해 주시고 수정할 부분이 있으면 말씀 부탁드립니다.
+
+감사합니다."""
+
+    subject = "[연구] 변동성 예측 순차 대 병렬 비교 결과 및 학회 포스터·초록 공유"
+    return subject, body, []
+
+
 PRESETS = {
     "simulation": simulation_email,
     "professor_publication_brief": professor_publication_brief_email,
@@ -1306,6 +1336,7 @@ PRESETS = {
     "project_direction_eli5": project_direction_eli5_email,
     "assumption_diagnosis": assumption_diagnosis_email,
     "pipeline_plan": pipeline_plan_email,
+    "regime_seqpar_poster": regime_seqpar_poster_email,
 }
 
 
@@ -1363,6 +1394,14 @@ def parse_args() -> argparse.Namespace:
         default="simulation",
         help="Email template preset. Default keeps compatibility with simulate_and_send.py.",
     )
+    parser.add_argument(
+        "--attach", action="append", type=Path, default=[],
+        help="Extra file to attach (repeatable), e.g. a poster PPTX kept outside the repo.",
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Print sender/receiver/subject/body/attachments without sending.",
+    )
     return parser.parse_args()
 
 
@@ -1381,7 +1420,19 @@ def main() -> None:
         )
 
     msg, attachments = build_message(args.preset, sender, receiver)
+    attachments = list(attachments) + list(args.attach)
+    missing = [str(p) for p in attachments if not p.exists()]
+    if missing:
+        raise SystemExit(f"첨부 파일 없음: {missing}")
     attach_files(msg, attachments)
+
+    if args.dry_run:
+        body_part = msg.get_body(preferencelist=("plain",))
+        print(f"From: {sender}\nTo: {receiver}\nSubject: {msg['Subject']}\nProvider: {provider}")
+        print("Attachments:", [f"{p.name} ({p.stat().st_size:,} bytes)" for p in attachments] or "없음")
+        print("-" * 60)
+        print(body_part.get_content())
+        return
 
     with smtplib.SMTP_SSL(config["host"], config["port"], timeout=30) as server:
         server.login(sender, password)
