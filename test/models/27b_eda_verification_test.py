@@ -84,9 +84,21 @@ def style(ax, title: str = "") -> None:
 def save(fig, name: str) -> str:
     IMG.mkdir(parents=True, exist_ok=True)
     p = IMG / f"{STEM}_{name}.png"
-    fig.savefig(p, dpi=140, bbox_inches="tight")
+    fig.savefig(p, dpi=300, bbox_inches="tight")
     plt.close(fig)
     return os.path.relpath(p, RES)
+
+
+def tidy_time_log(ax, fs: float = 7) -> None:
+    """작은 칸 여러 개의 시간 축(연도만)과 로그 축(일반 숫자)을 겹치지 않게 정리한다."""
+    import matplotlib.dates as mdates
+    from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter
+    ax.xaxis.set_major_locator(mdates.YearLocator())
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+    ax.yaxis.set_major_locator(LogLocator(base=10, subs=(1.0, 2.0, 5.0)))
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
+    ax.yaxis.set_minor_formatter(NullFormatter())
+    ax.tick_params(labelsize=fs)
 
 
 # %% [markdown]
@@ -127,9 +139,84 @@ def ticker_stats(tk: str) -> dict:
 # ## A. 거시 EDA
 
 # %%
+def acf_median(st: list[dict]) -> dict:
+    """예측 구간별 블록 로그 RV 자기상관(시차 1~60)의 종목 중앙값."""
+    return {H: np.nanmedian(np.array([x["acf"][H] for x in st]), axis=0) for H in M.HORIZONS_H}
+
+
+def section_a0(st: list[dict]) -> None:
+    """A0 한눈에 보기: 20종목 가격·변동성을 한 축에 겹쳐 그리고, 변동성의 자기상관을 붙인다."""
+    am = acf_median(st)
+    fig, axes = plt.subplots(1, 3, figsize=(16.5, 5.2), gridspec_kw={"width_ratios": [1.15, 1.15, 0.9]})
+    norm, rv30 = {}, {}
+    for x in st:
+        c = x["close"].dropna()
+        norm[x["tk"]] = c / c.iloc[0]
+        v = x["daily_rv"].dropna() * 100
+        rv30[x["tk"]] = v.rolling(30, min_periods=10).median()
+    for ax, dd, col, ttl in ((axes[0], norm, PAL[0], "(가) 20종목 일별 종가(첫날 = 1, 로그 축)\n가격 수준이 한곳으로 돌아오지 않는다"),
+                             (axes[1], rv30, PAL[2], "(나) 20종목 일별 변동성(30일 이동 중앙값, %, 로그 축)\n높거나 낮은 상태가 몇 달씩 이어지다 바뀐다")):
+        for tk, sr in dd.items():
+            ax.plot(sr.index, sr.values, color=col, lw=0.8, alpha=0.45)
+        med = pd.DataFrame(dd).median(axis=1)
+        ax.plot(med.index, med.values, color=INK, lw=2.2, label="20종목 중앙값")
+        ax.set_yscale("log")
+        ax.axvline(M.SPLIT, color=MUTED, lw=1.2, ls="--")
+        y1 = ax.get_ylim()[1]
+        ax.text(M.SPLIT, y1, "학습 ← | → 평가 ", ha="center", va="bottom", fontsize=12, color=MUTED)
+        style(ax)
+        ax.set_title(ttl, fontsize=13.5, loc="left", color=INK, pad=22)
+        tidy_time_log(ax, fs=12)
+        ax.legend(frameon=False, fontsize=12, loc="lower left" if ax is axes[0] else "upper right")
+    ax = axes[2]
+    for H in M.HORIZONS_H:
+        ax.plot(range(1, 61), am[H], color=H_COLOR[H], lw=2.2, label=M.hlabel(H))
+    ax.axhline(0, color=MUTED, lw=1)
+    ax.set_xlabel("몇 구간 전 변동성인가(시차)", fontsize=12.5)
+    ax.set_ylabel("다음 변동성과의 상관(종목 중앙값)", fontsize=12.5)
+    ax.tick_params(labelsize=12)
+    ax.legend(frameon=False, fontsize=12, title="예측 구간", title_fontsize=12, ncol=1)
+    style(ax)
+    ax.set_title("(다) 변동성의 자기상관(로그 실현변동성)\n과거 변동성이 다음 변동성을 설명한다", fontsize=13.5, loc="left", color=INK, pad=22)
+    fig.tight_layout(w_pad=3)  # 제목은 보고서·포스터 캡션이 맡는다
+    emit("### A0. 한눈에 보기: 비정상이지만 시간 구조가 있는 시계열")
+    emit()
+    emit(f"![한눈에 보기]({save(fig, 'a0_overview')})")
+    emit()
+    fin = pd.Series({tk.replace("KRW-", ""): float(sr.iloc[-1]) for tk, sr in norm.items()})
+    swing = pd.Series({tk.replace("KRW-", ""): float(sr.max() / sr.min()) for tk, sr in rv30.items()})
+    emit("**읽는 법**: (가)·(나)는 20종목을 한 축에 겹쳐 그린 것이고(옅은 선 = 종목, 검정 = 그날의 20종목 중앙값), 점선은 학습/평가 분할"
+         f"({M.SPLIT.date()})이다. (다)는 예측 구간 길이로 묶은 블록의 로그 실현변동성이 몇 블록 전 값과 얼마나 상관되는지(종목마다 구한 뒤 중앙값)다.")
+    emit()
+    emit(f"- **(가) 가격**: 3년 뒤 가격은 첫날의 {fin.min():.2f}배({fin.idxmin()})~{fin.max():.1f}배({fin.idxmax()})로 퍼지고, "
+         f"{int((fin > 1).sum())}종목이 오르고 {int((fin <= 1).sum())}종목이 내렸다. 가격 수준은 돌아올 고정점이 없다.")
+    emit(f"- **(나) 변동성**: 종목마다 30일 이동 중앙값의 최대÷최소는 중앙 {swing.median():.1f}배(범위 {swing.min():.1f}~{swing.max():.1f}배)다. "
+         "변동성은 한 수준에 머물지 않고 높은 상태와 낮은 상태가 몇 달씩 이어진다.")
+    emit(f"- **(다) 시간 구조**: 직전 블록과의 상관은 {' · '.join(f'{M.hlabel(H)} {am[H][0]:.2f}' for H in M.HORIZONS_H)}이고, "
+         f"60블록 뒤에도 {min(am[H][59] for H in M.HORIZONS_H):.2f}~{max(am[H][59] for H in M.HORIZONS_H):.2f}로 0이 되지 않는다. "
+         "가격은 예측할 고정점이 없지만, 변동성은 과거가 다음을 설명하는 시계열이다.")
+    ns = ROOT / "test" / "results" / "27d_regime_seqpar_20261008" / "27d_regime_seqpar_nonstationarity.csv"
+    if ns.exists():
+        d = pd.read_csv(ns)
+        n_tk = d["종목"].nunique()
+        price_ur = int(d[d["계열"] == "로그가격"]["판정"].str.startswith("비정상").sum())
+        arch = int((d[d["계열"] == "로그수익률"]["ARCH_LM_p"] < 0.05).sum())
+        mix = " · ".join(f"{M.hlabel(H)} {int(d[d['계열'] == f'로그RV {M.hlabel(H)}']['판정'].str.startswith('엇갈림').sum())}/{n_tk}"
+                         for H in M.HORIZONS_H)
+        emit(f"- **검정(27d 2-3절)**: 로그가격은 {price_ur}/{n_tk}종목이 단위근 비정상(ADF·KPSS), 로그수익률은 ARCH-LM이 {arch}/{n_tk}종목에서 "
+             f"기각(분산이 시간에 따라 변함), 로그 RV는 ADF·KPSS가 함께 기각한 '엇갈림'(단위근은 아니지만 정상성도 기각, 장기기억·수준 이동)이 {mix}종목이다.")
+    else:
+        emit("- **검정(27d 2-3절)**: 해당 없음(27d 비정상성 결과가 아직 없음).")
+    emit("- **연구 방향과의 연결**: 변동성의 수준이 국면처럼 바뀌므로 전체 기간 평균 하나로 모델을 비교하면 국면마다 다른 승부가 섞인다. 그래서 "
+         "직전 변동성 국면으로 나눠 다시 비교한다(27d). 또 과거가 다음을 설명하는 시간 구조가 있으므로, 과거를 어떤 방식으로 읽는가"
+         "(차례로 읽는 순차 대 한꺼번에 보는 병렬)가 비교의 축이 된다.")
+    emit()
+
+
 def section_a(st: list[dict]) -> None:
     emit("## A. 거시 EDA: 데이터 자체가 어떤 모습인가")
     emit()
+    section_a0(st)
     # A1 가격
     fig, axes = plt.subplots(4, 5, figsize=(16, 10), sharex=True)
     for ax, x in zip(axes.ravel(), st, strict=True):
@@ -139,11 +226,12 @@ def section_a(st: list[dict]) -> None:
         ax.axvline(M.SPLIT, color=MUTED, lw=1, ls="--")
         if x["tk"] in DELISTED:
             ax.axvline(pd.Timestamp(x["last"]), color=PAL[1], lw=1.2)
-            ax.text(pd.Timestamp(x["last"]), ax.get_ylim()[1], " 데이터 끝(상장폐지)", fontsize=7, color=PAL[1], va="top")
-        style(ax, x["tk"].replace("KRW-", ""))
-        ax.tick_params(labelsize=7)
-    fig.suptitle("일별 종가(첫날=1, 로그 축). 점선=학습/평가 분할(2025-11-11)", x=0.01, ha="left", fontsize=12)
+        style(ax, x["tk"].replace("KRW-", "") + (" (상장폐지, 주황선 = 데이터 끝)" if x["tk"] in DELISTED else ""))
+        tidy_time_log(ax)
+    fig.tight_layout()  # 제목은 보고서·포스터 캡션이 맡는다
     emit(f"![가격]({save(fig, 'a1_price')})")
+    emit()
+    emit(f"**그림**: 종목별 일별 종가(첫날 = 1, 로그 축). 점선 = 학습/평가 분할({M.SPLIT.date()}).")
     emit()
     rows = [(x["tk"].replace("KRW-", ""), float(x["close"].dropna().iloc[-1] / x["close"].dropna().iloc[0])) for x in st]
     up = sum(v > 1 for _, v in rows)
@@ -173,9 +261,11 @@ def section_a(st: list[dict]) -> None:
         ax.set_yscale("log")
         ax.axvline(M.SPLIT, color=MUTED, lw=1, ls="--")
         style(ax, x["tk"].replace("KRW-", ""))
-        ax.tick_params(labelsize=7)
-    fig.suptitle("일별 실현변동성(%, 로그 축). 초록=일별, 검정=30일 이동 중앙값, 점선=분할", x=0.01, ha="left", fontsize=12)
+        tidy_time_log(ax)
+    fig.tight_layout()  # 제목은 보고서·포스터 캡션이 맡는다
     emit(f"![일별 RV]({save(fig, 'a2_daily_rv')})")
+    emit()
+    emit("**그림**: 종목별 일별 실현변동성(%, 로그 축). 초록 = 일별, 검정 = 30일 이동 중앙값, 점선 = 학습/평가 분할.")
     emit()
     ratio = pd.Series({x["tk"].replace("KRW-", ""): x["rv_te"] / x["rv_tr"] for x in st})
     emit("| 종목 | 일별 RV 중앙값(학습) | 일별 RV 중앙값(평가) | 평가/학습 |")
@@ -198,8 +288,9 @@ def section_a(st: list[dict]) -> None:
     ax.axvline(sp - 0.5, color=PAL[1], lw=2)
     cb = fig.colorbar(im, ax=ax)
     cb.set_label("15분 수익률이 정확히 0인 봉의 비율(%)")
-    ax.set_title("월별 가격 정지(15분 수익률 0) 비율. 주황선 오른쪽이 평가 기간", loc="left", fontsize=11)
     emit(f"![정지 비율]({save(fig, 'a3_zero_share')})")
+    emit()
+    emit("**그림**: 월별 가격 정지(15분 수익률 0) 비율. 주황선 오른쪽이 평가 기간.")
     emit()
     zr = pd.Series({x["tk"].replace("KRW-", ""): (x["zero_te"], x["zero_tr"]) for x in st})
     more = sum(a > b for a, b in zr.values)
@@ -229,8 +320,10 @@ def section_a(st: list[dict]) -> None:
     ax.set_xlabel("시차(블록 수)")
     ax.set_ylabel("자기상관(종목 중앙값)")
     ax.legend(frameon=False, fontsize=9)
-    style(ax, "블록 로그 RV의 자기상관: 예측 구간별 '과거가 미래를 얼마나 설명하나'")
+    style(ax)
     emit(f"![자기상관]({save(fig, 'a4_acf')})")
+    emit()
+    emit("**그림**: 블록 로그 RV의 자기상관(종목 중앙값). 예측 구간별로 '과거 변동성이 다음 변동성을 얼마나 설명하나'를 본다.")
     emit()
     emit("| 예측 구간 | 시차 1 | 시차 10 | 시차 60 | 0.2 아래로 처음 떨어지는 시차(블록) |")
     emit("| :--- | ---: | ---: | ---: | ---: |")
