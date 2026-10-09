@@ -92,19 +92,6 @@ GATE: dict = {}          # 재현 게이트 값(보고서에 기록)
 ZERO_Q15: list[str] = []  # 15분 학습 20% 분위수가 0인 종목(가격 정지가 Q1·Q2 경계에 걸림)
 
 
-def save_poster(fig, p: Path, axis_titles: list[str] | None = None) -> Path:
-    """포스터판: 그림 안 큰 제목을 빼고(캡션이 설명을 맡는다) 인쇄용 300dpi로 따로 저장한다."""
-    if fig._suptitle is not None:
-        fig._suptitle.set_text("")
-    for t_ in fig.findobj(matplotlib.text.Text):  # 포스터 청중용 용어: '최선' → '1위'(캡션에서 정의)
-        t_.set_text(t_.get_text().replace("칸 최선", "1위 모델").replace("최선", "1위"))
-    for ax, tt in zip(fig.axes, axis_titles or []):
-        ax.set_title(tt, fontsize=12.5, loc="left")
-    q = p.with_name(p.stem + "_poster.png")
-    fig.savefig(q, dpi=300, bbox_inches="tight")
-    return q
-
-
 def emit(t: str = "") -> None:
     _LINES.append(t)
 
@@ -426,7 +413,7 @@ def fig_regime_map(rg: pd.DataFrame, sd: pd.DataFrame) -> Path:
               loc="upper center", bbox_to_anchor=(0.5, -0.09), ncol=1, frameon=False, fontsize=10.5)
     fig.tight_layout()
     p = IMG / f"{STEM}_fig1_regime_best_map.png"
-    fig.savefig(p, dpi=160, bbox_inches="tight")
+    fig.savefig(p, dpi=300, bbox_inches="tight")
     plt.close(fig)
     return p
 
@@ -462,7 +449,7 @@ def fig_seqpar(t: pd.DataFrame) -> Path:
                  "칸 아래 숫자 = 시드별로 다시 검정해 같은 방향으로 유의했던 시드 수", fontsize=13.5, x=0.02, ha="left", color=INK)
     fig.tight_layout(rect=(0, 0.04, 1, 0.94))
     p = IMG / f"{STEM}_fig2_seqpar_dm.png"
-    fig.savefig(p, dpi=160, bbox_inches="tight")
+    fig.savefig(p, dpi=300, bbox_inches="tight")
     plt.close(fig)
     return p
 
@@ -493,18 +480,15 @@ def fig_regime_lines(rg: pd.DataFrame) -> Path:
         ax.grid(axis="y", color=GRID)
         for s_ in ("top", "right"):
             ax.spines[s_].set_visible(False)
-    fig.supylabel("칸 최선 대비 QLIKE 격차(0 = 그 묶음이 최선, 낮을수록 좋음)", fontsize=11.5, x=0.0)
+    fig.supylabel("1위 모델 대비 QLIKE 격차(0 = 그 묶음의 모델이 1위, 작을수록 좋음)", fontsize=11.5, x=0.0)
     handles = [plt.Line2D([], [], color=GROUP_COLOR[g_], lw=2.4, marker="o", markersize=8, label=lb) for g_, lb in
                zip(GROUP_ORDER, ["순차(GARCH·GRU·LSTM)", "병렬 특징 기반(트리·커널)", "병렬 딥러닝(어텐션·합성곱·파운데이션)"])]
-    handles += [plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=8, label="채운 점 = 그 묶음에 최선과 동률인 모델이 있음(Holm p ≥ 0.05)"),
-                plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=8, markerfacecolor="white", label="빈 점 = 그 묶음 모델이 모두 최선보다 유의하게 나쁨")]
+    handles += [plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=8, label="채운 점 = 그 묶음에 1위와 통계적으로 구분 안 되는 모델이 있음(Holm p ≥ 0.05)"),
+                plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=8, markerfacecolor="white", label="빈 점 = 그 묶음 모델이 모두 1위보다 유의하게 나쁨")]
     fig.legend(handles=handles, loc="lower center", ncol=3, frameon=False, fontsize=10.5, bbox_to_anchor=(0.5, -0.02))
-    fig.suptitle("변동성 국면별로 각 처리 방식의 가장 나은 모델이 칸 최선에서 얼마나 떨어져 있는가(시드 5개 평균, 구간마다 세로축 다름)",
-                 fontsize=13.5, x=0.01, ha="left", color=INK)
-    fig.tight_layout(rect=(0, 0.1, 1, 0.94))
+    fig.tight_layout(rect=(0, 0.1, 1, 1))  # 제목은 보고서·포스터 캡션이 맡는다
     p = IMG / f"{STEM}_fig1b_regime_lines.png"
-    fig.savefig(p, dpi=160, bbox_inches="tight")
-    save_poster(fig, p)
+    fig.savefig(p, dpi=300, bbox_inches="tight")
     plt.close(fig)
     return p
 
@@ -564,12 +548,63 @@ def fig_seqpar_lines(t: pd.DataFrame) -> Path:
     handles = [plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=9, label="채운 점 = 차이가 유의함(Holm p < 0.05)"),
                plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=9, markerfacecolor="white", label="빈 점 = 구분 안 됨")]
     fig.legend(handles=handles, loc="lower center", ncol=2, frameon=False, fontsize=11, bbox_to_anchor=(0.5, -0.01))
-    fig.suptitle("변동성 국면별 순차 대 병렬 묶음 비교(묶음 구성원 손실의 단순 평균, 시드 5개 평균, 선 = 예측 구간)",
-                 fontsize=13.5, x=0.01, ha="left", color=INK)
-    fig.tight_layout(rect=(0, 0.06, 1, 0.94))
+    fig.tight_layout(rect=(0, 0.06, 1, 1))  # 제목은 보고서·포스터 캡션이 맡는다
     p = IMG / f"{STEM}_fig2b_seqpar_lines.png"
-    fig.savefig(p, dpi=160, bbox_inches="tight")
-    save_poster(fig, p)
+    fig.savefig(p, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    return p
+
+
+def fig_top5(rg: pd.DataFrame) -> Path:
+    """예측 구간별 상위 5개 모델(위: 전체 기간, 아래: 가장 요동 Q5): 1위 대비 QLIKE 격차 점그림, 색 = 처리 방식."""
+    Hs = list(M.HORIZONS_H)
+    rows = (("전체", "전체 기간"), ("Q5", "가장 요동칠 때(Q5)"))
+    fig, axes = plt.subplots(len(rows), len(Hs), figsize=(25, 6.3))
+    for r, (scope, rlab) in enumerate(rows):
+        for c, H in enumerate(Hs):
+            ax = axes[r, c]
+            g = rg[(rg["H"] == H) & (rg["국면"] == scope) & (rg["모델"] != "naive")].sort_values("격차").reset_index(drop=True)
+            g["순위"] = np.arange(1, len(g) + 1)
+            deep = g[g["모델"].map(GROUP_OF).eq("병렬(딥러닝)")].head(1)
+            extra = deep if int(deep["순위"].iloc[0]) > 5 else deep.iloc[0:0]
+            items = list(g.head(5).itertuples()) + list(extra.itertuples())
+            ys = np.arange(len(items))[::-1].astype(float)
+            if len(extra):
+                ys[-1] -= 0.6   # 5위 밖 병렬 딥러닝 1위는 한 칸 띄운다
+                ax.axhline(ys[-1] + 0.8, color=MUTED, lw=0.8, ls=(0, (3, 3)))
+            xmax = max(float(it.격차) for it in items) * 1.45 or 1e-3
+            for y, it in zip(ys, items):
+                col = GROUP_COLOR[GROUP_OF[it.모델]]
+                v = max(float(it.격차), 0.0)
+                ax.plot([0, v], [y, y], color=col, lw=2.2, alpha=0.6, zorder=1)
+                ax.scatter(v, y, s=80, zorder=3, color=col if it.통계적동률 else "white", edgecolor=col, linewidth=2.2)
+                lab = "1위" if it.순위 == 1 else (f"+{v:.4f}" if v < 0.001 else f"+{v:.3f}")
+                ax.text(v + xmax * 0.05, y, lab, va="center", fontsize=10.5, color=INK)
+            ax.set_yticks(ys, [f"{it.순위}. {it.모델}" for it in items], fontsize=11.5)
+            for tl, it in zip(ax.get_yticklabels(), items):
+                tl.set_color(GROUP_COLOR[GROUP_OF[it.모델]])
+            ax.set_xlim(-xmax * 0.03, xmax)
+            ax.set_ylim(min(ys) - 0.6, max(ys) + 0.6)
+            ax.grid(axis="x", color=GRID)
+            ax.tick_params(axis="y", length=0)
+            ax.tick_params(axis="x", labelsize=9.5)
+            for s_ in ("top", "right", "left"):
+                ax.spines[s_].set_visible(False)
+            if r == 0:
+                ax.set_title(M.hlabel(H), fontsize=15, loc="left", color=INK, fontweight="bold", pad=12)
+            if c == 0:
+                ax.annotate(rlab, xy=(-0.78, 0.5), xycoords="axes fraction", rotation=90, va="center", ha="center",
+                            fontsize=14, fontweight="bold", color=INK)
+    fig.supxlabel("1위 모델 대비 QLIKE 격차(0 = 1위, 작을수록 좋음, 시드 5개 평균, 칸마다 가로축 다름)", fontsize=12.5)
+    handles = [plt.Line2D([], [], color=GROUP_COLOR[g_], lw=0, marker="o", markersize=10, label=lb) for g_, lb in
+               zip(GROUP_ORDER, ["순차(GARCH·GRU·LSTM)", "병렬 특징 기반(트리·커널)", "병렬 딥러닝(어텐션·합성곱·파운데이션)"])]
+    handles += [plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=10, label="채운 점 = 1위와 통계적으로 구분 안 됨(Holm p ≥ 0.05)"),
+                plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=10, markerfacecolor="white", label="빈 점 = 1위보다 유의하게 나쁨"),
+                plt.Line2D([], [], color=MUTED, lw=0.8, ls=(0, (3, 3)), label="점선 아래 = 5위 밖 병렬 딥러닝 중 가장 나은 모델")]
+    fig.legend(handles=handles, loc="lower center", ncol=3, frameon=False, fontsize=12, bbox_to_anchor=(0.5, -0.1))
+    fig.tight_layout(rect=(0.015, 0.0, 1, 1), h_pad=2.5, w_pad=5.5)
+    p = IMG / f"{STEM}_fig5_top5_by_horizon.png"
+    fig.savefig(p, dpi=300, bbox_inches="tight")
     plt.close(fig)
     return p
 
@@ -598,8 +633,7 @@ def fig_nonstationarity(ns: pd.DataFrame) -> Path:
               ncol=4, frameon=False, fontsize=11)
     fig.tight_layout()
     p = IMG / f"{STEM}_fig3_nonstationarity.png"
-    fig.savefig(p, dpi=160, bbox_inches="tight")
-    save_poster(fig, p, [""])
+    fig.savefig(p, dpi=300, bbox_inches="tight")
     plt.close(fig)
     return p
 
@@ -633,7 +667,7 @@ def fig_shift(ns: pd.DataFrame) -> Path:
         axes[1].spines[s].set_visible(False)
     fig.tight_layout()
     p = IMG / f"{STEM}_fig4_distribution_shift.png"
-    fig.savefig(p, dpi=160, bbox_inches="tight")
+    fig.savefig(p, dpi=300, bbox_inches="tight")
     plt.close(fig)
     return p
 
@@ -642,6 +676,38 @@ def fig_shift(ns: pd.DataFrame) -> Path:
 # ## 보고서
 
 # %%
+def top5_section(rg: pd.DataFrame, figs: dict) -> None:
+    """그림 5(예측 구간별 상위 5개)와 읽는 법·수치 해석을 보고서에 쓴다."""
+    emit(f"![예측 구간별 상위 5개 모델]({os.path.relpath(figs['top5'], RES)})")
+    emit()
+    emit("**읽는 법**: 행은 예측 구간, 왼쪽 열은 전체 기간, 오른쪽 열은 가장 요동칠 때(Q5)다. 칸마다 후보(naive 제외 29개, 4·12시간 28개) 중 "
+         "시드 5개 평균 QLIKE가 작은 순서로 5위까지 그렸다. 가로축은 1위 대비 QLIKE 격차(0 = 1위)이고 칸마다 축 범위가 다르다. 점 색과 모델 이름 색은 "
+         "처리 방식(파랑 순차, 주황 병렬 특징 기반, 갈색 병렬 딥러닝)이다. 채운 점은 1위와 통계적으로 구분 안 됨(국면 최선 검정의 H0 \"1위와 기대 QLIKE가 같다\"를 "
+         "Holm 보정 후 기각하지 못함), 빈 점은 1위보다 유의하게 나쁨이다. 병렬 딥러닝이 5위 안에 없으면 그중 가장 나은 모델을 점선 아래에 순위와 함께 붙였다. "
+         "1위 선정은 이 절의 지도와 같은 시각 동일 가중이다.")
+    emit()
+    emit("| 예측 구간 | 범위 | 5위 안 순차 | 5위 안 병렬 특징 기반 | 5위 안 병렬 딥러닝 | 병렬 딥러닝 최고 순위(모델, 1위 대비 격차, 1위와 구분 여부) |")
+    emit("| :--- | :--- | ---: | ---: | ---: | :--- |")
+    for H in M.HORIZONS_H:
+        for scope, lab in (("전체", "전체 기간"), ("Q5", "가장 요동(Q5)")):
+            g = rg[(rg["H"] == H) & (rg["국면"] == scope) & (rg["모델"] != "naive")].sort_values("격차").reset_index(drop=True)
+            top = g.head(5)["모델"].map(GROUP_OF)
+            d = g[g["모델"].map(GROUP_OF).eq("병렬(딥러닝)")].head(1)
+            rk = int(d.index[0]) + 1
+            tie = "구분 안 됨" if bool(d["통계적동률"].iloc[0]) else "유의하게 나쁨"
+            emit(f"| {M.hlabel(H)} | {lab} | {int((top == '순차').sum())} | {int((top == '병렬(특징 기반)').sum())} | "
+                 f"{int((top == '병렬(딥러닝)').sum())} | {rk}위({d['모델'].iloc[0]}, +{float(d['격차'].iloc[0]):.4f}, {tie}) |")
+    emit()
+    q5 = rg[(rg["국면"] == "Q5") & (rg["모델"] != "naive")]
+    win = {H: q5[q5["H"] == H].sort_values("격차")["모델"].iloc[0] for H in M.HORIZONS_H}
+    seq_top = [M.hlabel(H) for H in M.HORIZONS_H if GROUP_OF[win[H]] == "순차"]
+    emit(f"**해석**: 전체 기간의 5위 안은 대부분 트리·커널(주황)이고 순차는 15분(GARCH 3종)과 4·12시간(GRU·LSTM)에 들어온다. 가장 요동칠 때는 "
+         f"{'·'.join(seq_top) if seq_top else '해당 없음(순차 1위 없음)'} 1위가 순차 모델({', '.join(win[M.HORIZONS_H[i]] for i, H in enumerate(M.HORIZONS_H) if GROUP_OF[win[H]] == '순차')})로 "
+         "바뀌지만, 같은 칸의 트리·커널도 채운 점(1위와 구분 안 됨)으로 남는다. 병렬 딥러닝은 위 표의 순위처럼 대부분 5위 밖이며, 가장 요동칠 때는 "
+         "다섯 구간 모두 1위보다 유의하게 나쁘다(빈 점). 이 그림은 상위 모델만 보여 주므로 묶음 전체의 평균 비교는 3절의 묶음 검정을 본다.")
+    emit()
+
+
 def write_report(ns: pd.DataFrame, rg: pd.DataFrame, sd: pd.DataFrame, t: pd.DataFrame, figs: dict) -> None:
     rel = lambda p: os.path.relpath(p, RES)
     emit("# 27d번: 변동성 국면별 최선·순차 대 병렬 묶음 검정·비정상성 검정(시드 5개)")
@@ -750,10 +816,11 @@ def write_report(ns: pd.DataFrame, rg: pd.DataFrame, sd: pd.DataFrame, t: pd.Dat
     emit()
     emit(f"![국면별 최선 선 그래프]({rel(figs['map_lines'])})")
     emit()
-    emit("**선 그래프판 읽는 법**: 위 지도와 같은 결과를 처리 방식 묶음별로 다시 그렸다. 예측 구간마다 칸(국면)별로 각 묶음에서 가장 나은 모델이 그 칸 최선보다 "
+    emit("**선 그래프판 읽는 법**: 위 지도와 같은 결과를 처리 방식 묶음별로 다시 그렸다(그림의 '1위'는 이 보고서의 '최선'과 같다). 예측 구간마다 칸(국면)별로 각 묶음에서 가장 나은 모델이 그 칸 최선보다 "
          "QLIKE가 얼마나 큰지(격차, 0이면 그 묶음 모델이 최선)를 잇는다. 채운 점은 최선과 통계적 동률, 빈 점은 최선보다 유의하게 나쁜 경우다. 각 묶음의 "
          "최선 구성원을 고른 값이라 묶음 전체의 평균 성능은 아니다(묶음 평균 비교는 3절).")
     emit()
+    top5_section(rg, figs)
     emit("**읽는 법**: 칸마다 시드 5개 평균 QLIKE가 가장 작은 모델(굵은 글씨)이고, 칸 색은 그 모델의 처리 방식이다. \"시드별 최선: 같은 모델 k/5 · 같은 처리 방식 m/5\"는 시드마다 "
          "따로 골랐을 때 같은 모델이 최선이었던 횟수와 같은 처리 방식 묶음의 모델이 최선이었던 횟수, \"동률\"은 최선과 통계적으로 구분되지 않은(Holm p ≥ 0.05) 모델 수를 묶음별로 센 것이다. "
          "맨 윗줄(전체 기간)은 국면을 나누지 않은 결과다. 이 줄은 시각별 종목 평균 손실의 시각 평균으로 최선을 고르므로, 종목별 평균을 "
@@ -891,7 +958,8 @@ def main(argv=None) -> None:
     t = seqpar_tests(cache)
     print("[순차 대 병렬] 완료", flush=True)
     figs = {"ns": fig_nonstationarity(ns), "shift": fig_shift(ns), "map": fig_regime_map(rg, sd), "seqpar": fig_seqpar(t),
-            "map_lines": fig_regime_lines(rg), "seqpar_lines": fig_seqpar_lines(t)}
+            "map_lines": fig_regime_lines(rg), "seqpar_lines": fig_seqpar_lines(t),
+            "top5": fig_top5(rg)}
     write_report(ns, rg, sd, t, figs)
     print(f"[27d 완료] {RES / (STEM + '_report.md')}", flush=True)
 

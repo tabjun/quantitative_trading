@@ -327,7 +327,7 @@ def eda_regime(base: dict, workers: int) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def fig_eda(t: pd.DataFrame) -> Path:
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5.8))
+    fig, axes = plt.subplots(1, 2, figsize=(15.5, 5.3))
     x = np.arange(1, 6)
     for H in M.HORIZONS_H:
         g = t[t["H"] == H].sort_values("국면")
@@ -336,9 +336,9 @@ def fig_eda(t: pd.DataFrame) -> Path:
             axes[1].plot(x, g["rho_중앙값"], color=H_COLOR[H], marker="o", lw=2.2, label=M.hlabel(H))
     axes[0].axhline(0, color=MUTED, lw=1)
     axes[1].axhline(0, color=MUTED, lw=1)
-    axes[0].set_title("다음 H분 RV ÷ 직전 H분 RV(로그, 종목 중앙값)\n음수 = 다음 변동성이 직전보다 작다(평균 회귀)", fontsize=12, loc="left")
-    axes[1].set_title("직전 창 RV² 중 뒤쪽 절반의 몫과 왼쪽 로그비의 순위 상관\n(Spearman, 종목 중앙값, 0 위 = 뒤쪽에 몰리면 덜 줄어듦, 15분은 해당 없음)",
-                      fontsize=12, loc="left")
+    axes[0].set_title("(왼쪽) 다음 변동성 ÷ 직전 변동성(로그, 종목 중앙값)\n0보다 아래 = 다음 변동성이 직전보다 줄어든다(평균 회귀)", fontsize=12.5, loc="left")
+    axes[1].set_title("(오른쪽) 직전 구간 뒤쪽 절반에 변동성이 몰린 정도와 왼쪽 값의 순위 상관\n"
+                      "(Spearman, 종목 중앙값, 0보다 위 = 뒤쪽에 몰렸을수록 덜 줄어든다, 15분은 해당 없음)", fontsize=12.5, loc="left")
     for ax in axes:
         ax.set_xticks(x, ["Q1\n잔잔", "Q2", "Q3", "Q4", "Q5\n요동"])
         ax.set_xlabel("직전 변동성 국면(종목별 학습 구간 5분위)")
@@ -346,14 +346,9 @@ def fig_eda(t: pd.DataFrame) -> Path:
         for s_ in ("top", "right"):
             ax.spines[s_].set_visible(False)
         ax.legend(frameon=False, title="예측 구간", fontsize=10)
-    fig.suptitle("EDA: 평가 구간 20종목, 국면별 평균 회귀와 직전 창 안의 최근 경로가 다음 변동성을 설명하는 정도", fontsize=13.5, x=0.01,
-                 ha="left", color=INK)
-    fig.tight_layout(rect=(0, 0, 1, 0.94))
+    fig.tight_layout()  # 제목은 보고서·포스터 캡션이 맡는다
     p = IMG / f"{STEM}_fig3_eda_recent_path.png"
-    fig.savefig(p, dpi=160, bbox_inches="tight")
-    D27.save_poster(fig, p, ["(왼쪽) 다음 변동성 ÷ 직전 변동성(로그, 종목 중앙값)\n0보다 아래 = 다음 변동성이 직전보다 줄어든다",
-                             "(오른쪽) 직전 구간 뒤쪽 절반에 변동성이 몰린 정도와 왼쪽 값의 순위 상관\n"
-                             "(종목 중앙값, 0보다 위 = 뒤쪽에 몰렸을수록 덜 줄어든다, 15분은 해당 없음)"])
+    fig.savefig(p, dpi=300, bbox_inches="tight")
     plt.close(fig)
     return p
 
@@ -398,7 +393,7 @@ def fig_group(t: pd.DataFrame) -> Path:
                  "칸 아래 숫자 = 시드별로 다시 검정해 같은 방향으로 유의했던 시드 수", fontsize=13.5, x=0.01, ha="left", color=INK)
     fig.tight_layout(rect=(0, 0, 1, 0.93))
     p = IMG / f"{STEM}_fig1_group_dm.png"
-    fig.savefig(p, dpi=160, bbox_inches="tight")
+    fig.savefig(p, dpi=300, bbox_inches="tight")
     plt.close(fig)
     return p
 
@@ -431,7 +426,7 @@ def fig_rnn_rank(rk: pd.DataFrame, sd: pd.DataFrame) -> Path:
                  "시드 동률 = 시드마다 최선을 다시 골라 검정했을 때 그 모델이 최선이거나 동률이었던 시드 수", fontsize=13, x=0.01, ha="left", color=INK)
     fig.tight_layout(rect=(0, 0.04, 1, 0.95))
     p = IMG / f"{STEM}_fig2_rnn_rank.png"
-    fig.savefig(p, dpi=160, bbox_inches="tight")
+    fig.savefig(p, dpi=300, bbox_inches="tight")
     plt.close(fig)
     return p
 
