@@ -499,8 +499,16 @@ def section_c(rd: pd.DataFrame | None, store: dict | None) -> None:
                 cells.append(f"{x['상관'].iloc[0]:.3f} ({x['상관최소'].iloc[0]:.3f})")
         emit(f"| {nm} | " + " | ".join(cells) + " |")
     emit()
-    emit("**읽는 법과 해석**: 셀은 예측과 실제의 로그 상관(RV>0 시점)의 종목 중앙값과 괄호 안 최솟값이다. 상관이 0.1보다 낮거나 필터로 바뀐 예측이 "
-         f"5%를 넘는 칸을 이상치로 본다. 이상치 칸: {', '.join(f'{r_.모델} {M.hlabel(int(r_.H))}' for r_ in flag.itertuples()) or '없음'}.")
+    # 종목 단위 판정: 중앙값으로 먼저 묶으면 한 종목의 품질 저하가 가려진다(2026-10-10 Codex 리뷰 지적).
+    rowflag = q[(q["로그상관"] < 0.1) | (q["트리밍비율"] > 0.05)].sort_values("로그상관")
+    rowtxt = ", ".join(f"{r_.종목.replace('KRW-', '')} {r_.모델} {M.hlabel(int(r_.H))}({r_.로그상관:.3f})"
+                       for r_ in rowflag.itertuples()) or "해당 없음(모든 종목·구간·모델 칸이 기준 안)"
+    emit("**읽는 법과 해석**: 셀은 예측과 실제의 로그 상관(RV>0 시점)의 종목 중앙값과 괄호 안 최솟값이다. 판정 기준은 상관 0.1 미만 또는 "
+         "필터로 바뀐 예측 5% 초과이고, 두 단위로 따로 본다. "
+         f"(1) 모델·구간 단위(종목 중앙값): {', '.join(f'{r_.모델} {M.hlabel(int(r_.H))}' for r_ in flag.itertuples()) or '해당 없음(중앙값이 모두 기준 안)'}. "
+         f"(2) 종목 단위(종목 × 구간 × 모델 {len(q):,}칸 각각): {len(rowflag)}칸 — {rowtxt}. "
+         "종목 단위 이상치는 그 종목에서 해당 모델의 예측이 실제와 거의 같이 움직이지 않았다는 뜻이고, 그 손실은 이미 QLIKE 평균에 들어 있다. "
+         "이상치 칸의 모델이 어느 구간·국면에서든 1위인지는 27d 결과로 따로 확인한다.")
     emit()
     emit("### C2. 26c 공유 모델 값 대조")
     emit()
