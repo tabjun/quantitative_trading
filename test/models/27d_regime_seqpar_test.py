@@ -92,6 +92,19 @@ GATE: dict = {}          # 재현 게이트 값(보고서에 기록)
 ZERO_Q15: list[str] = []  # 15분 학습 20% 분위수가 0인 종목(가격 정지가 Q1·Q2 경계에 걸림)
 
 
+def save_poster(fig, p: Path, axis_titles: list[str] | None = None) -> Path:
+    """포스터판: 그림 안 큰 제목을 빼고(캡션이 설명을 맡는다) 인쇄용 300dpi로 따로 저장한다."""
+    if fig._suptitle is not None:
+        fig._suptitle.set_text("")
+    for t_ in fig.findobj(matplotlib.text.Text):  # 포스터 청중용 용어: '최선' → '1위'(캡션에서 정의)
+        t_.set_text(t_.get_text().replace("칸 최선", "1위 모델").replace("최선", "1위"))
+    for ax, tt in zip(fig.axes, axis_titles or []):
+        ax.set_title(tt, fontsize=12.5, loc="left")
+    q = p.with_name(p.stem + "_poster.png")
+    fig.savefig(q, dpi=300, bbox_inches="tight")
+    return q
+
+
 def emit(t: str = "") -> None:
     _LINES.append(t)
 
@@ -491,6 +504,7 @@ def fig_regime_lines(rg: pd.DataFrame) -> Path:
     fig.tight_layout(rect=(0, 0.1, 1, 0.94))
     p = IMG / f"{STEM}_fig1b_regime_lines.png"
     fig.savefig(p, dpi=160, bbox_inches="tight")
+    save_poster(fig, p)
     plt.close(fig)
     return p
 
@@ -555,6 +569,7 @@ def fig_seqpar_lines(t: pd.DataFrame) -> Path:
     fig.tight_layout(rect=(0, 0.06, 1, 0.94))
     p = IMG / f"{STEM}_fig2b_seqpar_lines.png"
     fig.savefig(p, dpi=160, bbox_inches="tight")
+    save_poster(fig, p)
     plt.close(fig)
     return p
 
@@ -584,6 +599,7 @@ def fig_nonstationarity(ns: pd.DataFrame) -> Path:
     fig.tight_layout()
     p = IMG / f"{STEM}_fig3_nonstationarity.png"
     fig.savefig(p, dpi=160, bbox_inches="tight")
+    save_poster(fig, p, [""])
     plt.close(fig)
     return p
 

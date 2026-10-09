@@ -351,6 +351,9 @@ def fig_eda(t: pd.DataFrame) -> Path:
     fig.tight_layout(rect=(0, 0, 1, 0.94))
     p = IMG / f"{STEM}_fig3_eda_recent_path.png"
     fig.savefig(p, dpi=160, bbox_inches="tight")
+    D27.save_poster(fig, p, ["(왼쪽) 다음 변동성 ÷ 직전 변동성(로그, 종목 중앙값)\n0보다 아래 = 다음 변동성이 직전보다 줄어든다",
+                             "(오른쪽) 직전 구간 뒤쪽 절반에 변동성이 몰린 정도와 왼쪽 값의 순위 상관\n"
+                             "(종목 중앙값, 0보다 위 = 뒤쪽에 몰렸을수록 덜 줄어든다, 15분은 해당 없음)"])
     plt.close(fig)
     return p
 
