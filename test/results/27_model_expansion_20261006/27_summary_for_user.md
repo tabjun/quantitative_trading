@@ -240,3 +240,25 @@ H0를 기각하지 못한 것은 "같다고 증명했다"가 아니라 "차이�
 4. **4·12시간 표본 부족**: 평가 시각이 1,964개·651개라 상위 모델을 구분할 증거가 부족하다. 결론을 더 단단히 하려면 평가 기간을 늘리거나 종목을 묶은 검정(패널 DM)이 필요하다.
 5. **국면별 표본과 학습 절차**: 12시간 국면당 관측은 0.2만~0.3만이라 동률이 넓다. 순차 대 병렬 묶음 차이는 학습 절차를 맞추지 않은 차이다. 요동 국면 최선은 15분봉 구성의 순환망에만 해당하고, 15분봉 구성과 블록 구성은 입력 표현·과거 길이·학습 표본·배치가 함께 달라 입력 표현만의 효과는 식별하지 못했다(27e). 논문용 후속은 별도 실험으로 한다: 학습 절차를 맞춘 순차 대 병렬 통제 비교, 시드 확장, 종목을 묶은 패널 DM, 구조 변화 시점 검정.
 6. **사전학습 데이터 구성**: 파운데이션 모델 가중치는 모두 평가 시작 전에 확정됐지만(최소 41일 앞섬), 사전학습 데이터에 업비트 시계열이 들어갔는지는 공개되지 않아 확인하지 못했다.
+
+---
+
+## 6. 참고문헌(이 요약과 포스터에서 인용한 문헌)
+
+- Ansari, A. F. 외 (2024). Chronos: Learning the language of time series. *Transactions on Machine Learning Research*.
+- Bollerslev, T., Patton, A. J., & Quaedvlieg, R. (2016). Exploiting the errors: A simple approach for improved volatility forecasting. *Journal of Econometrics*, 192(1), 1–18.
+- Bucci, A. (2020). Realized volatility forecasting with neural networks. *Journal of Financial Econometrics*, 18(3), 502–531.
+- Corsi, F. (2009). A simple approximate long-memory model of realized volatility. *Journal of Financial Econometrics*, 7(2), 174–196.
+- Das, A., Kong, W., Sen, R., & Zhou, Y. (2024). A decoder-only foundation model for time-series forecasting. *Proceedings of the 41st International Conference on Machine Learning (ICML)*.
+- Diebold, F. X., & Mariano, R. S. (1995). Comparing predictive accuracy. *Journal of Business & Economic Statistics*, 13(3), 253–263.
+- Hansen, P. R., Lunde, A., & Nason, J. M. (2011). The model confidence set. *Econometrica*, 79(2), 453–497.
+- Holm, S. (1979). A simple sequentially rejective multiple test procedure. *Scandinavian Journal of Statistics*, 6(2), 65–70.
+- Lamoureux, C. G., & Lastrapes, W. D. (1990). Persistence in variance, structural change, and the GARCH model. *Journal of Business & Economic Statistics*, 8(2), 225–234.
+- Lerch, S., Thorarinsdottir, T. L., Ravazzolo, F., & Gneiting, T. (2017). Forecaster's dilemma: Extreme events and forecast evaluation. *Statistical Science*, 32(1), 106–127.
+- Luo, D., & Wang, X. (2024). ModernTCN: A modern pure convolution structure for general time series analysis. *International Conference on Learning Representations (ICLR)*.
+- Newey, W. K., & West, K. D. (1987). A simple, positive semi-definite, heteroskedasticity and autocorrelation consistent covariance matrix. *Econometrica*, 55(3), 703–708.
+- Nie, Y., Nguyen, N. H., Sinthong, P., & Kalagnanam, J. (2023). A time series is worth 64 words: Long-term forecasting with Transformers. *International Conference on Learning Representations (ICLR)*.
+- Patton, A. J. (2011). Volatility forecast comparison using imperfect volatility proxies. *Journal of Econometrics*, 160(1), 246–256.
+- Sucarrat, G., & Escribano, A. (2018). Estimation of log-GARCH models in the presence of zero returns. *The European Journal of Finance*, 24(10), 809–827.
+- Wu, H., Hu, T., Liu, Y., Zhou, H., Wang, J., & Long, M. (2023). TimesNet: Temporal 2D-variation modeling for general time series analysis. *International Conference on Learning Representations (ICLR)*.
+- Zeng, A., Chen, M., Zhang, L., & Xu, Q. (2023). Are Transformers effective for time series forecasting? *Proceedings of the AAAI Conference on Artificial Intelligence*, 37(9), 11121–11128.
