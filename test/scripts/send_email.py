@@ -1125,38 +1125,6 @@ EDA 단계로 돌아와 점검하고 있습니다.
     return subject, body, []
 
 
-def gmail_mcp_reauth_reminder_email(commit_hash: str) -> tuple[str, str, list[Path]]:
-    auth_url = (
-        "https://accounts.google.com/o/oauth2/v2/auth?access_type=offline&scope="
-        "https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fgmail.modify%20"
-        "https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fgmail.settings.basic"
-        "&response_type=code&client_id=945664325537-d78904mq1lkbgcpibbmukqbm98gpi2gb.apps.googleusercontent.com"
-        "&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Foauth2callback"
-    )
-    body = f"""지메일 MCP 인증 갱신 안내 메일입니다.
-
-구글의 "테스트 중(Testing)" 앱 정책상, 지금 발급된 지메일 연동 인증(refresh token)은
-발급 후 약 7일이 지나면 만료됩니다. 만료되기 전에 아래 순서로 다시 인증해주세요.
-
-1. 로컬(윈도우 PC) Claude Code 세션을 엽니다 — claude-in-chrome이 연결된 그 창
-   (`claude --chrome`으로 실행한 세션).
-2. ~/.gmail-mcp/reauth_local_prompt.md 에 저장해둔 프롬프트를 그 세션에 그대로
-   붙여넣습니다. (브라우저로 인증 URL을 열고, 로그인/허용까지 진행한 뒤, 구글
-   토큰 엔드포인트와 직접 교환해서 최종 JSON을 출력하도록 구성된 프롬프트입니다.)
-3. 로컬 세션이 출력한 JSON을 그대로 복사해서, 서버 쪽(원격) Claude Code 세션에
-   붙여넣고 "이 JSON으로 지메일 credentials.json 갱신해줘"라고 요청합니다.
-4. Claude Code 세션을 재시작하면 (껐다가 다시 켜기) 지메일 MCP가 새 인증으로
-   다시 붙습니다.
-
-참고용 인증 URL (프롬프트 파일에도 동일하게 포함되어 있습니다):
-{auth_url}
-
-이 알림은 서버 crontab에 등록된 자동 발송이며, 지메일 MCP 연동을 더 이상 쓰지 않으실 경우
-Claude에게 "지메일 재인증 알림 크론잡 삭제해줘"라고 요청하면 해제됩니다.
-"""
-    subject = "[알림] 지메일 MCP 인증 갱신 필요 (7일 만료 임박)"
-    return subject, body, []
-
 
 def project_direction_eli5_email(commit_hash: str) -> tuple[str, str, list[Path]]:
     """2026-09-04: 프로젝트 방향(변동성 기준) 정리 + 근거 보고서 링크 2종.
@@ -1339,7 +1307,6 @@ PRESETS = {
     "feature_guardrail_results": feature_guardrail_results_email,
     "feature_algorithm_resource": feature_algorithm_resource_email,
     "volatility_direction_followup": volatility_direction_followup_email,
-    "gmail_mcp_reauth_reminder": gmail_mcp_reauth_reminder_email,
     "project_direction_eli5": project_direction_eli5_email,
     "assumption_diagnosis": assumption_diagnosis_email,
     "pipeline_plan": pipeline_plan_email,

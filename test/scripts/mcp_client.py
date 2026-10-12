@@ -1,13 +1,12 @@
 """MCP 서버 직접 호출용 최소 클라이언트.
 
-용도: `.mcp.json`에 등록된 MCP 서버(arxiv=stdio, huggingface=streamable HTTP)를
+용도: `.mcp.json`에 등록된 MCP 서버(현재 arxiv=stdio, streamable HTTP 서버도 지원)를
 Claude Code/Codex 세션 밖에서도 호출한다. MCP 서버는 에이전트 세션 **시작 시점**에만
 로드되므로, 등록 직후 같은 세션에서 바로 쓰려면 이 스크립트를 경유한다.
 
 사용 예:
     python test/scripts/mcp_client.py arxiv tools
     python test/scripts/mcp_client.py arxiv search_papers '{"query": "volume volatility", "max_results": 5}'
-    python test/scripts/mcp_client.py huggingface hub_repo_search '{"query": "garch", "type": "model"}'
 """
 
 from __future__ import annotations
@@ -86,9 +85,6 @@ def _http_post(url: str, body: dict, session_id: str | None, timeout: int) -> tu
     request.add_header("Accept", "application/json, text/event-stream")
     if session_id:
         request.add_header("Mcp-Session-Id", session_id)
-    token = os.environ.get("HF_TOKEN")
-    if token and "huggingface" in url:
-        request.add_header("Authorization", f"Bearer {token}")
     with urllib.request.urlopen(request, timeout=timeout) as response:
         return response.headers.get("Mcp-Session-Id"), response.read().decode()
 
