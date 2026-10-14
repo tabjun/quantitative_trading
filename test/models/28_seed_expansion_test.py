@@ -724,11 +724,18 @@ def chosen_lr(tk: str, H: int, name: str, quick: bool) -> float:
     return float(pickle.loads(f.read_bytes())["meta"]["lr"])
 
 
+def _peak_rss_gb() -> float:
+    """작업 프로세스의 최대 상주 메모리(GB). 2026-10-15 메모리 초과로 jupyterhub 서비스째 재시작된 뒤 추가."""
+    import resource
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024 ** 2
+
+
 def _cpu_task(tk, seed, quick):
     f = part_path("cpu", tk, seed, quick=quick)
     if f.exists():
         return "skip", tk
     res = run_cpu_job(tk, seed, quick)
+    res["meta"]["최대RSS_GB"] = _peak_rss_gb()
     _atomic_write(f, pickle.dumps(res))
     return f"{res['elapsed']:.0f}s 실패 {len(res['fails'])}", tk
 
@@ -742,29 +749,96 @@ def _gpu_task(tk, H, name, seed, quick):
     except Exception as e:
         traceback.print_exc()
         return f"실패 {type(e).__name__}: {str(e)[:160]}", f.name
+    res["meta"]["최대RSS_GB"] = _peak_rss_gb()
     _atomic_write(f, pickle.dumps(res))
-    return f"{res['meta']['초']:.0f}s lr {res['meta']['lr']:g}", f.name
+    return f"{res['meta']['초']:.0f}s lr {res['meta']['lr']:g} RSS {res['meta']['최대RSS_GB']:.1f}GB", f.name
 
 
-def run_pool(tasks: list, fn, workers: int, label: str, retries: int = 1) -> list:
-    """작업을 병렬로 돌리고 실패한 작업은 retries번 다시 돌린다. 끝까지 실패한 작업 목록을 돌려준다."""
+# 공유 서버 자원 한도(AGENTS.md 2.14). 2026-10-15 03:11 GPU 4 + CPU 6 워커가 RAM 30GB를 넘겨 jupyterhub.service가
+# 재시작되고 그 안의 모든 프로세스(서비스 세션 포함)가 종료됐다. 고정 워커 수 대신, 작업을 하나 넣을 때마다
+# "사용 가능 메모리 − 이미 돌고 있는 작업이 앞으로 더 쓸 몫 ≥ 예비분 + 새 작업 추정치"일 때만 넣는다.
+# 한도는 LIMITS 파일로 실행 중에도 바꿀 수 있다(다른 세션이 무거운 작업을 할 때 낮춘다).
+LIMITS = RES / "parts" / "_limits.json"
+LIMIT_DEFAULT = {"reserve_gb": 6.0, "floor_gb": 4.5, "gpu_reserve_gb": 4.0, "max_gpu_workers": 3, "max_cpu_workers": 4,
+                 "est_gb": {"cpu_s0": 5.0, "cpu": 3.0, "gpu": 2.8, "pi": 2.0}}
+
+
+def limits() -> dict:
+    d = json.loads(json.dumps(LIMIT_DEFAULT))
+    try:
+        d.update(json.loads(LIMITS.read_text()))
+    except Exception:
+        pass
+    return d
+
+
+def _avail_gb() -> float:
+    return M.free_ram_gb()
+
+
+def _gpu_free_gb() -> float:
+    try:
+        import torch
+        return torch.cuda.mem_get_info()[0] / 1024 ** 3 if torch.cuda.is_available() else 99.0
+    except Exception:
+        return 99.0
+
+
+def _pool_rss_gb(pool) -> float:
+    import psutil
+    tot = 0.0
+    for pid in list(getattr(pool, "_processes", {}) or {}):
+        try:
+            tot += psutil.Process(pid).memory_info().rss / 1024 ** 3
+        except Exception:
+            pass
+    return tot
+
+
+def run_pool(tasks: list, fn, workers: int, label: str, retries: int = 1, kind: str = "cpu") -> list:
+    """작업을 메모리 한도 안에서 병렬로 돌린다. workers는 상한이고, 실제 동시 실행 수는 메모리가 정한다.
+    실패한 작업은 retries번 다시 돌리고, 끝까지 실패한 작업 목록을 돌려준다."""
     import multiprocessing as mp
+    from concurrent.futures import wait, FIRST_COMPLETED
     ctx = mp.get_context("spawn")
     pending = list(tasks)
     for attempt in range(retries + 1):
-        failed = []
-        t0 = time.time()
-        with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as pool:
-            futs = {pool.submit(fn, *t): t for t in pending}
-            for k, fu in enumerate(as_completed(futs), 1):
-                t = futs[fu]
-                try:
-                    msg, nm = fu.result()
-                except Exception as e:
-                    msg, nm = f"실패 {type(e).__name__}: {str(e)[:160]}", str(t)
-                if msg.startswith("실패"):
-                    failed.append(t)
-                print(f"  [{label} {k}/{len(pending)}] {nm} {msg} · 경과 {(time.time() - t0) / 60:.1f}분", flush=True)
+        failed, done_n, t0, last_note = [], 0, time.time(), 0.0
+        queue = list(pending)
+        with ProcessPoolExecutor(max_workers=max(workers, 1), mp_context=ctx) as pool:
+            running: dict = {}
+            while queue or running:
+                L = limits()
+                cap = min(workers, int(L["max_gpu_workers"] if kind == "gpu" else L["max_cpu_workers"]))
+                est = float(L["est_gb"].get(kind, 3.0))
+                if queue and len(running) < max(cap, 1):
+                    owed = max(0.0, len(running) * est - _pool_rss_gb(pool))       # 돌고 있는 작업이 더 쓸 몫(추정)
+                    room = _avail_gb() - owed
+                    gpu_ok = kind != "gpu" or _gpu_free_gb() >= float(L["gpu_reserve_gb"])
+                    if (not running) and _avail_gb() >= float(L["floor_gb"]) + est and gpu_ok or \
+                            room >= float(L["reserve_gb"]) + est and gpu_ok:
+                        t = queue.pop(0)
+                        running[pool.submit(fn, *t)] = t
+                        continue
+                    if time.time() - last_note > 600:
+                        print(f"  [{label}] 메모리 대기: 사용 가능 {_avail_gb():.1f}GB, 예약 {owed:.1f}GB, "
+                              f"동시 {len(running)}/{cap}", flush=True)
+                        last_note = time.time()
+                if not running:
+                    time.sleep(15)
+                    continue
+                fin, _ = wait(list(running), timeout=15, return_when=FIRST_COMPLETED)
+                for fu in fin:
+                    t = running.pop(fu)
+                    try:
+                        msg, nm = fu.result()
+                    except Exception as e:
+                        msg, nm = f"실패 {type(e).__name__}: {str(e)[:160]}", str(t)
+                    if msg.startswith("실패"):
+                        failed.append(t)
+                    done_n += 1
+                    print(f"  [{label} {done_n}/{len(pending)}] {nm} {msg} · 경과 {(time.time() - t0) / 60:.1f}분 · "
+                          f"여유 {_avail_gb():.1f}GB · 동시 {len(running) + 1}", flush=True)
         if not failed:
             return []
         print(f"[{label}] 실패 {len(failed)}개 재시도({attempt + 1}/{retries})", flush=True)
@@ -1502,13 +1576,14 @@ def main(argv=None) -> None:
     M.halt_labels()
     t0 = time.time()
     if a.family == "pi":
-        left = run_pool([(tk, a.quick) for tk in tickers], pi_job_task, a.workers, "π", a.retries)
+        left = run_pool([(tk, a.quick) for tk in tickers], pi_job_task, a.workers, "π", a.retries, kind="pi")
     elif a.family == "cpu":
-        left = run_pool([(tk, a.seed, a.quick) for tk in tickers], _cpu_task, a.workers, f"CPU s{a.seed}", a.retries)
+        left = run_pool([(tk, a.seed, a.quick) for tk in tickers], _cpu_task, a.workers, f"CPU s{a.seed}", a.retries,
+                        kind="cpu_s0" if a.seed == 0 else "cpu")
     elif a.family == "gpu":
         hs = [int(h) for h in a.horizons.split(",")]
         tasks = [(tk, H, nm, a.seed, a.quick) for nm in a.models.split(",") for H in hs for tk in tickers]
-        left = run_pool(tasks, _gpu_task, a.workers, f"GPU s{a.seed}", a.retries)
+        left = run_pool(tasks, _gpu_task, a.workers, f"GPU s{a.seed}", a.retries, kind="gpu")
     elif a.family == "combine":
         for s in [int(x) for x in a.seeds.split(",")] if a.seeds else [a.seed]:
             save_seed(s, tickers, a.quick)
