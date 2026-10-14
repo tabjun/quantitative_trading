@@ -406,6 +406,20 @@ arXiv 대조 완료(제목, 저자 확인): 1406.1078(GRU), 1706.03762(Transform
 | S-Mamba | 저자 ETTh1 스크립트: batch 32, lr 7e-5, d_model 256, d_state 2, 10에폭 | 같음 | - |
 | GRU·LSTM | (자체 학습 루프) | 배치 2,048, bf16 혼합정밀도, 메모리 부족 시 배치 절반 | - |
 
+**28번 변경분(2026-10-15, `test/models/28_seed_expansion_test.py`).** 위 표의 27번 값에서 아래만 바꾼다. 나머지는 같다.
+
+| 모델 | 공식 기본값(확인 근거) | 27번 | 28번 | 이유 |
+| :--- | :--- | :--- | :--- | :--- |
+| neuralforecast 6종 | `max_steps`: PatchTST·Autoformer 5,000, iTransformer·TCN·TimesNet·TimeXer 1,000. `learning_rate`: PatchTST·Autoformer·TimesNet 1e-4, 나머지 1e-3(설치본 3.2.2 생성자 기본값, 2026-10-15 `inspect.signature`로 확인). 조기 종료는 `EarlyStopping`만 쓰고 체크포인트를 끈다(`_base_model.py`) | max_steps 1,000, 기본 학습률, 인내 3, 최선 가중치 복원 없음 | **max_steps 5,000**(라이브러리 기본값 중 큰 값), 검증 100스텝마다, **인내 5**, **최선 가중치 복원 콜백**, **학습률 3점(기본값 × 0.25·1·4)** | 27번에서 상한 도달 14~48%, 멈춘 적합은 최선보다 300스텝 뒤 가중치로 예측했다 |
+| ModernTCN | 저자 lr 1e-4 | 저자 값 | 학습률 3점(1e-4 × 0.25·1·4), 나머지 저자 값 | 모든 학습 신경망에 같은 탐색 기회 |
+| S-Mamba | 저자 lr 7e-5 | 저자 값 | 학습률 3점(7e-5 × 0.25·1·4), 나머지 저자 값(러너 파일은 그대로 두고 모듈 상수만 바꿔 실행) | 같음 |
+| GRU·LSTM | (자체) | 학습률 2e-3·5e-4·1e-4 | **학습률 8e-3·2e-3·5e-4**(중심 2e-3 × 4·1·0.25), 옵티마이저 상태 깊은 복사 | 27번에서 상단 2e-3 선택 71%(범위가 위에서 잘렸을 가능성) |
+| 전 학습 모델·정지 분류기 | - | 보정은 내부 모델, 평가 예측은 재적합 모델 | **무재적합**: 내부 모델 하나로 보정·평가 예측 | 보정 계수와 예측 모델 불일치(15분 QLIKE +0.09 악화) 제거 |
+
+학습률은 시드 0에서 (종목, 구간, 모델)마다 내부검증 구간의 척도 보정 QLIKE로 고르고 모든 시드에 고정한다.
+
+**속도 측정(2026-10-15, KRW-BTC, 시드 0, 학습률 3점, GPU 워커 2).** 작업 하나(3점 적합) 소요: GRU·LSTM 13~17초, PatchTST 15~47초, iTransformer 67~95초, TCN 7~65초, Autoformer 135~139초, TimesNet 546~703초, TimeXer 64~97초, ModernTCN 1~12초, S-Mamba 6~105초. 상한 5,000 도달 0건(최장 3,400스텝, Autoformer 12시간). 이로 추정한 GPU 작업량은 시드 0이 약 30작업시간, 시드 1 이상이 시드당 약 10작업시간이며 TimesNet이 약 60%다.
+
 활용 참고(논문 외): TimesFM 개요·장단점·투자 활용·경쟁 모델 비교 정리 — https://github.com/gameworkerkim/vibe-investing/blob/main/TechDoc/TimesFM/TimesFM_%EB%B6%84%EC%84%9D_%EA%B0%80%EC%9D%B4%EB%93%9C.md
 (이 문서의 코드 예시 `TimesFmHparams(per_core_batch_size=32, ...)`는 1.x·2.0 API이고, 2.5는 `ForecastConfig`를 쓴다)
 
