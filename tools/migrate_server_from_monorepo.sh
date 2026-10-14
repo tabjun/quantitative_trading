@@ -59,7 +59,7 @@ echo "대응 커밋: $(git -C "$tmp/repo" log -1 --format='%h %s' "$match")"
 echo "이후 적용될 커밋:"; git -C "$tmp/repo" log --oneline "$match..origin/stock"
 
 echo; echo "옛 경로를 쓰는 실행 중 프로세스(이동 후에도 심볼릭 링크로 계속 동작한다):"
-pgrep -af -- "$OLD" | grep -v "migrate_server_from_monorepo" || echo "  없음"
+pgrep -af -- "$OLD" 2>/dev/null | grep -v "migrate_server_from_monorepo" || echo "  없음"
 
 if [ "$APPLY" -ne 1 ]; then
   printf '\n점검 통과. 실제 이전은 --apply 를 붙여 다시 실행한다.\n'
@@ -75,7 +75,8 @@ git symbolic-ref HEAD refs/heads/stock
 git config branch.stock.remote origin
 git config branch.stock.merge refs/heads/stock
 git config core.hooksPath .githooks
-git lfs install --local >/dev/null 2>&1 || echo "(git-lfs 없음: LFS 노트북은 포인터로 남는다)"
+# 훅은 .githooks에 이미 있으니 LFS 필터 설정만 저장소에 등록한다(hooksPath가 있으면 훅 설치는 실패한다).
+git lfs install --local --skip-repo >/dev/null 2>&1 || echo "(git-lfs 필터 등록 실패: LFS 노트북이 포인터로 보일 수 있다)"
 git reset -q
 # tools/는 옛 저장소에서 상위 폴더에 있었다 — 같은 내용을 인덱스에서 꺼내 저장소 안에 둔다.
 git checkout -- tools
