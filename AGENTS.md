@@ -204,7 +204,7 @@ test/images/ {번호}_{실험약칭}_{YYYYMMDD}/{번호}_{실험약칭}_{부분}
   규칙과 무관** — 로컬은 HTTPS 원격을 그대로 써도 된다(2026-08-09 확인, push 정상 동작).
   즉 "SSH가 기본"인 대상은 서버의 git 원격뿐이고, 로컬 origin 프로토콜까지 SSH로 맞출
   필요는 없다.
-- VS Code Remote Tunnels의 GitHub 로그인(device code OAuth, `tools/USAGE.md` 방법 2)은
+- VS Code Remote Tunnels의 GitHub 로그인(device code OAuth, `tools/vscode/USAGE.md` 방법 2)은
   이 git 원격 설정과 무관한 별개 채널이다 — SSH가 막혀 있어도 아웃바운드 방식이라 서버
   접속엔 쓸 수 있지만, git push/pull의 SSH/HTTPS 선택에는 영향을 주지 않는다.
 - 보고서/메일 링크는 GitHub 렌더링 Markdown URL만(commit history 링크 금지). 메일 본문엔
@@ -439,7 +439,7 @@ timestamp 순으로 섞여 나오고, `make_features`의 `log_close.diff()`가 *
 ### 2.11 코드 작성 루프 규율 (Loop Engineering Field Notes)
 
 > 출처: Karpathy, "Field Notes on Getting a Language Model to Write Code You Will Not
-> Rewrite". 원문은 `personal_ai_project/CLAUDE.original.md`.
+> Rewrite". 원문 파일(`CLAUDE.original.md`)은 저장소에 커밋된 적이 없어 현재 확인할 수 없다.
 
 Read Before You Write(정독, 패턴 모르면 질문) · Think Before You Code(가정·트레이드오프 명시,
 헷갈리면 멈춰서 질문) · Simplicity(눈앞 문제만, 성급한 추상화 금지) · Surgical Changes(diff
