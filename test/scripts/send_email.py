@@ -25,8 +25,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-GITHUB_BASE = "https://github.com/tabjun/personal_ai_project"
-REPO_BLOB_BASE = f"{GITHUB_BASE}/blob/stock/quantitative_trading"
+GITHUB_BASE = "https://github.com/tabjun/quantitative_trading"
+REPO_BLOB_BASE = f"{GITHUB_BASE}/blob/stock"
 
 
 def load_env() -> None:

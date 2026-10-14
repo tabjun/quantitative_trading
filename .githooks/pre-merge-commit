@@ -3,4 +3,4 @@
 # 정책으로 검사해 develop/main에 지침 파일이 들어오는 것을 막는다(AGENTS.md 2.7절).
 set -eu
 
-python quantitative_trading/.githooks/check_repo_policy.py
+python .githooks/check_repo_policy.py

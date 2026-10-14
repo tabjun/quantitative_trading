@@ -9,8 +9,10 @@ import sys
 from pathlib import Path
 
 
-REPO_SUBDIR = "quantitative_trading"
-TEST_SCRIPTS_PREFIX = f"{REPO_SUBDIR}/test/scripts/"
+# 2026-10-15: personal_ai_project 모노레포에서 독립 저장소로 분리되어 이 폴더가 곧 저장소 루트다.
+# 경로 접두어는 이제 빈 문자열이다(예전 값 "quantitative_trading/").
+REPO_PREFIX = ""
+TEST_SCRIPTS_PREFIX = f"{REPO_PREFIX}test/scripts/"
 
 # 2026-08-09: stock은 연구 브랜치라 작업 지침 파일을 포함해 전량 커밋하지만,
 # develop/main은 최종 결과물만 올라가는 브랜치라 이 파일들을 제외한다
@@ -20,13 +22,13 @@ TEST_SCRIPTS_PREFIX = f"{REPO_SUBDIR}/test/scripts/"
 # 지침 파일이 그대로 들어왔고, fast-forward 병합은 커밋 훅이 아예 없다. 그래서 자동 병합 커밋은
 # pre-merge-commit이, 두 경우 모두 push 시점은 pre-push(`--pre-push`)가 같은 규칙으로 막는다.
 GOVERNANCE_FILES = {
-    f"{REPO_SUBDIR}/AGENTS.md",
-    f"{REPO_SUBDIR}/CLAUDE.md",
-    f"{REPO_SUBDIR}/chat_history.md",
-    f"{REPO_SUBDIR}/conversation_l2_cache.md",  # 이전 이름 재유입도 차단
-    f"{REPO_SUBDIR}/history.md",
-    f"{REPO_SUBDIR}/process.md",
-    f"{REPO_SUBDIR}/state.md",
+    f"{REPO_PREFIX}AGENTS.md",
+    f"{REPO_PREFIX}CLAUDE.md",
+    f"{REPO_PREFIX}chat_history.md",
+    f"{REPO_PREFIX}conversation_l2_cache.md",  # 이전 이름 재유입도 차단
+    f"{REPO_PREFIX}history.md",
+    f"{REPO_PREFIX}process.md",
+    f"{REPO_PREFIX}state.md",
 }
 GOVERNANCE_EXCLUDED_BRANCHES = {"develop", "main"}
 
@@ -47,7 +49,7 @@ TEST_SCRIPTS_ALLOWED = {
 # 중간물 33개를 남겨, 3주 뒤 세션이 파일만 보고 어느 실험 결과인지 판단하지 못하고 커밋
 # 이력을 역추적해야 했다. 종류는 상위 폴더(results/ vs images/)가 가르고, 출처는 그 바로
 # 아래 이름이 가른다 — 따라서 **태그 디렉터리든 직접 놓인 파일이든 번호로 시작**해야 한다.
-ARTIFACT_PREFIXES = (f"{REPO_SUBDIR}/test/results/", f"{REPO_SUBDIR}/test/images/")
+ARTIFACT_PREFIXES = (f"{REPO_PREFIX}test/results/", f"{REPO_PREFIX}test/images/")
 # 특정 실험에 속하지 않는 교차 문서와, 번호 체계 이전(2026-07 이전) 산출물 — 소급 개명하지
 # 않는다(실험 번호는 불변 식별자, known_pitfalls P6). 새 이름을 여기 추가할 때는 "이것이
 # 정말 한 실험의 산출물이 아닌가"를 먼저 따진다.
@@ -79,11 +81,11 @@ ARTIFACT_ALLOWED = {
 # 계획서를 test/experiment_specs/에 따로 두자 보고서에 설계가 실리지 않았고, 18번 이후에는 설계가
 # 드라이버 주석에만 남았다. 같은 희석이 되풀이되지 않도록 커밋 단계에서 막는다. 규칙을 만든
 # 시점 이전 실험(27번까지)은 소급 차단하지 않는다.
-SPECS_PREFIX = f"{REPO_SUBDIR}/test/experiment_specs/"
-MATERIALS_PREFIX = f"{REPO_SUBDIR}/test/research_materials/"
+SPECS_PREFIX = f"{REPO_PREFIX}test/experiment_specs/"
+MATERIALS_PREFIX = f"{REPO_PREFIX}test/research_materials/"
 MATERIALS_BLOCKED_WORDS = ("plan", "design", "spec", "report")
-MODELS_PREFIX = f"{REPO_SUBDIR}/test/models/"
-RESULTS_PREFIX = f"{REPO_SUBDIR}/test/results/"
+MODELS_PREFIX = f"{REPO_PREFIX}test/models/"
+RESULTS_PREFIX = f"{REPO_PREFIX}test/results/"
 DESIGN_RULE_FROM = 28
 
 

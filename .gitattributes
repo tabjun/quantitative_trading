@@ -1,0 +1,4 @@
+test/models/12_feature_guardrail_fusion_test.ipynb filter=lfs diff=lfs merge=lfs -text
+
+# Git 훅은 Linux 서버에서 실행되므로 줄바꿈을 LF로 고정한다 (CRLF면 bad interpreter)
+.githooks/* text eol=lf

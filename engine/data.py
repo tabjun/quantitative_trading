@@ -26,6 +26,7 @@ def find_repo_root(start: Path) -> Path:
     candidates.extend([start, *start.parents])
     candidates.extend(
         [
+            Path.home() / "quantitative_trading",
             Path.home() / "personal_ai_project" / "quantitative_trading",
             Path.home() / "OneDrive" / "바탕 화면" / "Analysis" / "toy_agent_project" / "quantitative_trading",
         ]

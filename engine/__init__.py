@@ -21,8 +21,9 @@
     from pathlib import Path
     def _engine_root(start: Path) -> Path:
         # engine/와 pyproject.toml을 함께 가진 디렉터리(=quantitative_trading)를 sys.path 루트로 쓴다.
-        # cwd가 repo root(personal_ai_project)든 test/models/든 동작하도록 부모와 홈 fallback을 함께 본다.
-        candidates = [start, *start.parents, Path.home() / "personal_ai_project" / "quantitative_trading"]
+        # cwd가 repo root든 test/models/든 동작하도록 부모와 홈 fallback을 함께 본다(2026-10-15 독립
+        # 저장소 분리 후 서버 경로는 ~/quantitative_trading, 옛 ~/personal_ai_project/... 도 남겨 둔다).
+        candidates = [start, *start.parents, Path.home() / "quantitative_trading", Path.home() / "personal_ai_project" / "quantitative_trading"]
         for c in candidates:
             if (c / "pyproject.toml").exists() and (c / "engine").is_dir():
                 return c
