@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ast
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -99,6 +101,43 @@ def staged_text(root: Path, path: str) -> str:
     return subprocess.check_output(["git", "show", f":{path}"], cwd=root, text=True, encoding="utf-8")
 
 
+def section_body(text: str, heading: str) -> str:
+    """`## 제목` 절의 본문(다음 `\n## ` 앞까지). 없으면 빈 문자열."""
+    i = text.find("\n" + heading)
+    if i < 0:
+        return ""
+    j = text.find("\n## ", i + len(heading) + 1)
+    return text[i:j if j > 0 else len(text)]
+
+
+def design_section_ok(text: str) -> bool:
+    """제목만이 아니라 실제 설계 내용(인용 줄이 아닌 본문 5줄 이상)이 있어야 한다."""
+    body = section_body(text, "## 실험 설계").splitlines()[1:]
+    return sum(1 for ln in body if ln.strip() and not ln.startswith(">")) >= 5
+
+
+def describe_ok(text: str) -> bool:
+    """실제 describe 표(`| 종목 | count |` 머리행), 당시 노트북 출력 원문(`count` 행), 또는 describe 절의 '해당 없음'."""
+    if "| 종목 | count |" in text or re.search(r"^count\s", text, flags=re.M):
+        return True
+    return "해당 없음" in section_body(text, "## 기초통계량(describe 표)")
+
+
+def calls_design(text: str) -> bool:
+    """AST로 `render_design_section`/`_design_section` 호출이 실제로 있는지 본다(주석·문자열은 불인정)."""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return "render_design_section(" in text
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            f = node.func
+            name = f.id if isinstance(f, ast.Name) else f.attr if isinstance(f, ast.Attribute) else ""
+            if name in ("render_design_section", "_design_section"):
+                return True
+    return False
+
+
 def head_text(root: Path, path: str) -> str:
     """HEAD에 있는 파일 내용. 새 파일이면 빈 문자열."""
     r = subprocess.run(["git", "show", f"HEAD:{path}"], cwd=root, capture_output=True, text=True, encoding="utf-8")
@@ -114,8 +153,9 @@ def design_errors(root: Path, status: str, path: str) -> list[str]:
     if status.startswith("A") and path.startswith(MATERIALS_PREFIX):
         base = path.rsplit("/", 1)[1].lower()
         if any(w in base for w in MATERIALS_BLOCKED_WORDS):
-            out.append(f"{path}: research_materials/에는 외부 문헌·논문 정리만 둡니다. 설계는 드라이버 설계 셀과 "
-                       "보고서 실험 설계 절로, 카탈로그·브리프·보고서는 test/results/로 보내세요(AGENTS.md 2.9k).")
+            out.append(f"{path}: research_materials/에는 설계서·계획서·보고서 이름의 파일을 두지 않습니다. 설계는 드라이버 "
+                       "설계 셀과 보고서 실험 설계 절로, 결과 보고서는 test/results/로 보내세요. 문헌 정리와 "
+                       "알고리즘·방법론 카탈로그, 데이터 정의는 research_materials/에 둘 수 있습니다(AGENTS.md 2.9k).")
     if status.startswith("D"):
         return out
     # 소급 보호(2026-10-14): 이미 설계 절·describe 표·설계 출력 호출을 갖춘 과거 보고서·드라이버는 번호와
@@ -124,14 +164,13 @@ def design_errors(root: Path, status: str, path: str) -> list[str]:
         old = head_text(root, path)
         if old:
             new = staged_text(root, path)
-            if "\n## 실험 설계" in old and "\n## 실험 설계" not in new:
-                out.append(f"{path}: 기존에 있던 `## 실험 설계` 절이 사라졌습니다(AGENTS.md 2.9k). 보고서를 고칠 때 설계 절을 지우지 마세요.")
-            had = "describe 표(pandas" in old or "## 기초통계량(describe 표)" in old
-            has = "describe 표(pandas" in new or "## 기초통계량(describe 표)" in new
-            if had and not has:
-                out.append(f"{path}: 기존에 있던 describe 표(또는 해당 없음 표기)가 사라졌습니다(AGENTS.md 2.9k).")
+            if design_section_ok(old) and not design_section_ok(new):
+                out.append(f"{path}: 기존에 있던 `## 실험 설계` 절의 내용이 사라졌거나 제목만 남았습니다(AGENTS.md 2.9k).")
+            if describe_ok(old) and not describe_ok(new):
+                out.append(f"{path}: 기존에 있던 describe 표(또는 해당 없음 표기)의 내용이 사라졌습니다. 제목만 남기면 인정하지 "
+                           "않습니다(AGENTS.md 2.9k).")
     if path.startswith(MODELS_PREFIX) and path.endswith(".py"):
-        if "render_design_section(" in head_text(root, path) and "render_design_section(" not in staged_text(root, path):
+        if calls_design(head_text(root, path)) and not calls_design(staged_text(root, path)):
             out.append(f"{path}: 기존에 있던 `render_design_section` 호출(보고서에 설계 절을 싣는 코드)이 사라졌습니다(AGENTS.md 2.9k).")
     if path.startswith(MODELS_PREFIX) and path.endswith("_test.py"):
         base = path[len(MODELS_PREFIX):]
@@ -148,7 +187,7 @@ def design_errors(root: Path, status: str, path: str) -> list[str]:
                     l.startswith("# ## 실험 설계") for l in cell):
                 out.append(f"{path}: 드라이버 맨 앞 `# %% [markdown]` 셀에 `## 실험 설계` 절이 없습니다. 실행 전에 "
                            "왜·연구 질문·비교 대상·고정 조건·테스트 케이스·판정 기준을 쓰세요(AGENTS.md 2.9k).")
-            if "render_design_section(" not in text:
+            if not calls_design(text):
                 out.append(f"{path}: 보고서 작성부가 `report_header.render_design_section(__file__)`를 부르지 않습니다. "
                            "설계 셀 원문을 보고서 서두에 자동으로 실어야 합니다(AGENTS.md 2.9k).")
     if path.startswith(RESULTS_PREFIX) and path.endswith("_report.md"):
@@ -156,9 +195,9 @@ def design_errors(root: Path, status: str, path: str) -> list[str]:
         num = experiment_number(base)
         if num is not None and num >= DESIGN_RULE_FROM:
             text = staged_text(root, path)
-            if "\n## 실험 설계" not in text:
-                out.append(f"{path}: 보고서 서두에 `## 실험 설계` 절이 없습니다(AGENTS.md 2.9k).")
-            if "describe 표" not in text:
+            if not design_section_ok(text):
+                out.append(f"{path}: 보고서 서두에 `## 실험 설계` 절이 없거나 제목뿐입니다(AGENTS.md 2.9k).")
+            if not describe_ok(text):
                 out.append(f"{path}: 표준 헤더 5항의 describe 표가 없습니다. `render_standard_header`로 만드세요"
                            "(AGENTS.md 2.9k).")
     return out

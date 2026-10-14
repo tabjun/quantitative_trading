@@ -398,7 +398,7 @@ uv run test/models/6_optimization_stabilization_test.py --run-all --profile serv
 ## 7. 관련 링크
 
 - 5번 결과 보고서: `test/results/5_optimization_diagnostics_quick_probe_20260613.md`
-- 6번 실행 계획서: `test/results/6_optimization_stabilization_stage_report_20260613.md`
+- 6번 실행 계획서: 이 보고서 서두의 "실험 설계" 절(2026-10-14 이전에는 `experiment_specs/6_optimization_stabilization_plan_20260613.md`)
 - 6번 오케스트레이터: `test/models/6_optimization_stabilization_test.ipynb`
 - 6번 diff 추적 미러: `test/models/6_optimization_stabilization_test.py`
 

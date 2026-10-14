@@ -228,7 +228,7 @@
 
 ## 9. 관련 문서
 
-- [7번 stage plan](C:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/test/results/7_optimization_breadth_expansion_interpretation_20260616.md)
-- [8번 training plan](C:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/test/results/8_optimization_breadth_training_report_20260623.md)
-- [8번 training code](C:/Users/jun99/OneDrive/바탕%20화면/Analysis/toy_agent_project/quantitative_trading/test/models/8_optimization_breadth_training_test.py)
+- 7번 stage plan: 이 보고서 서두의 "실험 설계" 절(2026-10-14 이전에는 `experiment_specs/7_optimization_breadth_expansion_plan_20260613.md`)
+- [8번 training plan](8_optimization_breadth_training_report_20260623.md)의 "실험 설계" 절
+- [8번 training code](../models/8_optimization_breadth_training_test.py)
 

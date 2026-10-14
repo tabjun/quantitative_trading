@@ -4,7 +4,7 @@
 
 > 실행 전에 쓴 계획서·설계 문서 원문이다(2026-10-14 `test/experiment_specs/` 폐지 때 이 보고서로 합쳤다. 원 파일은 git 이력에 남아 있다). 제목 수준을 두 단계 내리고 옮겨진 파일의 경로만 새 위치로 고쳤으며, 그 밖의 내용은 고치지 않았다.
 
-> 원문: 구 `test/research_materials/optimization_training_case_design_20260616.md`
+> 원문: 구 `test/experiment_specs/8_optimization_breadth_training_plan_20260616.md`
 
 ### 8번 최적화 breadth training 설계
 
@@ -188,7 +188,7 @@ python test/models/8_optimization_breadth_training_test.py \
 
 #### 설계 근거 문서
 
-전처리, 정규화, 손실함수, optimizer, gradient policy를 왜 넣었는지는 `test/results/8_optimization_breadth_training_report_20260623.md`에 별도 정리한다.
+전처리, 정규화, 손실함수, optimizer, gradient policy를 왜 넣었는지는 이 보고서의 아래 "8번 확장 학습 case 설계 근거" 절에 정리돼 있다(2026-10-14 이전에는 별도 문서였다).
 
 > 원문: 구 `test/research_materials/optimization_training_case_design_20260616.md` — 8번 학습 case 설계 근거
 
