@@ -13,10 +13,10 @@
 | :--- | :--- | :--- |
 | 병렬 어텐션 | PatchTST, iTransformer, Autoformer, TimeXer | neuralforecast 공식 패키지 |
 | 합성곱 | TCN, TimesNet | neuralforecast 공식 패키지 |
-| 합성곱 | ModernTCN | 저자 공식 GitHub 코드(어댑터 `27_adapters.py`) |
+| 합성곱 | ModernTCN | 저자 공식 GitHub 코드(어댑터 함수 `modern_tcn_predict`, `27_model_expansion_test.py`. 2026-10-14 정정: `27_adapters.py`라는 파일은 저장소에 없다) |
 | 파운데이션(zero-shot) | Chronos-Bolt, TimesFM, TTM, Moirai-2, Sundial, Time-MoE, Lag-Llama | 각 공식 패키지, 격리 venv는 서브프로세스 |
 
-제외: S-Mamba(`mamba_ssm`이 CUDA 컴파일을 요구하는데 서버에 `nvcc`가 없어 설치 실패), xLSTM·TimeGPT·DLinear·NLinear
+제외: S-Mamba(`mamba_ssm`이 CUDA 컴파일을 요구하는데 서버에 `nvcc`가 없어 설치 실패. **2026-10-14 정정: 이후 격리 venv로 해결해 결과에 포함했다. 보고서 0절 참조**), xLSTM·TimeGPT·DLinear·NLinear
 (제외 이유는 `test/research_materials/model_catalog.md`).
 
 #### 입력 형식(공통)
