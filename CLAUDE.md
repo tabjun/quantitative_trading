@@ -14,3 +14,5 @@ Claude Code 전용 차이점(Codex와 다른 점)은 다음 두 가지뿐이며,
 - 도구 전환 체크리스트에서 "이 세션"이 가리키는 주체가 Codex 대신 Claude Code다.
 
 규칙을 고치고 싶으면 `AGENTS.md`를 고친다. 이 파일에 규칙을 직접 추가하지 않는다.
+
+요청 기록도 AGENTS.md §1을 따른다. Claude Code와 Codex는 같은 `chat_history.md`·`state.md`를 갱신한다.

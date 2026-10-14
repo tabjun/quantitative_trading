@@ -10,7 +10,7 @@
 
 도구별 사설 memory는 보조 정보일 뿐이다. source of truth는 저장소 문서다:
 `AGENTS.md`(영구 규칙, Claude Code는 `CLAUDE.md` 스텁을 거쳐 진입) → `process.md`(현재 단계) →
-`state.md`(요청 단위 완료 체크) → `history.md`(이력) → `conversation_l2_cache.md`(최근 요청
+`state.md`(요청 단위 완료 체크) → `history.md`(이력) → `chat_history.md`(최근 요청
 원문) → `test/known_pitfalls.md`(실행 직전 체크) → `test/README.md`(연구 공간 안내).
 
 ### 문서별 역할 (겹치지 않게 유지, 2026-08-09 확정)
@@ -24,7 +24,7 @@
 | `process.md` | 연구 단계별 To-Do(무엇을 할 것인가, Phase/실험 단위) | AI | `[x]`/`[ ]` + 서술 |
 | `state.md` | **사용자 요청 단위로 "실행됐는가"만** 체크(연구 서술 없음) | AI(요청마다 자동 갱신) | `[x]`/`[ ]`/`[~]` 표 |
 | `history.md` | 완료된 작업의 이력(무엇을·왜·어떻게·결과) | AI | 표 |
-| `conversation_l2_cache.md` | 사용자 요청 **원문** 보존(최근 20개, 요약 안 함) | AI | 표 |
+| `chat_history.md` | 사용자 요청 **원문** 보존(최근 20개, 요약 안 함) | AI | 표 |
 
 `process.md`와 `state.md`를 혼동하지 않는다 — `process.md`는 "이 연구를 어떤 순서로 할
 것인가"이고, `state.md`는 "사용자가 요청한 각각의 일이 끝났는가"다. 전자는 실험이
@@ -42,7 +42,7 @@
 
 새 세션이 시작되면: `AGENTS.md`(이 파일, Claude Code는 `CLAUDE.md` 스텁을 거쳐 여기로 옴) →
 `process.md` → `state.md`(미완료 요청 확인) → `history.md` 최근 섹션 →
-`conversation_l2_cache.md` 최근 항목 → `test/known_pitfalls.md` → `test/README.md`.
+`chat_history.md` 최근 항목 → `test/known_pitfalls.md` → `test/README.md`.
 
 ---
 
@@ -52,15 +52,18 @@
   이 파일을 가리키는 3줄 스텁이라 결과적으로 같은 규칙을 본다. MCP 설정 파일만 도구별로
   분리되어 있다: Codex=`.codex/config.toml`, Claude Code=`.mcp.json`. 어느 도구로 시작해도
   같은 규칙을 이어받는다.
-- **요청을 받을 때마다**: `conversation_l2_cache.md`에 새 인덱스로 요청 원문을 먼저 기록하고,
+- **공통 기록 의무(2026-10-14 명확화)**: Claude Code와 Codex 모두 적용한다. 사용자가 해당
+  요청 또는 범위를 명시적으로 기록하지 말라고 한 경우에만 생략한다. 작업 완료를 기다리지 않고
+  요청 원문·진행 상태를 즉시 남기며 비고에 기록 주체와 수행환경을 적는다.
+- **요청을 받을 때마다**: `chat_history.md`에 새 인덱스로 요청 원문을 먼저 기록하고,
   같은 인덱스로 `state.md`에 `[ ]`(진행중) 행을 추가한다. 요청을 완료하면 `state.md`의 그
   행을 `[x]`로 갱신한다(중단/보류는 `[~]`).
 - **세션 종료 전**: `history.md`에 수행 내용·산출물·다음 목표 한 행 추가, `process.md` 현재
   단계 갱신, `state.md`에 미완료로 남은 항목이 있으면 `[~]`와 비고로 정확히 표시. 방향
-  전환이 있었으면 `conversation_l2_cache.md`에 요청 원문 그대로 추가(요약 금지). 중단/
+  전환이 있었으면 `chat_history.md`에 요청 원문 그대로 추가(요약 금지). 중단/
   복구 중이면 완료처럼 쓰지 말고 확보한 것·못한 것·다음 도구가 할 일을 명시한다.
 - **세션 시작 시**: `process.md` 미완료 체크리스트 → `state.md`의 `[ ]`/`[~]` 행(무엇이
-  안 끝났는지) → `history.md` 최근 완료 작업 → `conversation_l2_cache.md` 최근 선호·제약
+  안 끝났는지) → `history.md` 최근 완료 작업 → `chat_history.md` 최근 선호·제약
   순으로 복원한다.
 
 ---
@@ -76,7 +79,7 @@
 - **현재 환경 단서**: 세션 자체가 학교 서버(GPU RTX 4090 24GB) 위에서 도는 경우가 있다. 핵심은
   "환경 이름"이 아니라 "GPU heavy run은 커널/명시 승인으로만, 세션은 경량 검증까지만"이다.
   서버 세션에서도 경량 체크는 허용되고, heavy run은 여전히 노트북 커널/명시 승인으로만 한다.
-- `history.md`/`conversation_l2_cache.md`의 수행환경 컬럼: `로컬`(코드·문서·경량검증·커밋·메일)
+- `history.md`/`chat_history.md`의 수행환경 컬럼: `로컬`(코드·문서·경량검증·커밋·메일)
   / `서버`(GPU heavy 실행) / 섞이면 `로컬+서버`.
 
 ### 2.2 `/test`와 실사용 프레임워크를 분리한다
@@ -157,7 +160,7 @@ test/images/ {번호}_{실험약칭}_{YYYYMMDD}/{번호}_{실험약칭}_{부분}
 
 ### 2.5 수행환경 표기 (2.1 참조)
 
-`history.md`/`conversation_l2_cache.md` 이력 행 끝 `수행환경` 컬럼은 항상 채운다(로컬/서버/
+`history.md`/`chat_history.md` 이력 행 끝 `수행환경` 컬럼은 항상 채운다(로컬/서버/
 로컬+서버). 2026-06-28 이전 기록은 이력 없어 일괄 `로컬`.
 
 ### 2.6 커밋 메시지 규칙
@@ -174,12 +177,12 @@ test/images/ {번호}_{실험약칭}_{YYYYMMDD}/{번호}_{실험약칭}_{부분}
 - 사용자 지시 없으면 작업 브랜치에서만 커밋/푸시. `main`/`develop` 병합은 명시 요청 시만.
 - **브랜치별 역할 분리 (2026-08-09 확정)**: `stock`은 연구 브랜치라 작업 지침 파일을 포함한
   전량을 커밋한다. `develop`/`main`은 최종 결과물만 올라가는 브랜치라 아래 지침 파일 6종은
-  **존재 자체를 제외**한다 — `AGENTS.md`, `CLAUDE.md`, `conversation_l2_cache.md`, `history.md`,
+  **존재 자체를 제외**한다 — `AGENTS.md`, `CLAUDE.md`, `chat_history.md`, `history.md`,
   `process.md`, `state.md`. 일반 `git merge stock`을 그대로 실행해도 되며, 이 파일들이
   스테이징되면 `.githooks/check_repo_policy.py`(pre-commit)가 `develop`/`main`에서 커밋
   자체를 자동 차단하고 되돌리는 명령을 안내한다(삭제는 허용). 훅이 막았을 때 되돌리는 예:
   ```bash
-  git restore --staged --worktree -- AGENTS.md CLAUDE.md conversation_l2_cache.md history.md process.md state.md
+  git restore --staged --worktree -- AGENTS.md CLAUDE.md chat_history.md history.md process.md state.md
   # 해당 브랜치에 그 파일이 원래 없었다면(신규 추가로 잡힌 경우)
   git rm --cached -- <해당 파일>
   ```
@@ -206,7 +209,7 @@ test/images/ {번호}_{실험약칭}_{YYYYMMDD}/{번호}_{실험약칭}_{부분}
 ### 2.8 새 파일보다 기존 파일을 우선한다
 
 `AGENTS.md`(+ `CLAUDE.md` 스텁), `process.md`, `state.md`, `history.md`,
-`conversation_l2_cache.md`, `test/known_pitfalls.md`, `test/README.md`, `pipelines/`,
+`chat_history.md`, `test/known_pitfalls.md`, `test/README.md`, `pipelines/`,
 `test/scripts/`, 기존 `test/models/*`를 먼저 확인하고, 새 파일보다 기존 파일 수정·확장을
 우선한다.
 
@@ -447,7 +450,7 @@ Modes(Kitchen Sink/Wrong Abstraction/Optimistic Path/Runaway Refactor 경계).
   종료 시 1회. 실행 중 발견한 버그·이슈·수정은 결과 raw md에 전량 남긴다(취사선택은 사용자 몫).
 - **suite 승계·챔피언 선정**: 단일 지표 최고로 뽑지 않는다. 진폭 건전성(variance_ratio)과 큰
   변동 포착(tail_f1·large_move_da)을 함께 본다 — `known_pitfalls.md` P1/P4.
-- **요청 원문 보존(원문=대화캐시, 요약=process/history)**: `conversation_l2_cache.md`는 사용자
+- **요청 원문 보존(원문=대화캐시, 요약=process/history)**: `chat_history.md`는 사용자
   요청을 **원문 그대로** 남기는 곳이다 — 이 파일에서는 요약하지 않는다. 요약·정리·구조화는
   `process.md`(현재 상태)와 `history.md`(이력)가 맡는다.
 - **데이터 축 기본값**: 업비트 KRW 전 종목 15분봉(원설계). 단일 종목은 진단 목적에 한해 쓰고
@@ -565,5 +568,5 @@ uv run pipelines/simulate_and_send.py
 **Codex → Claude / Claude → Codex 공통**: 변경 파일 커밋/메모 → `history.md` 기록 →
 `process.md` 다음 스텝 갱신 → `state.md`에 미완료 항목 정확히 표시. 새 세션은
 `AGENTS.md`(또는 `CLAUDE.md` 스텁) → `process.md` → `state.md` → `history.md` →
-`conversation_l2_cache.md` 순으로 복원한다. 어느 쪽 memory에만 남긴 결정도 반드시 저장소
+`chat_history.md` 순으로 복원한다. 어느 쪽 memory에만 남긴 결정도 반드시 저장소
 파일에 남긴다.

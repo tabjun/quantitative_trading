@@ -123,7 +123,7 @@ git 저장소도 uv venv도 없는 상태), 아래 순서를 처음부터 끝까
 
    접속 주소는 `tools/vscode/README.md`에 고정되어 있다(`https://stat5.kmu.ac.kr:9500/user/<user>/proxy/9999/`).
 7. **세션 복원** — code-server에서 Claude Code(또는 Codex)를 열고
-   `CLAUDE.md`(Codex는 `AGENTS.md`) → `process.md` → `history.md` → `conversation_l2_cache.md`
+   `CLAUDE.md`(Codex는 `AGENTS.md`) → `process.md` → `history.md` → `chat_history.md`
    순서로 읽어 이전 작업 상태를 복원한 뒤 이어서 진행한다.
 
 ### 기본 운영: 기존 uv venv를 재사용한다 (새로 만들지 않는다)

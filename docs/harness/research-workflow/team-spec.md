@@ -25,9 +25,9 @@ This spec applies when a task repeats across sessions:
 - `AGENTS.md`: repo-wide always-loaded rules only
 - `process.md`: long-horizon roadmap and phase map
 - `history.md`: completed work log and next step
-- `conversation_l2_cache.md`: compressed request memory
+- `chat_history.md`: verbatim user requests shared by Claude Code and Codex (latest 20)
 - `test/README.md`: `test/` directory overview only
-- `test/models/*.ipynb`: experiment source of truth
+- `test/models/*.ipynb`: preserved source for legacy notebook experiments; new experiments use headless `.py` drivers
 - `test/models/*.py`: headless experiment driver; its leading `# %% [markdown]` cell is the design cache written before the run
 - `test/results/*.md`: experiment write-up and interpretation, including the design section copied from the driver (`test/experiment_specs/` was abolished on 2026-10-14)
 - `test/research_materials/*.md`: literature and paper notes only

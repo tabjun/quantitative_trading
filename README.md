@@ -70,7 +70,7 @@
 - [process.md](process.md): 연구 단계별 할 일(Phase/실험 단위 To-Do)
 - `state.md`: 요청 단위로 "실행됐는지 아닌지"만 체크
 - [history.md](history.md): 완료된 작업의 이력
-- `conversation_l2_cache.md`: 사용자 요청 원문 보존 캐시(최근 20개)
+- `chat_history.md`: 사용자 요청 원문 보존 캐시(최근 20개)
 - `test/known_pitfalls.md`: 실행 직전 대조하는 반복 함정 체크리스트(코드 게이트)
 - [test/README.md](test/README.md): 연구 실험 공간 사용 가이드
 
@@ -198,9 +198,9 @@ uv sync
 
 1. 세션 시작 시 `AGENTS.md`(§ 목적, 상단)에 적힌 읽기 순서를 그대로 따릅니다(여기 다시 옮겨 적지 않습니다 — AGENTS.md만 바뀌었을 때 이 문서가 뒤처지는 걸 막기 위함입니다).
 2. 기존 실험, 문서, 파이프라인을 먼저 검색한 뒤 새 파일이 정말 필요한지 판단합니다.
-3. 연구 실험은 `test/models/*.ipynb`를 먼저 만들고 같은 이름의 `.py` 미러를 유지합니다.
+3. 새 연구 실험은 `test/models/*.py` 헤드리스 드라이버를 기본으로 작성합니다. 기존 노트북 기반 실험의 `.ipynb`·`.py` 미러는 그대로 보존합니다.
 4. 공통으로 재사용할 가치가 있는 로직은 루트 패키지(`analysis/`, `contexts/`, `marts/`, `pipelines/`)에 캡슐화합니다.
-5. 결과 요약과 다음 단계는 `history.md`, `process.md`, `conversation_l2_cache.md`에 반영합니다.
+5. 결과 요약과 다음 단계는 `history.md`, `process.md`, `chat_history.md`에 반영합니다.
 
 ## 11. 재현 실행 명령
 
