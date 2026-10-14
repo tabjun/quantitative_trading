@@ -12,7 +12,7 @@
 # | 파운데이션(zero-shot) | Chronos-Bolt, TimesFM, TTM, Moirai-2, Sundial, Time-MoE, Lag-Llama | 각 공식 패키지, 격리 venv는 서브프로세스 |
 #
 # 제외: S-Mamba(`mamba_ssm`이 CUDA 컴파일을 요구하는데 서버에 `nvcc`가 없어 설치 실패), xLSTM·TimeGPT·DLinear·NLinear
-# (제외 이유는 `test/results/model_catalog.md`).
+# (제외 이유는 `test/research_materials/model_catalog.md`).
 #
 # ## 입력 형식(공통)
 #
@@ -732,7 +732,7 @@ def write_report27(elapsed_note: str = "") -> None:
          "메인 환경의 torch 버전은 그대로다.")
     emit("- **TTM의 4시간·12시간 결과는 제외했다**: TTM r2 모델카드가 분·시간 해상도(10분·15분·1시간)만 지원한다고 명시한다. 이 두 구간은 "
          "공식 지원 범위 밖이라 순위·동률·검정에서 뺐고, 계산값은 `excluded_ttm_unsupported_resolution.csv`에 기록으로만 남겼다.")
-    emit("- 제외 모델(Linear·Ridge·HAR-RV·DLinear·NLinear 등)의 제외 이유는 `test/results/model_catalog.md`에 있다.")
+    emit("- 제외 모델(Linear·Ridge·HAR-RV·DLinear·NLinear 등)의 제외 이유는 `test/research_materials/model_catalog.md`에 있다.")
     emit(f"- {elapsed_note}" if elapsed_note else "- 소요 시간 기록: 해당 없음(여러 실행으로 나뉘어 합산하지 않았다).")
     emit()
     emit("## 1. 비교 대상 구성")

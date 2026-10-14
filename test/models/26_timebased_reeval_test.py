@@ -26,7 +26,7 @@
 # 라벨이 T보다 작은 봉까지 알 수 있다. H시간 타깃은 라벨 T, T+15분, …, T+H시간-15분인 4H개 봉의
 # 실현변동성 sqrt(Σ r²)이고, naive는 직전 4H개 봉의 같은 값이다.
 #
-# 결측 처리의 근거와 데이터 정의는 `test/results/data_definition.md`를 본다.
+# 결측 처리의 근거와 데이터 정의는 `test/research_materials/data_definition.md`를 본다.
 
 # %%
 from __future__ import annotations

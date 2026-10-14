@@ -31,7 +31,7 @@ c₊는 내부검증 정시 시점 중 RV>0인 시점에서만 추정한다. π�
 라벨이 T보다 작은 봉까지 알 수 있다. H시간 타깃은 라벨 T, T+15분, …, T+H시간-15분인 4H개 봉의
 실현변동성 sqrt(Σ r²)이고, naive는 직전 4H개 봉의 같은 값이다.
 
-결측 처리의 근거와 데이터 정의는 `test/results/data_definition.md`를 본다.
+결측 처리의 근거와 데이터 정의는 `test/research_materials/data_definition.md`를 본다.
 
 ---
 
@@ -236,7 +236,7 @@ c₊는 내부검증 정시 시점 중 RV>0인 시점에서만 추정한다. π�
 - **단일 처리(비교용)**: 26번 방식. 같은 적합 모델의 같은 예측에 RV=0을 포함한 배율 c 하나만 곱한다. `onepart_comparison.csv`에 있다.
 - GARCH 계열과 naive는 두 갈래에서 같은 값이다(분산을 직접 예측하므로 정지 처리를 적용하지 않는다). GARCH 보정은 본 실행 안에서 내부학습 재적합으로 한다.
 - **상장폐지 종목**: AQT·AERGO는 7월 이후 업비트 KRW 마켓에서 빠져 새 데이터를 받을 수 없다. 생존 편향을 피하려고 빼지 않고, 2026-07-18까지의 데이터로만 평가했다(평가 기간이 다른 종목보다 약 2.5개월 짧다).
-- 비교 대상은 24번 모델에서 선형 예측기(Linear·Ridge·HAR-RV)를 뺀 12종과 naive다. 제외 이유는 `test/results/model_catalog.md`에 있다.
+- 비교 대상은 24번 모델에서 선형 예측기(Linear·Ridge·HAR-RV)를 뺀 12종과 naive다. 제외 이유는 `test/research_materials/model_catalog.md`에 있다.
 
 소요 2.03시간.
 

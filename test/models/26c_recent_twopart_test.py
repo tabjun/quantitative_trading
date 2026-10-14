@@ -26,7 +26,7 @@
 # 라벨이 T보다 작은 봉까지 알 수 있다. H시간 타깃은 라벨 T, T+15분, …, T+H시간-15분인 4H개 봉의
 # 실현변동성 sqrt(Σ r²)이고, naive는 직전 4H개 봉의 같은 값이다.
 #
-# 결측 처리의 근거와 데이터 정의는 `test/results/data_definition.md`를 본다.
+# 결측 처리의 근거와 데이터 정의는 `test/research_materials/data_definition.md`를 본다.
 
 # %%
 from __future__ import annotations
@@ -151,7 +151,7 @@ ZERO_ROUNDS, ZERO_LR, ZERO_EARLY_STOP = 2000, 0.03, 100
 PI_MAX = 0.99
 
 # 선형 예측기(Linear·Ridge·HAR-RV)는 2026-09-07 선형성 기각 결정과 2026-10-05 결정에 따라 이 코드에 없다.
-# 제외 이유와 복구 방법은 test/results/model_catalog.md와 이 변경의 커밋 메시지에 있다.
+# 제외 이유와 복구 방법은 test/research_materials/model_catalog.md와 이 변경의 커밋 메시지에 있다.
 LOG_TARGET_MODELS = ("KernelRidge-RBF", "SVR-RBF", "Nystroem+Ridge",
                      "LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM", "GRU", "LSTM")
 VAR_MODELS = ("GARCH-t", "MS-GARCH", "TAR-GARCH")
@@ -1634,7 +1634,7 @@ def write_report(rd, store, rd1, store1, fails_df, eda_df, heda_df, zdf, tickers
     emit("- **상장폐지 종목**: AQT·AERGO는 7월 이후 업비트 KRW 마켓에서 빠져 새 데이터를 받을 수 없다. 생존 편향을 피하려고 "
          "빼지 않고, 2026-07-18까지의 데이터로만 평가했다(평가 기간이 다른 종목보다 약 2.5개월 짧다).")
     emit("- 비교 대상은 24번 모델에서 선형 예측기(Linear·Ridge·HAR-RV)를 뺀 12종과 naive다. 제외 이유는 "
-         "`test/results/model_catalog.md`에 있다.")
+         "`test/research_materials/model_catalog.md`에 있다.")
     emit()
     emit(f"소요 {elapsed_h:.2f}시간.")
     if truncated:

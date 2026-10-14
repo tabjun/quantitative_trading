@@ -90,7 +90,7 @@
 - `materials/`: 프로젝트 개요, 아키텍처, 도메인 문서
 - `test/models/`: 연구 실험 노트북과 `.py` 미러
 - `test/results/`: 실험 결과물
-- `test/research_materials/`: 외부 문헌·논문 정리만(설계는 드라이버 설계 셀 → 결과 보고서 "실험 설계" 절)
+- `test/research_materials/`: 연구 참고 문서(논문·문헌, 알고리즘·방법론 카탈로그, 데이터 정의). 설계는 드라이버 설계 셀 → 결과 보고서 "실험 설계" 절
 - `test/scripts/`: 재사용 가능한 연구 보조 유틸리티
 - `.githooks/`: 노트북 미러 동기화 및 저장소 정책 검사
 

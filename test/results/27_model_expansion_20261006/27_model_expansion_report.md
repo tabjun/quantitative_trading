@@ -17,7 +17,7 @@
 | 파운데이션(zero-shot) | Chronos-Bolt, TimesFM, TTM, Moirai-2, Sundial, Time-MoE, Lag-Llama | 각 공식 패키지, 격리 venv는 서브프로세스 |
 
 제외: S-Mamba(`mamba_ssm`이 CUDA 컴파일을 요구하는데 서버에 `nvcc`가 없어 설치 실패), xLSTM·TimeGPT·DLinear·NLinear
-(제외 이유는 `test/results/model_catalog.md`).
+(제외 이유는 `test/research_materials/model_catalog.md`).
 
 #### 입력 형식(공통)
 
@@ -246,7 +246,7 @@
 - 신규 모델 중 이번 결과에 들어온 것: PatchTST, iTransformer, TCN, Autoformer, TimesNet, TimeXer, ModernTCN, S-Mamba, Chronos-Bolt, TimesFM, TTM, Moirai-2, Sundial, Time-MoE, Lag-Llama. 들어오지 못한 것: 없음(전부 포함).
 - **S-Mamba**: 공식 구현이 `mamba_ssm`(구버전 `torch==2.0.1` 필요)에 의존하고 서버에 `nvcc`가 없어 처음에는 설치에 실패했다. 저자 요구 버전에 맞춰 미리 컴파일된 wheel로 **격리 venv**(`.venvs/smamba_py310_20261006`)를 구성해 해결했다(시스템 변경 없음). 메인 환경의 torch 버전은 그대로다.
 - **TTM의 4시간·12시간 결과는 제외했다**: TTM r2 모델카드가 분·시간 해상도(10분·15분·1시간)만 지원한다고 명시한다. 이 두 구간은 공식 지원 범위 밖이라 순위·동률·검정에서 뺐고, 계산값은 `excluded_ttm_unsupported_resolution.csv`에 기록으로만 남겼다.
-- 제외 모델(Linear·Ridge·HAR-RV·DLinear·NLinear 등)의 제외 이유는 `test/results/model_catalog.md`에 있다.
+- 제외 모델(Linear·Ridge·HAR-RV·DLinear·NLinear 등)의 제외 이유는 `test/research_materials/model_catalog.md`에 있다.
 - 소요 시간 기록: 해당 없음(여러 실행으로 나뉘어 합산하지 않았다).
 
 ## 1. 비교 대상 구성

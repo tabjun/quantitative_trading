@@ -343,11 +343,14 @@ RAW에서 시작해 파생변수가 생길 때마다 여기에 **정의/공식 �
    로그수익률%)를 이전 회차 EDA에서 본 데이터라도 매번 싣는다(`render_standard_header`가 자동으로
    넣는다). 숫자는 count 정수, 나머지 소수 둘째 자리, 1 미만 값은 유효숫자 4자리(과학적 표기
    금지)다. 이번 회차에 새로 만든 타깃·변수도 같은 형식(`describe_markdown`)으로 싣는다.
-4. **폴더 역할**: `test/research_materials/`에는 외부 문헌·논문 정리만 둔다. 이 연구의 설계·
-   결과·카탈로그(`model_catalog.md`, `methodology_catalog.md`, `data_definition.md`)는
-   `test/results/`에 둔다.
+4. **폴더 역할**: `test/research_materials/`는 이 연구를 이해하고 참고하려고 읽는 문서를 둔다 — 논문·문헌
+   정리, 알고리즘 카탈로그(`model_catalog.md`), 방법론 카탈로그(`methodology_catalog.md`), 데이터
+   정의(`data_definition.md`), 교수님 공유 브리프. `test/results/`는 실험별 결과 보고서와 그 서두의
+   실험 설계 절, 살아있는 교차 문서(`DATA_DICTIONARY.md`, `EXPERIMENT_LOG.md`)를 둔다. 설계서·계획서·
+   보고서는 `research_materials/`에 두지 않는다(2026-10-14에 카탈로그를 `results/`로 잘못 옮겼다가
+   사용자 지적으로 되돌렸다).
 5. **강제**: pre-commit 훅(`.githooks/check_repo_policy.py`)이 ① `test/experiment_specs/` 신규
-   파일, ② 문헌이 아닌 이름(plan·design·spec·catalog·brief·report)의 `research_materials/` 신규
+   파일, ② 설계서·보고서 이름(plan·design·spec·report)의 `research_materials/` 신규
    파일, ③ 28번 이상 드라이버의 설계 셀·`render_design_section` 호출 누락, ④ 28번 이상
    `*_report.md`의 `## 실험 설계` 절·describe 표 누락을 커밋 단계에서 막는다. **소급 보호**: 2026-10-14에
    2~27번 보고서와 드라이버에 이 구조를 이미 넣었으므로, ⑤ 그 절·표(해당 없음 표기 포함)·`render_design_section`

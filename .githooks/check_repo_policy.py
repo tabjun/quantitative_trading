@@ -54,9 +54,6 @@ ARTIFACT_ALLOWED = {
     "DATA_DICTIONARY.md", "EXPERIMENT_LOG.md", "SUMMARY_ONEPAGE_20260821.md",
     "MASTER_REPORT_20260814.md", "MASTER_REPORT_20260819.md",
     "governance_drift_rootcause_20260719.md",
-    # 2026-10-14 research_materials에서 옮긴 이 연구의 교차 문서(AGENTS.md 2.9k)
-    "model_catalog.md", "methodology_catalog.md", "data_definition.md",
-    "optimization_context_professor_brief_20260611.md",
     # 번호 체계 이전 산출물(2026-07~09)
     "assumption_report_20260907", "distribution_report_20260907",
     "scratch_volatility_20260907", "pipeline_report_20260908",
@@ -82,7 +79,7 @@ ARTIFACT_ALLOWED = {
 # 시점 이전 실험(27번까지)은 소급 차단하지 않는다.
 SPECS_PREFIX = f"{REPO_SUBDIR}/test/experiment_specs/"
 MATERIALS_PREFIX = f"{REPO_SUBDIR}/test/research_materials/"
-MATERIALS_BLOCKED_WORDS = ("plan", "design", "spec", "catalog", "brief", "report")
+MATERIALS_BLOCKED_WORDS = ("plan", "design", "spec", "report")
 MODELS_PREFIX = f"{REPO_SUBDIR}/test/models/"
 RESULTS_PREFIX = f"{REPO_SUBDIR}/test/results/"
 DESIGN_RULE_FROM = 28

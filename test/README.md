@@ -5,8 +5,8 @@
 ## 1. 폴더 역할
 
 - `models/`: 연구 실험 드라이버(`.py`, 과거 실험은 `.ipynb` 원본 포함). 드라이버 맨 앞 `# %% [markdown]` 셀이 **실행 전에 쓰는 설계 캐시**다.
-- `results/`: 결과 보고서와 표. 보고서마다 서두에 실행 환경 → **실험 설계**(드라이버 설계 셀 원문) → 표준 헤더(describe 표 포함) 순으로 싣는다. 여러 실험을 가로지르는 살아있는 문서(`DATA_DICTIONARY.md`, `data_definition.md`, `model_catalog.md`, `methodology_catalog.md`)도 여기 둔다.
-- `research_materials/`: **외부 문헌과 논문 정리만** 둔다. 이 연구의 설계·결과·카탈로그는 두지 않는다.
+- `results/`: 결과 보고서와 표. 보고서마다 서두에 실행 환경 → **실험 설계**(드라이버 설계 셀 원문) → 표준 헤더(describe 표 포함) 순으로 싣는다. 여러 실험을 가로지르는 살아있는 문서(`DATA_DICTIONARY.md`, `EXPERIMENT_LOG.md`)도 여기 둔다.
+- `research_materials/`: **이 연구를 이해하고 참고하려고 읽는 문서**를 둔다. 논문·문헌 정리, 알고리즘 카탈로그(`model_catalog.md`), 방법론 카탈로그(`methodology_catalog.md`), 데이터 정의(`data_definition.md`), 교수님 공유 브리프. 실험 설계서·결과 보고서는 두지 않는다.
 - (폐지) `experiment_specs/`: 2026-10-14 폐지. 계획서 원문은 대응 보고서의 "실험 설계" 절로 옮겼다(AGENTS.md 2.9k).
 - `images/`: 노트북 출력 그림과 보고서 삽입용 이미지
 - `scripts/`: 재사용 가능한 보조 유틸리티만 보관

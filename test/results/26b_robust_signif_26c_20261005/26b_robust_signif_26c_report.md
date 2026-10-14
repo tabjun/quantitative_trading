@@ -1,6 +1,6 @@
 # 26b번: 26c번 결과의 견고성·구분 불가 진단·유의성 검정
 
-입력: `test/results/26c_recent_twopart_20261005`(26c번, 20종목 × 5구간 × 13모델, 1300행). 재적합 없이 저장된 평가 예측만 쓴다. 데이터 정의와 결측 처리는 `test/results/data_definition.md`, 모델 정의는 `test/results/model_catalog.md`를 본다.
+입력: `test/results/26c_recent_twopart_20261005`(26c번, 20종목 × 5구간 × 13모델, 1300행). 재적합 없이 저장된 평가 예측만 쓴다. 데이터 정의와 결측 처리는 `test/research_materials/data_definition.md`, 모델 정의는 `test/research_materials/model_catalog.md`를 본다.
 
 ## 실험 설계
 
