@@ -202,7 +202,7 @@ test/images/ {번호}_{실험약칭}_{YYYYMMDD}/{번호}_{실험약칭}_{부분}
   `personal_ai_project` 모노레포(stock/apple/job_agent 브랜치 공유)에서 `stock`/`develop`/`main` 이력을
   그대로 옮겨 왔고(커밋별 트리 일치 검증), apple·이력서는 각각 `advertisement_apple`·`job_agent` 저장소로
   갈라졌다. 커밋 메시지 속 옛 해시(예: `(stock f950ac6)`)는 옛 저장소 기준이다. 서버 경로는
-  `~/quantitative_trading`(옛 `~/personal_ai_project/quantitative_trading`은 호환용 심볼릭 링크).
+  `~/quantitative_trading`(옛 경로 `~/personal_ai_project/quantitative_trading`은 2026-10-15 삭제됨).
 - **서버 ↔ GitHub은 SSH 원격**(`git@github.com:tabjun/quantitative_trading.git`)이 기본이다.
   학교 서버는 인바운드 SSH(22번)는 방화벽에 막혀 있지만 아웃바운드는 열려 있어 서버에서
   `ssh -T git@github.com` 인증은 정상 동작한다(2026-07-14 확인). **로컬 PC ↔ GitHub은 이
