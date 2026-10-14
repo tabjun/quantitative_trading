@@ -801,7 +801,7 @@ def main(argv=None) -> None:
     emit()
     emit(f"입력: `{SRC.relative_to(ROOT)}`({SRC_LABEL}, {len(tickers)}종목 × {len(M26.HORIZONS_H)}구간 × {len(models)}모델, "
          f"{len(rd)}행). 재적합 없이 저장된 평가 예측만 쓴다. 데이터 정의와 결측 처리는 "
-         "`test/research_materials/data_definition.md`, 모델 정의는 `test/research_materials/model_catalog.md`를 본다.")
+         "`test/results/data_definition.md`, 모델 정의는 `test/results/model_catalog.md`를 본다.")
     emit()
     design_section()
     if not a.skip_seed:

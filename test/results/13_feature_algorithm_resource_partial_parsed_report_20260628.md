@@ -30,7 +30,7 @@
 | 노트북 디스크 output | 없음 (복원 불가) |
 | 화면 캡처 4장 | 확보 — 이 보고서에서 전수 파싱 |
 | 전체 leaderboard / 평균표 / final summary | 캡처 안 됨 — 복원 불가 |
-| 실험 설계·계보 | `test/experiment_specs/13_*` + `test/README.md`로 확인 가능 |
+| 실험 설계·계보 | `test/results/13_feature_algorithm_resource_recovered_full_results_20260628.md`의 실험 설계 절 + `test/README.md`로 확인 가능 |
 
 ---
 
@@ -59,7 +59,7 @@
 | seq length | `seq64` |
 | seed | `42`, `777`, `2026` |
 
-> 13번 계획서(`test/experiment_specs/13_feature_algorithm_resource_plan_20260625.md`)에는 Linear/PatchTSTLike/
+> 13번 계획서(`test/results/13_feature_algorithm_resource_recovered_full_results_20260628.md`)에는 Linear/PatchTSTLike/
 > TCN/ModernTCN/DLinear/NLinear/Transformer/iTransformer/Autoformer/Mamba까지 더 넓은 모델군이 있으나,
 > 위 표는 **캡처에 실제로 찍힌 것만** 확정으로 기록한 것이다. 나머지가 돌았는지는 캡처만으로는 알 수 없다.
 

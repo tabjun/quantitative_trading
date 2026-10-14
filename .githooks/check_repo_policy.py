@@ -50,6 +50,9 @@ ARTIFACT_ALLOWED = {
     "DATA_DICTIONARY.md", "EXPERIMENT_LOG.md", "SUMMARY_ONEPAGE_20260821.md",
     "MASTER_REPORT_20260814.md", "MASTER_REPORT_20260819.md",
     "governance_drift_rootcause_20260719.md",
+    # 2026-10-14 research_materials에서 옮긴 이 연구의 교차 문서(AGENTS.md 2.9k)
+    "model_catalog.md", "methodology_catalog.md", "data_definition.md",
+    "optimization_context_professor_brief_20260611.md",
     # 번호 체계 이전 산출물(2026-07~09)
     "assumption_report_20260907", "distribution_report_20260907",
     "scratch_volatility_20260907", "pipeline_report_20260908",
@@ -67,6 +70,76 @@ ARTIFACT_ALLOWED = {
     "professor_direction_recommendation_20260821.md",
     "text_context_feature_report_20260608_012237.md",
 }
+
+
+# 2026-10-14: 설계는 드라이버 서두 설계 셀에 먼저 쓰고 보고서 "실험 설계" 절로 옮긴다(AGENTS.md 2.9k).
+# 계획서를 test/experiment_specs/에 따로 두자 보고서에 설계가 실리지 않았고, 18번 이후에는 설계가
+# 드라이버 주석에만 남았다. 같은 희석이 되풀이되지 않도록 커밋 단계에서 막는다. 규칙을 만든
+# 시점 이전 실험(27번까지)은 소급 차단하지 않는다.
+SPECS_PREFIX = f"{REPO_SUBDIR}/test/experiment_specs/"
+MATERIALS_PREFIX = f"{REPO_SUBDIR}/test/research_materials/"
+MATERIALS_BLOCKED_WORDS = ("plan", "design", "spec", "catalog", "brief", "report")
+MODELS_PREFIX = f"{REPO_SUBDIR}/test/models/"
+RESULTS_PREFIX = f"{REPO_SUBDIR}/test/results/"
+DESIGN_RULE_FROM = 28
+
+
+def experiment_number(name: str) -> int | None:
+    """'28b_xxx' → 28. 번호로 시작하지 않으면 None."""
+    digits = ""
+    for ch in name:
+        if not ch.isdigit():
+            break
+        digits += ch
+    return int(digits) if digits else None
+
+
+def staged_text(root: Path, path: str) -> str:
+    return subprocess.check_output(["git", "show", f":{path}"], cwd=root, text=True, encoding="utf-8")
+
+
+def design_errors(root: Path, status: str, path: str) -> list[str]:
+    """AGENTS.md 2.9k 검사: 신규 실험 드라이버의 설계 셀, 보고서의 실험 설계 절과 describe 표."""
+    out: list[str] = []
+    if status.startswith("A") and path.startswith(SPECS_PREFIX):
+        out.append(f"{path}: test/experiment_specs/는 2026-10-14에 폐지됐습니다. 설계는 드라이버 맨 앞 "
+                   "`# %% [markdown]` 셀의 `## 실험 설계`에 쓰고 보고서로 옮기세요(AGENTS.md 2.9k).")
+    if status.startswith("A") and path.startswith(MATERIALS_PREFIX):
+        base = path.rsplit("/", 1)[1].lower()
+        if any(w in base for w in MATERIALS_BLOCKED_WORDS):
+            out.append(f"{path}: research_materials/에는 외부 문헌·논문 정리만 둡니다. 설계는 드라이버 설계 셀과 "
+                       "보고서 실험 설계 절로, 카탈로그·브리프·보고서는 test/results/로 보내세요(AGENTS.md 2.9k).")
+    if status.startswith("D"):
+        return out
+    if path.startswith(MODELS_PREFIX) and path.endswith("_test.py"):
+        base = path[len(MODELS_PREFIX):]
+        num = experiment_number(base)
+        if num is not None and num >= DESIGN_RULE_FROM:
+            text = staged_text(root, path)
+            lines = text.splitlines()
+            cell = []
+            for line in lines[1:]:
+                if line.startswith("# %%") or not line.startswith("#"):
+                    break
+                cell.append(line)
+            if not lines or lines[0].strip() != "# %% [markdown]" or not any(
+                    l.startswith("# ## 실험 설계") for l in cell):
+                out.append(f"{path}: 드라이버 맨 앞 `# %% [markdown]` 셀에 `## 실험 설계` 절이 없습니다. 실행 전에 "
+                           "왜·연구 질문·비교 대상·고정 조건·테스트 케이스·판정 기준을 쓰세요(AGENTS.md 2.9k).")
+            if "render_design_section(" not in text:
+                out.append(f"{path}: 보고서 작성부가 `report_header.render_design_section(__file__)`를 부르지 않습니다. "
+                           "설계 셀 원문을 보고서 서두에 자동으로 실어야 합니다(AGENTS.md 2.9k).")
+    if path.startswith(RESULTS_PREFIX) and path.endswith("_report.md"):
+        base = path[len(RESULTS_PREFIX):].rsplit("/", 1)[-1]
+        num = experiment_number(base)
+        if num is not None and num >= DESIGN_RULE_FROM:
+            text = staged_text(root, path)
+            if "\n## 실험 설계" not in text:
+                out.append(f"{path}: 보고서 서두에 `## 실험 설계` 절이 없습니다(AGENTS.md 2.9k).")
+            if "describe 표" not in text:
+                out.append(f"{path}: 표준 헤더 5항의 describe 표가 없습니다. `render_standard_header`로 만드세요"
+                           "(AGENTS.md 2.9k).")
+    return out
 
 
 def run_git(args: list[str], cwd: Path) -> str:
@@ -156,6 +229,8 @@ def main() -> int:
                             "거기서 파생시키는 방식을 권장합니다."
                         )
                 break
+
+        errors.extend(design_errors(root, status, normalized))
 
         if branch in GOVERNANCE_EXCLUDED_BRANCHES and normalized in GOVERNANCE_FILES and status != "D":
             governance_errors.append(

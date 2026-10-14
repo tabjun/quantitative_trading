@@ -4,7 +4,7 @@
 # 이 파일은 **헤드리스 `.py` 드라이버**다(사용자 지시 2026-07-19: ipynb는 만들지 않고 `.py`만,
 # `#%%`로 셀을 구분하고 파일 내 마크다운·주석으로 설명한다). 실행과 결과 저장은 이 파일이 담당한다.
 #
-# - 계획서: `test/experiment_specs/16_nonstationary_crosssectional_plan_20260719.md`
+# - 계획서: `test/results/16_nonstationary_crosssectional_report_20260719.md`
 # - 방법론 근거(문헌): `test/research_materials/16_nonstationary_trend_capture_literature_review_20260719.md`
 # - 연구 초고(1~15 종합): `test/results/paper_draft_nonstationary_crypto_trend_20260719.md`
 #

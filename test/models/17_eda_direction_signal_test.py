@@ -34,7 +34,7 @@
 # %%
 """17번 EDA 드라이버 본체.
 
-계획서: test/experiment_specs/17_eda_direction_signal_plan_20260719.md
+계획서: test/results/17_eda_report_20260722.md
 실행:
     uv run test/models/17_eda_direction_signal_test.py            # 전 섹션 + 보고서
     uv run test/models/17_eda_direction_signal_test.py --dry-run  # 데이터 로드만 확인

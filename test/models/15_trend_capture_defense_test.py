@@ -11,14 +11,14 @@
 # - 실행: `python test/models/15_trend_capture_defense_test.py --suite t1_horizon` 등 (아래 셀 docstring 참고)
 # - raw 결과: `test/results/15_trend_capture_defense_20260716/*_raw.md` + `*_leaderboard.csv`
 # - 이미지: `test/images/15_trend_capture_defense_20260716/<suite>/`
-# - 계획서: `test/experiment_specs/15_trend_capture_defense_plan_20260716.md`
+# - 계획서: `test/results/15_trend_capture_defense_report_20260716.md`
 #
 # 아래 한 셀이 `.py` 미러와 동일하다.
 
 # %%
 """15번: 변동·추세 포착 최적화 + 방어 gate 융합 (헤드리스 .py 드라이버).
 
-배경(계획서: test/experiment_specs/15_trend_capture_defense_plan_20260716.md):
+배경(계획서: test/results/15_trend_capture_defense_report_20260716.md):
 - 8~14번 내내 "다음 15분 수익률" 점예측은 persistence를 못 이겼고, 학습은
   분산 폭주(Linear) 아니면 0 근처 평탄화 사이를 오갔다. 13번의 "변동 없는 예측 그래프"는
   방어 우선 셋업과 평탄화 모드가 결합한 결과다.

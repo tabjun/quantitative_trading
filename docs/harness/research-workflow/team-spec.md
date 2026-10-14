@@ -28,9 +28,9 @@ This spec applies when a task repeats across sessions:
 - `conversation_l2_cache.md`: compressed request memory
 - `test/README.md`: `test/` directory overview only
 - `test/models/*.ipynb`: experiment source of truth
-- `test/models/*.py`: diff-traceable mirror of the notebook
-- `test/results/*.md`: experiment write-up and interpretation
-- `test/experiment_specs/*.md`: design notes and rationale
+- `test/models/*.py`: headless experiment driver; its leading `# %% [markdown]` cell is the design cache written before the run
+- `test/results/*.md`: experiment write-up and interpretation, including the design section copied from the driver (`test/experiment_specs/` was abolished on 2026-10-14)
+- `test/research_materials/*.md`: literature and paper notes only
 
 ## Working Rules
 

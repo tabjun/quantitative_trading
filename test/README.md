@@ -4,9 +4,10 @@
 
 ## 1. 폴더 역할
 
-- `models/`: 연구용 `.ipynb` 원본과 동명 `.py` 미러
-- `results/`: Markdown 보고서, 요약표, 선택적 CSV
-- `research_materials/`: 문헌 메모, 실험 설계, 교수님 공유 브리프
+- `models/`: 연구 실험 드라이버(`.py`, 과거 실험은 `.ipynb` 원본 포함). 드라이버 맨 앞 `# %% [markdown]` 셀이 **실행 전에 쓰는 설계 캐시**다.
+- `results/`: 결과 보고서와 표. 보고서마다 서두에 실행 환경 → **실험 설계**(드라이버 설계 셀 원문) → 표준 헤더(describe 표 포함) 순으로 싣는다. 여러 실험을 가로지르는 살아있는 문서(`DATA_DICTIONARY.md`, `data_definition.md`, `model_catalog.md`, `methodology_catalog.md`)도 여기 둔다.
+- `research_materials/`: **외부 문헌과 논문 정리만** 둔다. 이 연구의 설계·결과·카탈로그는 두지 않는다.
+- (폐지) `experiment_specs/`: 2026-10-14 폐지. 계획서 원문은 대응 보고서의 "실험 설계" 절로 옮겼다(AGENTS.md 2.9k).
 - `images/`: 노트북 출력 그림과 보고서 삽입용 이미지
 - `scripts/`: 재사용 가능한 보조 유틸리티만 보관
 
@@ -56,7 +57,7 @@
 - `15번`은 14번까지 반복된 "다음 15분 수익률 점예측이 persistence를 못 이긴다"는 한계를 하방 방어 로직으로 우회하지 않고, target을 h-step 추세로 재설계해 정면으로 다룬다. multi-timeframe 변수 분해로 신호원(추세·위치 블록)을 특정하고, risk gate는 방어층으로 유지한 채 함께 평가한다.
 - 문헌 기반 논문화 방향과 후속 알고리즘 후보는 `test/research_materials/forecasting_methodology_literature_review_20260613.md`를 본다.
 - 세부 해석은 각 노트북의 결과 셀과 `test/results/*.md` 보고서를 우선 본다.
-- 설계 메모와 참고문헌은 `test/experiment_specs/`에 둔다.
+- 설계는 드라이버 서두 설계 셀 → 결과 보고서 "실험 설계" 절로 옮기고, 참고문헌은 `test/research_materials/`에 둔다.
 
 ## 5. 실행과 산출물
 

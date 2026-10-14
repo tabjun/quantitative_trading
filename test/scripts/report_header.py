@@ -10,8 +10,12 @@
                                  transforms=[("주기제거", "시간대별 변동성 주기가 지속성을 왜곡")])
     print(md)
 
+보고서 서두 구성(AGENTS.md 2.9k): 실행 환경 → 실험 설계(`render_design_section(__file__)`) →
+표준 헤더(`render_standard_header`, 5항에 describe 표 포함) → 결과.
+
 CLI 확인:
     uv run test/scripts/report_header.py --top 20
+    uv run test/scripts/report_header.py --design test/models/27_model_expansion_test.py
 """
 from __future__ import annotations
 
@@ -215,6 +219,117 @@ def series_stats(x: np.ndarray) -> dict:
     return out
 
 
+def demote_headings(md: str, by: int = 2) -> str:
+    """마크다운 제목 수준을 by만큼 내린다(코드 블록 안의 '#'은 건드리지 않는다). 6단계를 넘으면 6에 고정."""
+    out, fence = [], False
+    for line in md.splitlines():
+        if line.lstrip().startswith("```"):
+            fence = not fence
+        if not fence and line.startswith("#"):
+            hashes = len(line) - len(line.lstrip("#"))
+            if line[hashes:hashes + 1] in (" ", ""):
+                line = "#" * min(6, hashes + by) + line[hashes:]
+        out.append(line)
+    return "\n".join(out)
+
+
+def driver_design_markdown(driver_path: str | Path) -> str:
+    """드라이버 맨 앞 `# %% [markdown]` 셀(설계 캐시)을 마크다운으로 꺼낸다. 없으면 빈 문자열."""
+    lines = Path(driver_path).read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0].strip() != "# %% [markdown]":
+        return ""
+    body = []
+    for line in lines[1:]:
+        if line.startswith("# %%"):
+            break
+        if not line.startswith("#"):
+            break
+        body.append(line[2:] if line.startswith("# ") else line[1:])
+    return "\n".join(body).strip()
+
+
+def render_design_section(driver_path: str | Path, title: str = "실험 설계") -> str:
+    """보고서 서두의 '실험 설계' 절(AGENTS.md 2.9k).
+
+    설계·기본 설명은 실행 전에 드라이버 서두 `# %% [markdown]` 셀에 먼저 쓰고(중간 캐시),
+    보고서를 만들 때 이 함수로 그대로 옮긴다. 손으로 요약해 옮기면 회차가 쌓일수록 설계가
+    희석되므로(2026-10-14 사용자 지적) 원문을 자동으로 싣는다.
+    """
+    p = Path(driver_path)
+    md = driver_design_markdown(p)
+    try:
+        rel = p.resolve().relative_to(ROOT)
+    except ValueError:
+        rel = p
+    L = [f"## {title}", "",
+         f"> 드라이버 서두 설계 셀 원문(`{rel}`). 실행 전에 적은 설계이며, 결과를 본 뒤 바꾼 내용은 "
+         "결과 절에 따로 적는다.", ""]
+    L.append(demote_headings(md, 2) if md else "- 해당 없음(드라이버 서두에 설계 셀이 없다).")
+    L.append("")
+    return "\n".join(L)
+
+
+def _fmt_describe(v, col: str) -> str:
+    """describe 표 숫자 형식: count는 정수, 나머지는 소수 둘째 자리. 1 미만 값은 유효숫자 4자리."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    if not np.isfinite(f):
+        return "n/a"
+    if col == "count":
+        return f"{int(round(f)):,}"
+    if f == 0:
+        return "0"
+    if abs(f) < 1:   # 과학적 표기 금지(AGENTS.md 2.9b)
+        return np.format_float_positional(f, precision=4, unique=False, fractional=False, trim="-")
+    return f"{f:,.2f}"
+
+
+def describe_markdown(df: pd.DataFrame, index_name: str = "종목") -> str:
+    """pandas describe() 결과를 그대로 마크다운 표로 옮긴다(행 = index, 열 = describe 통계)."""
+    cols = list(df.columns)
+    L = [f"| {index_name} | " + " | ".join(cols) + " |",
+         "| :--- | " + " | ".join(["---:"] * len(cols)) + " |"]
+    for idx, row in df.iterrows():
+        L.append(f"| {idx} | " + " | ".join(_fmt_describe(row[c], c) for c in cols) + " |")
+    return "\n".join(L)
+
+
+def describe_tables(tickers: list[str]) -> str:
+    """종목별 원자료(종가·거래량·거래대금)와 로그수익률(%)의 pandas describe() 표.
+
+    이전 회차 EDA에서 이미 본 데이터라도 매 보고서에 그대로 싣는다(2026-10-14 사용자 지시).
+    `use_source()`로 정한 DB·기간 창을 따른다.
+    """
+    con = _con()
+    w, wp = _win()
+    frames = []
+    for t in tickers:
+        d = con.execute(
+            f"select timestamp, close, volume, value from {SOURCE_TABLE} where ticker=?{w} order by timestamp",
+            [t, *wp]).df()
+        if len(d) < 2:
+            continue
+        d["ticker"] = t
+        c = d["close"].astype(float).clip(lower=1e-12)
+        d["logret_pct"] = np.log(c).diff() * 100
+        frames.append(d)
+    con.close()
+    if not frames:
+        return "- 해당 없음(조회된 봉이 없다)."
+    df = pd.concat(frames, ignore_index=True)
+    order = [t for t in tickers if t in set(df["ticker"])]
+    L = ["#### describe 표(pandas `describe()` 그대로, 종목별)", "",
+         "> 숫자 형식: count는 정수, 나머지는 소수 둘째 자리(1 미만 값은 유효숫자 4자리). "
+         "로그수익률은 15분봉 기준 % 단위다. 행 단위 원자료라 무체결 구간(캔들 없음)은 포함되지 않는다.", ""]
+    for col, label in (("close", "종가(KRW)"), ("volume", "거래량(코인 수)"),
+                       ("value", "거래대금(KRW)"), ("logret_pct", "로그수익률(%)")):
+        tab = df.groupby("ticker")[col].describe().reindex(order)
+        L += [f"**{label}**", "", describe_markdown(tab), ""]
+    return "\n".join(L)
+
+
 def render_standard_header(
     tickers: list[str],
     train_frac: float = 0.70,
@@ -334,6 +449,8 @@ def render_standard_header(
     # 5. 기초통계량 · EDA 특성
     L.append("### 5. 기초통계량과 데이터 특성 (이전 EDA 확인 사항)")
     L.append("")
+    L.append(describe_tables(actual))
+    L.append("")
     if transformed_series and "원계열" in transformed_series:
         s0 = series_stats(transformed_series["원계열"])
         L.append("| 항목 | 값 |")
@@ -379,7 +496,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--top", type=int, default=20)
     ap.add_argument("--train-frac", type=float, default=0.70)
+    ap.add_argument("--design", help="드라이버 경로: 설계 절만 출력")
     a = ap.parse_args()
+    if a.design:
+        print(render_design_section(a.design))
+        return
     print(render_standard_header(top_tickers(a.top), a.train_frac))
 
 

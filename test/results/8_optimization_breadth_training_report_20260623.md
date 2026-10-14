@@ -1,5 +1,283 @@
 # 8번 최적화 breadth training 결과 보고서
 
+## 실험 설계
+
+> 실행 전에 쓴 계획서·설계 문서 원문이다(2026-10-14 `test/experiment_specs/` 폐지 때 이 보고서로 합쳤다. 원 파일은 git 이력에 남아 있다). 제목 수준을 두 단계 내리고 옮겨진 파일의 경로만 새 위치로 고쳤으며, 그 밖의 내용은 고치지 않았다.
+
+> 원문: 구 `test/research_materials/optimization_training_case_design_20260616.md`
+
+### 8번 최적화 breadth training 설계
+
+#### 역할
+
+8번은 7번의 stage plan을 실제 학습 실험으로 바꾸는 후속 번호다. 5번은 shortcut collapse 진단 기준선, 6번은 안정화 기준 정리, 7번은 자원 인식형 확장 계획이었다. 8번은 이 계보를 보존하면서 실제 GPU 학습, 시각화, 성능표, collapse 진단을 생성한다.
+
+중요한 점은 8번이 단순히 알고리즘 이름만 늘리는 실험이 아니라는 것이다. 같은 5개 기본 모델(`Linear`, `LSTM`, `GRU`, `TCN`, `Transformer`)도 전처리, 정규화, 손실함수, optimizer, scheduler, gradient clipping, 앙상블 방식에 따라 학습 경로가 달라질 수 있다. 따라서 8번은 **알고리즘 breadth**와 **학습 방식 breadth**를 함께 본다.
+
+#### 왜 8번이 필요한가
+
+7번 결과는 모델 성능 결과가 아니라 계획 출력이었다. 따라서 “Autoformer-like가 실제로 개선되는가”, “PatchTST-like가 0 수익률 붕괴를 줄이는가”, “DLinear/NLinear-like 같은 단순 구조가 복잡한 Transformer보다 안정적인가”, “앙상블이 직전가 복사 문제를 줄이는가”를 판단할 수 없었다.
+
+또한 7번은 같은 모델의 학습 방식을 바꾸는 실험을 충분히 포함하지 않았다. 하지만 비정상 업비트 시계열에서는 모델 구조보다 preprocessing, normalization, loss, gradient flow가 더 큰 영향을 줄 수 있다. 그러므로 8번은 모델 family 확장과 함께 학습 조건 확장을 동시에 수행한다.
+
+#### 고정할 안정화 기준
+
+- Target: 다음 가격 레벨이 아니라 다음 로그수익률
+- Evaluation: 예측 로그수익률을 KRW 가격으로 복원한 MAE/RMSE
+- Preprocessing: `none`, `winsorize`, `asinh`, `diff`, `ema_residual`, `frequency_highpass`
+- Normalization: `window_standard`, `window_robust`, `window_minmax`, `revin`, `robust_revin`, `asinh_revin`, `global_standard`
+- Loss: `return_mse`, `return_mae`, `return_huber`, `return_huber_directional`, `vol_weighted_huber`, `anti_collapse_huber`, `quantile_pinball`
+- Optimizer/Scheduler: `adamw`, `adam`, `rmsprop`, `sgd_momentum`와 `cosine`, `onecycle`, `plateau`, `none`
+- Gradient policy: `clip0.5`, `clip1`, `clip5`, `adaptive`, `none`
+- Model selection: validation loss만 보지 않고 persistence gap, variance ratio, near-zero return share, copy-risk ratio를 함께 확인
+
+#### 포함 모델군
+
+기본 대표군:
+
+- Linear
+- LSTM
+- GRU
+- TCN
+- Transformer
+
+확장 단일 모델군:
+
+- AutoformerLike
+- PatchTSTLike
+- DLinearLike
+- NLinearLike
+- TimesNetLike
+- TimeXerLike
+- ITransformerLike
+- ModernTCNLike
+- MambaLike
+
+앙상블군:
+
+- LSTM + Autoformer mean
+- TCN + Transformer mean
+- Linear + sequence residual-style mean
+- validation weighted top-k ensemble
+
+#### 추가 suite
+
+- `breadth_probe`: 기본 안정화 조건에서 모델 family 자체를 넓게 비교한다.
+- `core_tuning_probe`: 6번의 5개 기본 모델을 유지하되 전처리, 정규화, 손실함수, optimizer, scheduler, gradient clipping을 함께 흔들어 본다.
+- `preprocessing_cross_check`: 모델을 고정하고 `winsorize`, `asinh`, `diff`, `ema_residual`, `frequency_highpass`가 collapse 지표에 미치는 영향을 본다.
+- `normalization_cross_check`: `window_standard`, `window_robust`, `window_minmax`, `revin`, `robust_revin`, `asinh_revin`을 비교한다.
+- `loss_cross_check`: Huber, 방향성 벌점, 변동성 가중, anti-collapse, pinball loss를 비교한다.
+- `optimization_cross_check`: optimizer와 scheduler 조합이 같은 모델의 학습 경로를 어떻게 바꾸는지 본다.
+- `gradient_cross_check`: gradient clipping 강도와 adaptive clipping이 loss/gradient norm/붕괴 지표를 어떻게 바꾸는지 본다.
+- `ensemble_probe`: 단일 모델 결과를 묶어 앙상블이 collapse와 KRW MAE를 동시에 줄이는지 본다.
+- `full`: 넓은 조합을 순차적으로 확인하되, 서버 시간이 길어질 수 있으므로 중간 저장 대신 notebook inline 출력과 단계별 재실행을 전제로 한다.
+
+#### 서버 자원 기준
+
+기본 profile은 `school_4090_15gb`다.
+
+- device: cuda 우선
+- n_jobs: 16 이하
+- max_workers: 16 이하
+- DataLoader num_workers: 4
+- torch_num_threads: 16 이하
+- torch_interop_threads: 4
+- optuna_n_jobs: GPU 학습에서는 1
+- batch_size: 기본 48, OOM 발생 시 자동 절반 축소
+- max_cases: 기본 120개로 제한, 전체 실행은 `--max-cases 0`
+- 중간 결과는 case마다 notebook 출력으로 확인하고, 파일 저장은 기본적으로 하지 않는다.
+
+#### 실행 예시
+
+작게 확인:
+
+```bash
+python test/models/8_optimization_breadth_training_test.py \
+  --suite breadth_probe \
+  --models Linear,LSTM,TCN,Transformer,AutoformerLike,PatchTSTLike \
+  --epochs 3 \
+  --max-windows 1024 \
+  --batch-size 48 \
+  --continue-on-failure
+```
+
+기본 5개 모델의 학습 방식 튜닝 비교:
+
+```bash
+python test/models/8_optimization_breadth_training_test.py \
+  --suite core_tuning_probe \
+  --epochs 6 \
+  --max-windows 2048 \
+  --max-cases 120 \
+  --continue-on-failure
+```
+
+전처리 비교:
+
+```bash
+python test/models/8_optimization_breadth_training_test.py \
+  --suite preprocessing_cross_check \
+  --epochs 8 \
+  --max-windows 2048 \
+  --continue-on-failure
+```
+
+loss 비교:
+
+```bash
+python test/models/8_optimization_breadth_training_test.py \
+  --suite loss_cross_check \
+  --epochs 8 \
+  --max-windows 2048 \
+  --continue-on-failure
+```
+
+gradient clipping 비교:
+
+```bash
+python test/models/8_optimization_breadth_training_test.py \
+  --suite gradient_cross_check \
+  --epochs 8 \
+  --max-windows 2048 \
+  --continue-on-failure
+```
+
+앙상블 확인:
+
+```bash
+python test/models/8_optimization_breadth_training_test.py \
+  --suite ensemble_probe \
+  --epochs 8 \
+  --max-windows 2048 \
+  --continue-on-failure
+```
+
+#### 산출물
+
+- `test/results/8_optimization_breadth_training_<timestamp>_summary.csv`
+- `test/results/8_optimization_breadth_training_<timestamp>_curves.csv`
+- `test/results/8_optimization_breadth_training_<timestamp>_report.md`
+- `test/images/8_optimization_breadth_training_<timestamp>_*_learning_curve.png`
+- `test/images/8_optimization_breadth_training_<timestamp>_*_prediction.png`
+- `test/images/8_optimization_breadth_training_<timestamp>_collapse_diagnostics.png`
+
+`curves.csv`에는 `train_loss`, `val_loss`뿐 아니라 `grad_norm_mean`, `grad_norm_max`, `lr`도 저장한다. 따라서 loss만 줄어드는지, gradient가 소실/폭주/불안정해지는지 같이 확인한다.
+
+#### 좋은 결과 기준
+
+좋은 결과는 단순히 RMSE가 낮은 것이 아니다. 다음 조건을 함께 만족해야 한다.
+
+- validation loss가 train loss와 함께 안정적으로 감소한다.
+- gradient norm이 초반부터 0에 붙거나 과도하게 튀지 않는다.
+- 예측 수익률이 0 근처에만 몰리지 않는다.
+- 예측 수익률 분산이 실제 수익률 분산 대비 지나치게 작지 않다.
+- KRW 복원 예측이 단순 persistence baseline과 사실상 동일하지 않다.
+- 방향성 지표가 우연 수준에만 머물지 않는다.
+
+#### 나쁜 결과 기준
+
+다음 중 하나라도 반복되면 shortcut collapse 위험이 높다.
+
+- loss는 감소하지만 예측 수익률 표준편차가 거의 0이다.
+- loss는 감소하지만 gradient norm이 매우 작아져 사실상 업데이트가 죽는다.
+- gradient norm이 특정 epoch에서 과도하게 튀고 이후 validation loss가 회복되지 않는다.
+- `near_zero_return_share`가 0.70 이상이다.
+- `variance_ratio`가 0.10 미만이다.
+- `copy_risk_ratio`가 1에 가깝고 persistence baseline과 차이가 없다.
+- 예측 KRW 가격선이 직전가 baseline과 거의 겹친다.
+
+#### 설계 근거 문서
+
+전처리, 정규화, 손실함수, optimizer, gradient policy를 왜 넣었는지는 `test/results/8_optimization_breadth_training_report_20260623.md`에 별도 정리한다.
+
+> 원문: 구 `test/research_materials/optimization_training_case_design_20260616.md` — 8번 학습 case 설계 근거
+
+### 8번 확장 학습 case 설계 근거
+
+#### 핵심 메시지
+
+이번 문제는 “LSTM 대신 Transformer를 쓸 것인가” 같은 단순 알고리즘 선택 문제가 아니다. 같은 기본 모델 5개(`Linear`, `LSTM`, `GRU`, `TCN`, `Transformer`)도 전처리, 정규화, 손실함수, optimizer, scheduler, gradient clipping, 앙상블 방식에 따라 loss landscape를 이동하는 방식이 달라진다. 따라서 8번은 모델 이름 확장이 아니라 **학습 경로 확장 실험**이어야 한다.
+
+#### 참고한 연구 흐름
+
+##### 1. 비정상 시계열 정규화
+
+- Non-stationary Transformer는 실제 시계열의 분포가 시간에 따라 바뀌면 Transformer 성능이 크게 흔들릴 수 있고, 단순 stationarization이 오히려 중요한 비정상 정보를 지울 수 있다고 본다. 그래서 series stationarization과 de-stationary attention을 같이 쓴다.
+- Dish-TS는 input window와 output horizon 사이에도 분포 shift가 생긴다고 보고, input-space와 output-space의 분포를 따로 추정하는 구조를 제안한다.
+- FAN은 RevIN류가 평균/분산 같은 기본 trend는 다루지만 seasonal/frequency 성분에는 약하다고 보고, frequency component를 정규화 축으로 넣는다.
+- NoRIN은 RevIN류 affine normalization이 heavy-tail과 skewness를 바꾸지 못한다고 지적하고, arcsinh 계열의 비선형 reversible normalization을 제안한다.
+
+8번 반영:
+
+- `window_standard`, `window_robust`, `window_minmax`
+- `revin`, `robust_revin`, `asinh_revin`
+- `asinh`, `ema_residual`, `frequency_highpass`
+
+##### 2. 단순 모델과 분해/패치 구조의 중요성
+
+- DLinear/NLinear 계열은 복잡한 Transformer보다 단순 linear decomposition이 긴 시계열 예측에서 강할 수 있음을 보인다.
+- PatchTST는 긴 sequence를 그대로 attention에 넣기보다 patch 단위 토큰화와 channel-independence가 계산량과 표현력을 동시에 개선할 수 있다고 본다.
+
+8번 반영:
+
+- `DLinearLike`, `NLinearLike`, `PatchTSTLike`
+- 기본 5개 모델도 같은 preprocessing/normalization/loss/optimizer 조합으로 다시 확인
+
+##### 3. 손실함수와 평가 목표
+
+- 금융/코인 시계열에서는 price-level MSE만 낮춰도 직전가 복사나 0 수익률 예측이 쉬운 해가 될 수 있다.
+- quantile/pinball loss는 평균 하나가 아니라 조건부 분위수를 예측하는 관점에서 불확실성과 꼬리위험을 다룰 수 있다.
+- 방향성 벌점은 단순 오차 최소화가 “크기는 맞지만 방향은 틀리는” 해를 만들 때 보조적으로 쓴다.
+
+8번 반영:
+
+- `return_mse`, `return_mae`
+- `return_huber`
+- `return_huber_directional`
+- `vol_weighted_huber`
+- `anti_collapse_huber`
+- `quantile_pinball`
+
+##### 4. gradient와 optimizer 안정화
+
+- Pascanu, Mikolov, Bengio는 RNN 학습에서 vanishing/exploding gradient를 분석하고, exploding gradient에 대한 실용적 해법으로 gradient norm clipping을 제안한다.
+- Adam은 noisy/sparse gradient와 non-stationary objective에 적합한 adaptive optimizer로 널리 쓰인다.
+- AdamW는 adaptive optimizer에서 weight decay와 L2 regularization이 같지 않다는 점을 분리해 일반화 성능을 개선하는 방향이다.
+- SGDR/cosine restart 계열은 고정 learning rate보다 loss landscape 탐색을 더 다양하게 만들 수 있다.
+- Lookahead는 inner optimizer의 빠른 weight와 slow weight를 섞어 학습 안정성과 variance를 낮추는 방향이다.
+
+8번 반영:
+
+- `adamw`, `adam`, `rmsprop`, `sgd_momentum`
+- `cosine`, `onecycle`, `plateau`, `none`
+- `clip0.5`, `clip1`, `clip5`, `adaptive`, `none`
+- 학습 곡선에 `grad_norm_mean`, `grad_norm_max`, `lr` 저장
+
+#### 8번에서 봐야 할 질문
+
+- 같은 `LSTM`이라도 `window_standard + return_huber`와 `asinh_revin + anti_collapse_huber`의 예측 분산이 다른가?
+- 같은 `Transformer`라도 cosine scheduler와 plateau scheduler가 0 수익률 붕괴 정도를 다르게 만드는가?
+- robust/asinh 계열 전처리가 extreme candle 이후 loss 폭주를 줄이는가?
+- frequency/highpass 전처리가 직전가 복사형 baseline과의 중첩을 줄이는가?
+- gradient norm이 초반부터 거의 0으로 죽거나 반대로 튀는 case가 특정 모델/손실/정규화에 몰리는가?
+- 앙상블은 단순히 MAE만 낮추는가, 아니면 collapse 지표도 같이 낮추는가?
+
+#### 주요 참고 링크
+
+- Non-stationary Transformers: https://arxiv.org/abs/2205.14415
+- Dish-TS: https://arxiv.org/abs/2302.14829
+- FAN: https://arxiv.org/abs/2409.20371
+- NoRIN: https://arxiv.org/abs/2605.10823
+- DLinear/NLinear: https://arxiv.org/abs/2205.13504
+- PatchTST: https://arxiv.org/abs/2211.14730
+- Gradient clipping for RNNs: https://arxiv.org/abs/1211.5063
+- Adam: https://arxiv.org/abs/1412.6980
+- AdamW: https://arxiv.org/abs/1711.05101
+- SGDR: https://arxiv.org/abs/1608.03983
+- Lookahead: https://arxiv.org/abs/1907.08610
+
+---
+
 ## 1. 연구 목적
 
 8번 실험은 6번에서 정리한 학습 안정화 기준과 7번의 실행 계획을 실제 GPU 학습으로 연결한 첫 번째 breadth 비교다. 목적은 최신 모델의 단순 성능 순위를 정하는 것이 아니라, 업비트 비정상 시계열에서 다음 문제가 모델 계열을 바꾸어도 반복되는지 확인하는 것이다.

@@ -176,7 +176,7 @@
 
 - `test/models/12_feature_guardrail_fusion_test.ipynb`
 - `test/models/12_feature_guardrail_fusion_test.py`
-- `test/experiment_specs/12_feature_guardrail_fusion_plan_20260624.md`
+- `test/results/12_feature_guardrail_fusion_report_20260624.md`
 
 노트북 기본 셀은 다음을 실행한다.
 

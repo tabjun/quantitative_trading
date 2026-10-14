@@ -5,8 +5,8 @@
 연구 번호를 담당한다 — 모델이 바뀔 때마다 새 문서를 만들지 않고 그 행만 갱신한다.
 실제로 그 연구가 무엇을 했는지(실행 결과)는 `test/results/{N}_*/`에 남는다. 실험 번호와
 무관하게 누적되는 참조용 카탈로그라 이 문서 자체엔 번호를 붙이지 않는다
-(`test/research_materials/`의 비번호 문서 관례 — `forecasting_methodology_literature_
-review_20260613.md` 등과 같은 층위).
+(`test/results/`의 비번호 교차 문서 관례 — `DATA_DICTIONARY.md`, `methodology_catalog.md`와 같은
+층위. 2026-10-14에 `test/research_materials/`에서 옮겼다. 그 폴더는 외부 문헌 정리만 둔다).
 
 새 모델을 조사할 때마다 해당 계열 표에 행을 추가한다. 기존 행은 내용이 틀렸거나
 상태(비고)가 바뀌었을 때만 고친다.

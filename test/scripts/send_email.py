@@ -163,8 +163,8 @@ KRW 전 종목 기준 historical flow data mart 설계 및 구축 내용을 공�
 
 def optimization_context_brief_email(commit_hash: str) -> tuple[str, str, list[Path]]:
     report_path = "test/results/5_optimization_diagnostics_quick_probe_20260613.md"
-    design_path = "test/experiment_specs/5_optimization_diagnostics_framework_design_20260613.md"
-    next_path = "test/experiment_specs/6_optimization_stabilization_plan_20260613.md"
+    design_path = "test/results/5_optimization_diagnostics_quick_probe_20260613.md"
+    next_path = "test/results/6_optimization_stabilization_stage_report_20260613.md"
     body = f"""교수님 안녕하세요.
 
 교수님 ~~ 에 대한 것 보냅니다. 분석 해석 및  보고서 양식에도 시간 많이 드는데, 서버에서 커널을 빌려오다보니 제약사항에 대해 해결하느라 시간이 참많이드네요. 이것때문에 차라리 컴퓨터를 하나 맞추서 분석하고 싶어서 견적내보다가 가격이 제 월급나온거보고 접고 다시 있는 환경에서 최선을 다하기로했습니다. ㅋㅋㅋㅋ
@@ -232,7 +232,7 @@ def forecasting_methodology_review_email(commit_hash: str) -> tuple[str, str, li
     report_path = "test/research_materials/forecasting_methodology_literature_review_20260613.md"
     report_3_path = "test/results/3_time_series_multi_ticker_test_report_20260526_020000.md"
     report_5_path = "test/results/5_optimization_diagnostics_quick_probe_20260613.md"
-    plan_6_path = "test/experiment_specs/6_optimization_stabilization_plan_20260613.md"
+    plan_6_path = "test/results/6_optimization_stabilization_stage_report_20260613.md"
     readme_path = "test/README.md"
     body = f"""교수님 안녕하세요.
 
@@ -286,8 +286,8 @@ def forecasting_methodology_review_email(commit_hash: str) -> tuple[str, str, li
 def optimization_stabilization_stage_email(commit_hash: str) -> tuple[str, str, list[Path]]:
     report_5_path = "test/results/5_optimization_diagnostics_quick_probe_20260613.md"
     report_6_path = "test/results/6_optimization_stabilization_stage_report_20260613.md"
-    plan_6_path = "test/experiment_specs/6_optimization_stabilization_plan_20260613.md"
-    plan_7_path = "test/experiment_specs/7_optimization_breadth_expansion_plan_20260613.md"
+    plan_6_path = "test/results/6_optimization_stabilization_stage_report_20260613.md"
+    plan_7_path = "test/results/7_optimization_breadth_expansion_interpretation_20260616.md"
     notebook_6_path = "test/models/6_optimization_stabilization_test.ipynb"
     notebook_7_path = "test/models/7_optimization_breadth_expansion_test.ipynb"
     body = f"""교수님 안녕하세요.
@@ -355,7 +355,7 @@ def optimization_stabilization_stage_email(commit_hash: str) -> tuple[str, str, 
 
 def breadth_expansion_interpretation_email(commit_hash: str) -> tuple[str, str, list[Path]]:
     report_7_path = "test/results/7_optimization_breadth_expansion_interpretation_20260616.md"
-    report_8_path = "test/experiment_specs/8_optimization_breadth_training_plan_20260616.md"
+    report_8_path = "test/results/8_optimization_breadth_training_report_20260623.md"
     body = f"""교수님 안녕하세요.
 
 7번 확장 실험 결과를 정리해 공유드립니다. 결론부터 말씀드리면, 7번은 모델 성능 결과가 아니라 6번 안정화 이후의 후속 breadth expansion을 어떤 자원 프로필과 실행 순서로 돌릴지 정리한 stage plan입니다.
@@ -396,7 +396,7 @@ def breadth_expansion_interpretation_email(commit_hash: str) -> tuple[str, str, 
 
 def preprocessing_uncertainty_diagnostics_email(commit_hash: str) -> tuple[str, str, list[Path]]:
     report_8_path = "test/results/8_optimization_breadth_training_report_20260623.md"
-    plan_9_path = "test/experiment_specs/9_preprocessing_uncertainty_diagnostics_plan_20260623.md"
+    plan_9_path = "test/results/9_preprocessing_uncertainty_diagnostics_report_20260623.md"
     notebook_9_path = "test/models/9_preprocessing_uncertainty_diagnostics_test.ipynb"
     video_black_scholes = "https://www.youtube.com/watch?v=99BHnu64pu8"
     video_double_descent = "https://www.youtube.com/watch?v=5ruiphjlOwo"
@@ -512,7 +512,7 @@ Double Descent 관련 영상:
 def preprocessing_matrix_results_email(commit_hash: str) -> tuple[str, str, list[Path]]:
     report_path = "test/results/9_preprocessing_uncertainty_diagnostics_report_20260623.md"
     notebook_path = "test/models/9_preprocessing_uncertainty_diagnostics_test.ipynb"
-    plan_10_path = "test/experiment_specs/10_objective_ensemble_confirmation_plan_20260623.md"
+    plan_10_path = "test/results/10_objective_ensemble_confirmation_report_20260623.md"
     notebook_10_path = "test/models/10_objective_ensemble_confirmation_test.ipynb"
     summary_image = "test/images/9_preprocessing_uncertainty_diagnostics_test_cell002_230.png"
     heatmap_image = "test/images/9_preprocessing_uncertainty_diagnostics_test_cell002_231.png"
@@ -610,7 +610,7 @@ def feature_guardrail_transition_email(commit_hash: str) -> tuple[str, str, list
     synthesis_report_path = "test/results/10_11_point_risk_synthesis_report_20260624.md"
     report_10_path = "test/results/10_objective_ensemble_confirmation_report_20260623.md"
     report_11_path = "test/results/11_distributional_capacity_diagnostics_report_20260623.md"
-    plan_12_path = "test/experiment_specs/12_feature_guardrail_fusion_plan_20260624.md"
+    plan_12_path = "test/results/12_feature_guardrail_fusion_report_20260624.md"
     notebook_12_path = "test/models/12_feature_guardrail_fusion_test.ipynb"
     py_12_path = "test/models/12_feature_guardrail_fusion_test.py"
     point_flat_image = "test/images/10_objective_ensemble_confirmation_test_cell002_01.png"
