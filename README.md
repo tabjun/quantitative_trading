@@ -22,7 +22,7 @@
 통합비교(20종목×주기제거 전/후 2조건, "단일 최적 모델은 없다" — 변동성 구간마다 최우수
 모델이 다름) → 학회 포스터 → 24번 17개 모델 최대 규모 재적합(레짐전환 GARCH 2종
 정식 통합) → 25번 모델 순위 통계적 유의성 검정(Diebold-Mariano·Model Confidence Set)이
-지금까지의 작업 흐름이다. 상세는 `test/results/EXPERIMENT_LOG.md`·`history.md`의
+지금까지의 작업 흐름이다. 상세는 `test/results/EXPERIMENT_LOG.md`·`test/history.md`의
 2026-09 이후 절 참조.
 
 ### 장기 비전(현재 비활성 — 변동성 예측이 먼저 안정화된 뒤의 후속 과제)
@@ -67,7 +67,8 @@
 
 - [AGENTS.md](AGENTS.md): 세션마다 반드시 지켜야 하는 강제 규칙
 - `CLAUDE.md`: Claude Code 전용 진입 스텁(규칙 본문은 없음, `AGENTS.md`를 가리킴)
-- [process.md](process.md): 연구 단계별 할 일(Phase/실험 단위 To-Do)
+- 기록 4종은 트랙별로 한 벌씩 있다(2026-10-15): 루트 = 서비스 구현, `test/` = 연구. 연구 기록은 [test/process.md](test/process.md)·[test/history.md](test/history.md)
+- [process.md](process.md): 단계별 할 일(Phase/실험 단위 To-Do)
 - `state.md`: 요청 단위로 "실행됐는지 아닌지"만 체크
 - [history.md](history.md): 완료된 작업의 이력
 - `chat_history.md`: 사용자 요청 원문 보존 캐시(최근 20개)

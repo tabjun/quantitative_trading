@@ -26,6 +26,7 @@ This spec applies when a task repeats across sessions:
 - `process.md`: long-horizon roadmap and phase map
 - `history.md`: completed work log and next step
 - `chat_history.md`: verbatim user requests shared by Claude Code and Codex (latest 20)
+- Since 2026-10-15 the four record files exist per track: research records live under `test/`, service records at the repo root (see `AGENTS.md` §1).
 - `test/README.md`: `test/` directory overview only
 - `test/models/*.ipynb`: preserved source for legacy notebook experiments; new experiments use headless `.py` drivers
 - `test/models/*.py`: headless experiment driver; its leading `# %% [markdown]` cell is the design cache written before the run
