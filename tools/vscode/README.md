@@ -10,7 +10,7 @@
 ## 왜 저장소 안으로 옮겼나
 
 - 홈 디렉터리 루트에 스크립트가 있으면 Git 루트가 홈일 때 개인 환경 파일과 섞여 추적 범위가 불명확해진다.
-- 이 스크립트는 `quantitative_trading`뿐 아니라 `personal_ai_project` 아래 다른 프로젝트를 열 때도 재사용한다.
+- 기본 작업 폴더는 이 저장소 루트(`~/quantitative_trading`)다. 다른 폴더는 `start <경로>`로 연다.
 - 따라서 저장소 안의 `tools/vscode/`에 두고 문서화하는 편이 재현성과 관리 측면에서 낫다.
 
 ## 사용법
@@ -18,25 +18,25 @@
 기본 시작:
 
 ```bash
-~/personal_ai_project/tools/vscode/start-vscode.sh start
+~/quantitative_trading/tools/vscode/start-vscode.sh start
 ```
 
 특정 디렉터리로 시작:
 
 ```bash
-~/personal_ai_project/tools/vscode/start-vscode.sh start ~/personal_ai_project/quantitative_trading
+~/quantitative_trading/tools/vscode/start-vscode.sh start ~/quantitative_trading
 ```
 
 상태 확인:
 
 ```bash
-~/personal_ai_project/tools/vscode/start-vscode.sh status
+~/quantitative_trading/tools/vscode/start-vscode.sh status
 ```
 
 종료:
 
 ```bash
-~/personal_ai_project/tools/vscode/start-vscode.sh stop
+~/quantitative_trading/tools/vscode/start-vscode.sh stop
 ```
 
 ## 동작 원칙

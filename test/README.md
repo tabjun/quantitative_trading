@@ -101,24 +101,25 @@ git 저장소도 uv venv도 없는 상태), 아래 순서를 처음부터 끝까
 
    ```bash
    cd ~
-   git clone git@github.com:tabjun/personal_ai_project.git
-   cd personal_ai_project
+   git clone git@github.com:tabjun/quantitative_trading.git
+   cd quantitative_trading
    git checkout stock
+   git config core.hooksPath .githooks
    ```
 
 5. **uv venv 재구축** — 이 상황(env 자체가 없음)은 "env가 깨진 경우"에 해당하므로
    bootstrap 스크립트를 그대로 사용한다(아래 "환경이 깨져 재구축이 필요할 때" 절 참고).
 
    ```bash
-   cd ~/personal_ai_project/quantitative_trading
+   cd ~/quantitative_trading
    bash test/scripts/bootstrap_uv_312.sh
    ```
 
 6. **웹 VS Code(code-server) 기동** — Claude Code 확장을 포함해 자동 설치된다.
 
    ```bash
-   bash ~/personal_ai_project/tools/vscode/start-vscode.sh start ~/personal_ai_project/quantitative_trading
-   bash ~/personal_ai_project/tools/vscode/start-vscode.sh status
+   bash ~/quantitative_trading/tools/vscode/start-vscode.sh start ~/quantitative_trading
+   bash ~/quantitative_trading/tools/vscode/start-vscode.sh status
    ```
 
    접속 주소는 `tools/vscode/README.md`에 고정되어 있다(`https://stat5.kmu.ac.kr:9500/user/<user>/proxy/9999/`).
@@ -242,7 +243,7 @@ cat ~/.local/share/jupyter/kernels/quant313/kernel.json
 정상이라면 `argv`에 원하는 uv/venv Python 경로가 들어 있어야 한다.
 
 ```text
-/home/std_jun99120/personal_ai_project/quantitative_trading/.venv/bin/python
+/home/std_jun99120/quantitative_trading/.venv/bin/python
 ```
 
 즉, 연결 구조는 다음과 같다.
@@ -268,7 +269,7 @@ JupyterLab 터미널에서 오래 걸리는 환경 구성 스크립트는 `nohup
 #### 단일 스크립트 실행
 
 ```bash
-cd ~/personal_ai_project/quantitative_trading
+cd ~/quantitative_trading
 
 # logs 디렉터리가 없으면 생성한다. 이미 있으면 그대로 둔다.
 mkdir -p logs
@@ -295,7 +296,7 @@ disown %1
 두 환경을 동시에 만들면 다운로드, 디스크, 캐시 작업이 겹쳐 느려질 수 있으므로 순차 실행을 기본으로 한다. 아래 명령은 이미 실행 중인 3.13 작업이 끝난 뒤 3.12 작업을 자동으로 시작한다.
 
 ```bash
-cd ~/personal_ai_project/quantitative_trading
+cd ~/quantitative_trading
 
 # 위 단일 실행 블록에서 이미 mkdir -p logs를 실행했다면 생략해도 된다.
 mkdir -p logs
@@ -303,7 +304,7 @@ mkdir -p logs
 LOG="logs/bootstrap_uv_312_after_313_$(TZ=Asia/Seoul date +%Y%m%d_%H%M%S).log"
 
 nohup bash -lc '
-cd ~/personal_ai_project/quantitative_trading
+cd ~/quantitative_trading
 while kill -0 "$(cat logs/bootstrap_uv_313.pid)" 2>/dev/null; do
   sleep 60
 done
@@ -317,7 +318,7 @@ echo "$LOG" | tee logs/bootstrap_uv_312.latest
 #### 실행 상태 확인
 
 ```bash
-cd ~/personal_ai_project/quantitative_trading
+cd ~/quantitative_trading
 
 ps -p "$(cat logs/bootstrap_uv_313.pid)" -o pid,stat,etime,%cpu,%mem,cmd
 ps -p "$(cat logs/bootstrap_uv_312.pid)" -o pid,stat,etime,%cpu,%mem,cmd

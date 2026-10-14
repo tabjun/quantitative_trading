@@ -193,12 +193,17 @@ test/images/ {번호}_{실험약칭}_{YYYYMMDD}/{번호}_{실험약칭}_{부분}
   git rm --cached -- <해당 파일>
   ```
   `test/`, `pipelines/`, `marts/`, `engine/`, `analysis/` 등 코드·결과물은 그대로 병합된다.
-  이 자동 차단은 로컬 git이 `core.hooksPath=quantitative_trading/.githooks`를 가리킬 때만
-  동작한다 — 새로 clone한 환경에서는 `git config core.hooksPath quantitative_trading/.githooks`를
+  이 자동 차단은 로컬 git이 `core.hooksPath=.githooks`를 가리킬 때만
+  동작한다 — 새로 clone한 환경에서는 `git config core.hooksPath .githooks`를
   먼저 실행한다. **한계**: 훅은 각 PC의 로컬 설정이라 GitHub 서버는 강제하지 않는다. 서버 쪽
   강제(브랜치 보호 규칙, 필수 상태 검사)가 켜져 있는지는 이 서버에서 `gh` CLI가 없어 확인하지
   못했다. GitHub 저장소 설정(Branches)에서 직접 확인한다.
-- **서버 ↔ GitHub은 SSH 원격**(`git@github.com:tabjun/personal_ai_project.git`)이 기본이다.
+- **독립 저장소 (2026-10-15 분리)**: 이 프로젝트는 `tabjun/quantitative_trading` 단독 저장소다. 예전
+  `personal_ai_project` 모노레포(stock/apple/job_agent 브랜치 공유)에서 `stock`/`develop`/`main` 이력을
+  그대로 옮겨 왔고(커밋별 트리 일치 검증), apple·이력서는 각각 `advertisement_apple`·`job_agent` 저장소로
+  갈라졌다. 커밋 메시지 속 옛 해시(예: `(stock f950ac6)`)는 옛 저장소 기준이다. 서버 경로는
+  `~/quantitative_trading`(옛 `~/personal_ai_project/quantitative_trading`은 호환용 심볼릭 링크).
+- **서버 ↔ GitHub은 SSH 원격**(`git@github.com:tabjun/quantitative_trading.git`)이 기본이다.
   학교 서버는 인바운드 SSH(22번)는 방화벽에 막혀 있지만 아웃바운드는 열려 있어 서버에서
   `ssh -T git@github.com` 인증은 정상 동작한다(2026-07-14 확인). **로컬 PC ↔ GitHub은 이
   규칙과 무관** — 로컬은 HTTPS 원격을 그대로 써도 된다(2026-08-09 확인, push 정상 동작).

@@ -15,9 +15,9 @@
 ### 서버에서 상태 확인 / 시작 / 종료
 
 ```bash
-~/personal_ai_project/tools/vscode/start-vscode.sh status
-~/personal_ai_project/tools/vscode/start-vscode.sh start [workdir]   # 기본 workdir: personal_ai_project
-~/personal_ai_project/tools/vscode/start-vscode.sh stop
+~/quantitative_trading/tools/vscode/start-vscode.sh status
+~/quantitative_trading/tools/vscode/start-vscode.sh start [workdir]   # 기본 workdir: quantitative_trading
+~/quantitative_trading/tools/vscode/start-vscode.sh stop
 ```
 
 - 이미 떠 있으면 `start`는 실패한다 (자동 재시작 안 함) — 먼저 `stop` 해야 새 workdir로 재시작 가능.
@@ -133,7 +133,7 @@ disown
 ### (참고) 브라우저로도 열린다 — 별도 기능 아님
 
 ```
-https://vscode.dev/tunnel/stat5-quant/home/std_jun99120/personal_ai_project
+https://vscode.dev/tunnel/stat5-quant/home/std_jun99120/quantitative_trading
 ```
 
 `code tunnel`은 정의상 "vscode.dev에서 접속 가능한 터널"이라, 터널이 켜져 있으면 이 URL로 브라우저 접속도 항상 같이 열려 있다 (GitHub 인증 필요). 로컬 VS Code Desktop 접속과 이 브라우저 접속은 **같은 터널 하나를 공유하는 두 경로**일 뿐, 하나만 켜고 하나만 끄는 옵션은 없다 — 완전히 막고 싶으면 위 5번(`code tunnel kill`)으로 터널 자체를 꺼야 하고, 그러면 둘 다 끊긴다.
