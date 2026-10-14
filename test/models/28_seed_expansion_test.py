@@ -760,7 +760,7 @@ def _gpu_task(tk, H, name, seed, quick):
 # 한도는 LIMITS 파일로 실행 중에도 바꿀 수 있다(다른 세션이 무거운 작업을 할 때 낮춘다).
 LIMITS = RES / "parts" / "_limits.json"
 LIMIT_DEFAULT = {"reserve_gb": 6.0, "floor_gb": 4.5, "gpu_reserve_gb": 4.0, "max_gpu_workers": 3, "max_cpu_workers": 4,
-                 "est_gb": {"cpu_s0": 5.0, "cpu": 3.0, "gpu": 2.8, "pi": 2.0}}
+                 "est_gb": {"cpu_s0": 6.0, "cpu": 3.0, "gpu": 2.8, "pi": 2.0}}
 
 
 def limits() -> dict:
