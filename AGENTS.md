@@ -169,8 +169,20 @@ test/images/ {번호}_{실험약칭}_{YYYYMMDD}/{번호}_{실험약칭}_{부분}
   `Co-Authored-By: <현재 모델명> <noreply@anthropic.com>`.
 - header 필수, scope는 가능하면 붙인다(`serving`/`router`/`scheduler`/`io`/`collect`/
   `prototype`/`docs`/`research`/`vscode`/`infra`). 본문은 `어떻게`보다 `무엇을 왜`.
-- 한 커밋에 성격(`feat`/`build`/`refactor`/`fix`/`chore`/`docs`/`test`/`style`/`perf`/`ci`)을
-  섞지 않는다 — 여러 성격이면 커밋을 분리한다.
+- **type은 대분류 4개만 쓴다 (2026-10-15 개정)** — 세부 type으로 잘게 나누면 커밋 기록만
+  늘어난다는 사용자 지적에 따라, 예전 10종(`build`/`refactor`/`test`/`style`/`perf`/`ci` 포함)을
+  아래 4개로 흡수했다. 나누는 대신 **본문을 상세히** 쓴다(무엇을·왜, 저장소 밖에서 함께 한 일).
+
+  | type | 쓰는 경우 | 흡수한 옛 type |
+  | :--- | :--- | :--- |
+  | `feat` | 새 기능·새 실험 드라이버·실험 결과(보고서·그림 포함) | `test`(연구 실험), `perf`(기능 개선) |
+  | `fix` | 잘못된 코드·결과·설정을 바로잡음 | `perf`(병목·오류 수정) |
+  | `docs` | 문서·지침·기록(`AGENTS.md`, 기록 4종, 카탈로그 등)만 바뀜 | — |
+  | `chore` | 정리·삭제·리팩터·의존성·환경·훅 | `refactor`/`build`/`style`/`ci` |
+
+  `docx` 같은 오타 type을 쓰지 않는다. `git revert`가 자동으로 만드는 `Revert "..."` 제목은 예외로 허용한다.
+- 한 커밋에 성격이 다른 변경(예: 코드 수정 + 기록 문서)을 섞지 않되, 같은 type끼리는 한 커밋으로
+  묶는다 — 한 요청이 보통 1~2개(`feat`/`fix`/`chore` 하나 + `docs` 하나) 커밋이 되게 한다.
 
 ### 2.7 branch·Git 전달 규칙
 
