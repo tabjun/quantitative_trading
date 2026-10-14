@@ -1,3 +1,15 @@
 #!/bin/sh
+# 2026-10-14: fast-forward 병합은 커밋 훅이 없고, 훅 없이 만든 병합 커밋도 있을 수 있다. develop/main으로
+# 가는 push에 지침 파일이 있으면 여기서 막는다(AGENTS.md 2.7절). 그 뒤 Git LFS 검사를 이어서 한다.
+set -eu
+
+input=$(cat)
+if [ -n "$input" ]; then
+  printf '%s\n' "$input" | python .githooks/check_repo_policy.py --pre-push
+fi
 command -v git-lfs >/dev/null 2>&1 || { printf >&2 "\n%s\n\n" "This repository is configured for Git LFS but 'git-lfs' was not found on your path. If you no longer wish to use Git LFS, remove this hook by deleting the 'pre-push' file in the hooks directory (set by 'core.hookspath'; usually '.git/hooks')."; exit 2; }
-git lfs pre-push "$@"
+if [ -n "$input" ]; then
+  printf '%s\n' "$input" | git lfs pre-push "$@"
+else
+  git lfs pre-push "$@" < /dev/null
+fi
