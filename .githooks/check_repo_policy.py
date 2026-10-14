@@ -29,6 +29,11 @@ GOVERNANCE_FILES = {
     f"{REPO_PREFIX}history.md",
     f"{REPO_PREFIX}process.md",
     f"{REPO_PREFIX}state.md",
+    # 2026-10-15: 기록 4종을 트랙별로 나눠 연구 트랙 기록이 test/ 아래로 갔다(AGENTS.md §1).
+    f"{REPO_PREFIX}test/chat_history.md",
+    f"{REPO_PREFIX}test/history.md",
+    f"{REPO_PREFIX}test/process.md",
+    f"{REPO_PREFIX}test/state.md",
 }
 GOVERNANCE_EXCLUDED_BRANCHES = {"develop", "main"}
 
