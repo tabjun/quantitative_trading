@@ -296,19 +296,25 @@ def describe_markdown(df: pd.DataFrame, index_name: str = "종목") -> str:
     return "\n".join(L)
 
 
-def describe_tables(tickers: list[str]) -> str:
+def describe_tables(tickers: list[str], tables: dict[str, str] | None = None) -> str:
     """종목별 원자료(종가·거래량·거래대금)와 로그수익률(%)의 pandas describe() 표.
 
     이전 회차 EDA에서 이미 본 데이터라도 매 보고서에 그대로 싣는다(2026-10-14 사용자 지시).
-    `use_source()`로 정한 DB·기간 창을 따른다.
+    `use_source()`로 정한 DB·기간 창을 따른다. tables에 {종목: 테이블}을 주면 그 종목은 ticker 열이
+    없는 단일 종목 테이블(예: 15~17번의 `btc_15m_advance`)에서 읽는다.
     """
     con = _con()
     w, wp = _win()
     frames = []
     for t in tickers:
-        d = con.execute(
-            f"select timestamp, close, volume, value from {SOURCE_TABLE} where ticker=?{w} order by timestamp",
-            [t, *wp]).df()
+        if tables and t in tables:
+            d = con.execute(
+                f"select timestamp, close, volume, value from {tables[t]} where true{w} order by timestamp",
+                list(wp)).df()
+        else:
+            d = con.execute(
+                f"select timestamp, close, volume, value from {SOURCE_TABLE} where ticker=?{w} order by timestamp",
+                [t, *wp]).df()
         if len(d) < 2:
             continue
         d["ticker"] = t

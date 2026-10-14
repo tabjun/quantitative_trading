@@ -214,6 +214,15 @@ uv run test/models/6_optimization_stabilization_test.py --run-all --profile serv
 
 ---
 
+## 기초통계량(describe 표)
+
+> 2026-10-14 소급 추가(AGENTS.md 2.9k).
+
+- 해당 없음(6번은 5번 엔진을 부르는 실행 계획(stage plan)만 출력했고 가격 데이터를 읽지 않았다. 계획상 데이터 조건은 5번 보고서의 describe 표를 본다).
+
+---
+
+
 ## 1. 의도
 
 6번 실험의 목적은 5번 quick probe에서 드러난 shortcut collapse 문제를 바로 해결했다고 주장하는 것이 아니다. 이번 단계의 의도는 더 좁고 명확하다. 5번 결과를 바탕으로, 다음 후속 연구에서 무엇을 어떤 순서로 확인해야 하는지 실행 기준을 고정하는 것이다.
