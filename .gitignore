@@ -55,7 +55,7 @@ materials/research_overview.docx
 # (실제 시크릿/키 값은 포함하지 않음. .env/*.key/*.ini 등은 위에서 차단됨)
 # AGENTS.md
 # CLAUDE.md
-# conversation_l2_cache.md
+# chat_history.md
 # history.md
 # process.md
 

@@ -17,7 +17,8 @@ TEST_SCRIPTS_PREFIX = f"{REPO_SUBDIR}/test/scripts/"
 GOVERNANCE_FILES = {
     f"{REPO_SUBDIR}/AGENTS.md",
     f"{REPO_SUBDIR}/CLAUDE.md",
-    f"{REPO_SUBDIR}/conversation_l2_cache.md",
+    f"{REPO_SUBDIR}/chat_history.md",
+    f"{REPO_SUBDIR}/conversation_l2_cache.md",  # 이전 이름 재유입도 차단
     f"{REPO_SUBDIR}/history.md",
     f"{REPO_SUBDIR}/process.md",
     f"{REPO_SUBDIR}/state.md",
