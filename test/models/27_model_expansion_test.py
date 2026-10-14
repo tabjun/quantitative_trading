@@ -700,6 +700,13 @@ ROSTER = [
 ]
 
 
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def write_report27(elapsed_note: str = "") -> None:
     """합친 결과로 27번 보고서를 쓴다. 순위·동률·계열 요약은 26c의 함수를 재사용한다."""
     M.RES, M.STEM, M.IMG = RES, STEM, IMG
@@ -710,6 +717,7 @@ def write_report27(elapsed_note: str = "") -> None:
     new_in = [m_ for m_ in NEW_MODELS if m_ in set(rd["모델"])]
     new_out = [m_ for m_ in NEW_MODELS if m_ not in set(rd["모델"])]
     emit("# 27번: 신규 알고리즘 확대(병렬 어텐션·합성곱·파운데이션)")
+    emit(_design_section())
     emit()
     emit("## 0. 이 회차가 한 것")
     emit()

@@ -256,6 +256,13 @@ def run_mcs(L: pd.DataFrame, block: int = BLOCK_SIZE, reps: int = MCS_REPS,
 # ## 실행
 
 # %%
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def main(argv=None) -> None:
     from report_header import study_universe, num
 
@@ -276,6 +283,7 @@ def main(argv=None) -> None:
     REF = True                                  # 본문 수치 기준 조건(주기제거 후)
 
     emit("# 25번 — 모델 순위의 통계적 유의성 검정과 군별 분리 보고")
+    emit(_design_section())
     emit()
     emit(f"작성일 2026-10-04 · **{len(tickers)}종목** · 15분봉 · 1시간 뒤 실현변동성 · "
          f"모델 {len(models)}개")

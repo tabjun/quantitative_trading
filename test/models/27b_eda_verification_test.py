@@ -703,6 +703,13 @@ def section_d(rd: pd.DataFrame | None, store: dict | None) -> None:
 # ## 실행
 
 # %%
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def main(argv=None) -> None:
     from report_header import study_universe
     ap = argparse.ArgumentParser()
@@ -713,6 +720,7 @@ def main(argv=None) -> None:
     with ProcessPoolExecutor(max_workers=a.workers) as pool:
         st = list(pool.map(ticker_stats, tickers))
     emit("# 27b번: EDA·결과 점검·계열 단위 검정")
+    emit(_design_section())
     emit()
     emit(f"데이터 창 {M.DATA_START} ~ {M.DATA_END}, 분할 {M.SPLIT}, 20종목. 27번 결합 결과 "
          + ("있음." if (R27 / "27_model_expansion_model_comparison.csv").exists() else "**아직 없음(C·D절은 결과 대기)**."))

@@ -1,4 +1,4 @@
-"""pre-commit 저장소 정책 검사."""
+"""저장소 정책 검사: pre-commit, pre-merge-commit, pre-push(`--pre-push`)가 함께 쓴다."""
 
 from __future__ import annotations
 
@@ -14,6 +14,9 @@ TEST_SCRIPTS_PREFIX = f"{REPO_SUBDIR}/test/scripts/"
 # develop/main은 최종 결과물만 올라가는 브랜치라 이 파일들을 제외한다
 # (AGENTS.md 2.7절). git merge는 이 규칙을 모르므로, 병합 커밋이든 일반
 # 커밋이든 develop/main에서 이 파일들이 스테이징되면 여기서 차단한다.
+# 2026-10-14 실측(격리 복제본): 충돌 없는 일반 `git merge`는 pre-commit을 실행하지 않아 develop에
+# 지침 파일이 그대로 들어왔고, fast-forward 병합은 커밋 훅이 아예 없다. 그래서 자동 병합 커밋은
+# pre-merge-commit이, 두 경우 모두 push 시점은 pre-push(`--pre-push`)가 같은 규칙으로 막는다.
 GOVERNANCE_FILES = {
     f"{REPO_SUBDIR}/AGENTS.md",
     f"{REPO_SUBDIR}/CLAUDE.md",
@@ -99,6 +102,12 @@ def staged_text(root: Path, path: str) -> str:
     return subprocess.check_output(["git", "show", f":{path}"], cwd=root, text=True, encoding="utf-8")
 
 
+def head_text(root: Path, path: str) -> str:
+    """HEAD에 있는 파일 내용. 새 파일이면 빈 문자열."""
+    r = subprocess.run(["git", "show", f"HEAD:{path}"], cwd=root, capture_output=True, text=True, encoding="utf-8")
+    return r.stdout if r.returncode == 0 else ""
+
+
 def design_errors(root: Path, status: str, path: str) -> list[str]:
     """AGENTS.md 2.9k 검사: 신규 실험 드라이버의 설계 셀, 보고서의 실험 설계 절과 describe 표."""
     out: list[str] = []
@@ -112,6 +121,21 @@ def design_errors(root: Path, status: str, path: str) -> list[str]:
                        "보고서 실험 설계 절로, 카탈로그·브리프·보고서는 test/results/로 보내세요(AGENTS.md 2.9k).")
     if status.startswith("D"):
         return out
+    # 소급 보호(2026-10-14): 이미 설계 절·describe 표·설계 출력 호출을 갖춘 과거 보고서·드라이버는 번호와
+    # 무관하게 이후 수정에서 그것들을 잃지 않는다. 28번 미만 파일 전체에 새로 요구하지는 않는다.
+    if path.startswith(RESULTS_PREFIX) and path.endswith(".md"):
+        old = head_text(root, path)
+        if old:
+            new = staged_text(root, path)
+            if "\n## 실험 설계" in old and "\n## 실험 설계" not in new:
+                out.append(f"{path}: 기존에 있던 `## 실험 설계` 절이 사라졌습니다(AGENTS.md 2.9k). 보고서를 고칠 때 설계 절을 지우지 마세요.")
+            had = "describe 표(pandas" in old or "## 기초통계량(describe 표)" in old
+            has = "describe 표(pandas" in new or "## 기초통계량(describe 표)" in new
+            if had and not has:
+                out.append(f"{path}: 기존에 있던 describe 표(또는 해당 없음 표기)가 사라졌습니다(AGENTS.md 2.9k).")
+    if path.startswith(MODELS_PREFIX) and path.endswith(".py"):
+        if "render_design_section(" in head_text(root, path) and "render_design_section(" not in staged_text(root, path):
+            out.append(f"{path}: 기존에 있던 `render_design_section` 호출(보고서에 설계 절을 싣는 코드)이 사라졌습니다(AGENTS.md 2.9k).")
     if path.startswith(MODELS_PREFIX) and path.endswith("_test.py"):
         base = path[len(MODELS_PREFIX):]
         num = experiment_number(base)
@@ -247,5 +271,30 @@ def main() -> int:
     return 0
 
 
+def pre_push() -> int:
+    """develop/main으로 가는 push에 지침 파일이 있으면 막는다. stdin은 git이 주는 `<ref> <sha> <원격 ref> <원격 sha>`."""
+    root = repo_root()
+    errors: list[str] = []
+    for line in sys.stdin.read().splitlines():
+        parts = line.split()
+        if len(parts) != 4:
+            continue
+        _local_ref, local_sha, remote_ref, _remote_sha = parts
+        branch = remote_ref[len("refs/heads/"):] if remote_ref.startswith("refs/heads/") else remote_ref
+        if branch not in GOVERNANCE_EXCLUDED_BRANCHES or set(local_sha) == {"0"}:
+            continue
+        for path in sorted(GOVERNANCE_FILES):
+            probe = subprocess.run(["git", "cat-file", "-e", f"{local_sha}:{path}"], cwd=root,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if probe.returncode == 0:
+                errors.append(
+                    f"{path}: '{branch}'로 push하려는 커밋({local_sha[:7]})에 들어 있습니다. stock 전용 파일입니다"
+                    "(AGENTS.md 2.7절). 병합 결과에서 `git rm --cached -- <파일>`로 제외해 새 커밋을 만든 뒤 "
+                    "다시 push하세요.")
+    if errors:
+        return fail("지침 파일이 develop/main push에 포함됐습니다", errors)
+    return 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(pre_push() if "--pre-push" in sys.argv[1:] else main())

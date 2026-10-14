@@ -301,6 +301,13 @@ def stage_eda(tickers: list[str], rep: str, quick: bool) -> None:
 
 
 # %%
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--stage", default="eda", choices=["eda"])
@@ -313,6 +320,7 @@ def main(argv=None) -> None:
         tickers = tickers[:5]
 
     emit("# 22번 — 변동성 예측 파이프라인: 처리마다 EDA")
+    emit(_design_section())
     emit()
     emit(f"작성일 2026-09-08 · 브랜치 `stock` · 15분봉")
     emit()

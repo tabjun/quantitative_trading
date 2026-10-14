@@ -492,6 +492,13 @@ def report_contrast(df: pd.DataFrame) -> None:
     emit()
 
 
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def main(argv=None) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--quick", action="store_true", help="빠른 점검(3종목·2만행)")
@@ -515,6 +522,7 @@ def main(argv=None) -> None:
     pd.set_option("display.float_format", lambda v: f"{v:,.6f}")
 
     emit(f"# 20번 방향 대 변동성 예측 가능성 — 원시 수치 ({'quick' if args.quick else 'full'})")
+    emit(_design_section())
     emit()
     floor = 60_000 if args.quick else MIN_ROWS
     top = select_top_tickers(con, top_n, floor)

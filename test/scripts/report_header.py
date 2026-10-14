@@ -234,12 +234,21 @@ def demote_headings(md: str, by: int = 2) -> str:
 
 
 def driver_design_markdown(driver_path: str | Path) -> str:
-    """드라이버 맨 앞 `# %% [markdown]` 셀(설계 캐시)을 마크다운으로 꺼낸다. 없으면 빈 문자열."""
+    """드라이버 맨 앞 `# %% [markdown]` 셀(설계 캐시)을 마크다운으로 꺼낸다. 없으면 빈 문자열.
+
+    노트북 미러(.ipynb에서 자동 생성된 .py)는 맨 앞에 `# [FOR COMMIT TRACKING ONLY ...]` 머리말이 붙으므로
+    머리말 주석과 빈 줄을 건너뛴 뒤 첫 셀을 본다.
+    """
     lines = Path(driver_path).read_text(encoding="utf-8").splitlines()
-    if not lines or lines[0].strip() != "# %% [markdown]":
+    start = 0
+    if lines and lines[0].startswith("# [FOR COMMIT TRACKING ONLY"):
+        while start < len(lines) and lines[start].strip() != "# %% [markdown]" and (
+                lines[start].startswith("#") or not lines[start].strip()):
+            start += 1
+    if start >= len(lines) or lines[start].strip() != "# %% [markdown]":
         return ""
     body = []
-    for line in lines[1:]:
+    for line in lines[start + 1:]:
         if line.startswith("# %%"):
             break
         if not line.startswith("#"):

@@ -482,12 +482,20 @@ def section_direction(df: pd.DataFrame, report: list[str]):
 # ## 보고서 조립 + main
 
 # %%
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def build_and_save_report(df: pd.DataFrame, args):
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     stats = engdata.basic_statistics(df)
     report = [
         f"# 17번 EDA raw 결과 — {df['ticker'].iloc[0] if 'ticker' in df.columns else 'KRW-BTC'} 15분봉", "",
+        _design_section(), "",
         f"- 실행 시각: {stamp} (서버, 헤드리스 .py)",
         f"- 드라이버: `test/models/17_eda_direction_signal_test.py`",
         f"- target: h={args.horizon}봉({args.horizon*15}분={args.horizon/4:.0f}시간) 누적 로그수익률의 크기·방향", "",

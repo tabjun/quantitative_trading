@@ -774,6 +774,13 @@ def twopart_section(store: dict, models: list[str]) -> pd.DataFrame:
 # ## 실행
 
 # %%
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--skip-seed", action="store_true")
@@ -798,6 +805,7 @@ def main(argv=None) -> None:
         gate(store, {s: (r[1] if (r := load_seed(s)) is not None else None) for s in SEEDS[1:]},
              tuple(m for m in STOCHASTIC if m in models), f"26b({SRC_LABEL})")
     emit(f"# 26b번: {SRC_LABEL} 결과의 견고성·구분 불가 진단·유의성 검정")
+    emit(_design_section())
     emit()
     emit(f"입력: `{SRC.relative_to(ROOT)}`({SRC_LABEL}, {len(tickers)}종목 × {len(M26.HORIZONS_H)}구간 × {len(models)}모델, "
          f"{len(rd)}행). 재적합 없이 저장된 평가 예측만 쓴다. 데이터 정의와 결측 처리는 "

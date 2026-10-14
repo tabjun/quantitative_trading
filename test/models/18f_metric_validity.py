@@ -243,8 +243,16 @@ def evaluate(situations: dict) -> pd.DataFrame:
 
 
 # %%
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def report(table: pd.DataFrame, situations: dict) -> None:
     emit("# 18f 지표 유효성 원시 수치 (자동 생성)")
+    emit(_design_section())
     emit()
     emit(f"- 판정 규칙: 분리도 = |실모델 − 무모델| / max(|실모델|, |무모델|). "
          f"**{SEPARATION_THRESHOLD:.0%} 미만이면 무효**(그 상황에서 이 지표는 실력과 무모델을 구별하지 못한다), "

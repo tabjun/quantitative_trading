@@ -712,9 +712,17 @@ def top5_section(rg: pd.DataFrame, figs: dict) -> None:
     emit()
 
 
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def write_report(ns: pd.DataFrame, rg: pd.DataFrame, sd: pd.DataFrame, t: pd.DataFrame, figs: dict) -> None:
     rel = lambda p: os.path.relpath(p, RES)
     emit("# 27d번: 변동성 국면별 최선·순차 대 병렬 묶음 검정·비정상성 검정(시드 5개)")
+    emit(_design_section())
     emit()
     emit(standard_header(sorted(ns["종목"].unique()), BASE_TRANSFORMS))
     emit()

@@ -109,6 +109,13 @@ def top_liquid_tickers(con, n: int) -> list[str]:
         f"having count(*) > 95000 order by sum(value) desc limit {n}").fetchall()]
 
 
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="19c B갈래 모델선택 전종목 확인")
     parser.add_argument("--n-tickers", type=int, default=TOP_N)
@@ -122,6 +129,7 @@ def main(argv: list[str] | None = None) -> None:
     try:
         tickers = top_liquid_tickers(con, args.n_tickers)
         emit(f"# 19c 모델 선택 전종목({len(tickers)}) 확인 원시 수치")
+        emit(_design_section())
         emit()
         emit(f"- 대상: 유동성 상위 {len(tickers)}종목(16번 t3·18번 D6와 같은 표본): {', '.join(tickers)}")
         emit("- 조건: 주기 성분 제거(19번에서 18/18셀 전부 우세이므로 이 조건만 사용)")

@@ -314,6 +314,13 @@ def _group_series(L: dict, store: dict, H: int, members: tuple) -> pd.Series:
     return pd.DataFrame(cols).sort_index().mean(axis=1)
 
 
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def write_report() -> None:
     import matplotlib.pyplot as plt
     os.environ.setdefault("RUN26B_SRC", "27")
@@ -355,6 +362,7 @@ def write_report() -> None:
         L[key].update(Lb.get(key, {}))
     HS = M.HORIZONS_H
     emit("# 27c번: 순환망(GRU·LSTM)에 블록 입력을 넣은 순차 대 병렬 비교")
+    emit(_design_section())
     emit()
     emit("## 0. 이 회차가 한 것과 이유")
     emit()

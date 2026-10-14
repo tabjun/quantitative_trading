@@ -303,6 +303,13 @@ def run_condition(frame: pd.DataFrame, deseasonalize: bool) -> tuple[pd.DataFram
 
 
 # %%
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="19번 변동성 모델 선택")
     parser.add_argument("--ticker", default=BASE_TICKER)
@@ -325,6 +332,7 @@ def main(argv: list[str] | None = None) -> None:
     frame["ret"] = np.log(frame["close"].astype(float)).diff()
 
     emit(f"# 19번 변동성 모델 선택 원시 수치 — {args.ticker}")
+    emit(_design_section())
     emit()
     emit(f"- 데이터 {len(frame):,}행, {frame['timestamp'].min():%Y-%m-%d} ~ {frame['timestamp'].max():%Y-%m-%d}")
     emit("- 학습 70% / 평가 30%, 평가구간은 파라미터 고정 전진 필터링(재적합 없음)")

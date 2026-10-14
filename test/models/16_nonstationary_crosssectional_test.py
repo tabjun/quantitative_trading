@@ -598,12 +598,20 @@ def frame_to_md(frame: pd.DataFrame) -> str:
         return "```\n" + frame.to_string(index=False) + "\n```"
 
 
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def save_raw_report(suite, args, environment, statistics, leaderboard, failures, extra_sections):
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     leaderboard.to_csv(RESULTS_DIR / f"{suite}_leaderboard.csv", index=False)
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     lines = [
         f"# 16번 raw 결과 — {suite}", "",
+        _design_section(), "",
         f"- 실행 시각: {stamp} (서버, 헤드리스 .py)",
         f"- 드라이버: `test/models/16_nonstationary_crosssectional_test.py` --suite {suite}",
         f"- 케이스 수: {len(leaderboard)} (실패 {len(failures)})", "",

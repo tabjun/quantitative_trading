@@ -9,6 +9,90 @@
 
 ---
 
+## 실험 설계
+
+> T6·T7은 15번 드라이버의 후속 단계다. 드라이버 첫 설계 셀과 설명 문자열 원문을 옮긴다(2026-10-14 소급). 15번 계획서 원문(06-30 초안, 07-16 개정)은 `test/results/15_trend_capture_defense_report_20260716.md`의 실험 설계 절에 있다.
+
+### 15번: 변동·추세 포착 최적화 + 방어 gate 융합
+
+이번 실험부터 실행 방식이 노트북 셀 실행이 아니라 **헤드리스 `.py` 드라이버**로 바뀌었다(13번 notebook backup 실패·출력 용량 문제 교훈 + 원격 세션 전환). 이 노트북은 커밋 정책(동명 `.ipynb` 필수)을 지키는 미러이며, 실행과 결과 저장은 `.py`가 담당한다.
+
+- 실행: `python test/models/15_trend_capture_defense_test.py --suite t1_horizon` 등 (아래 셀 docstring 참고)
+- raw 결과: `test/results/15_trend_capture_defense_20260716/*_raw.md` + `*_leaderboard.csv`
+- 이미지: `test/images/15_trend_capture_defense_20260716/<suite>/`
+- 계획서: `test/results/15_trend_capture_defense_report_20260716.md`
+
+아래 한 셀이 `.py` 미러와 동일하다.
+
+**드라이버 설명 문자열 원문**
+
+```text
+15번: 변동·추세 포착 최적화 + 방어 gate 융합 (헤드리스 .py 드라이버).
+
+배경(계획서: test/results/15_trend_capture_defense_report_20260716.md):
+- 8~14번 내내 "다음 15분 수익률" 점예측은 persistence를 못 이겼고, 학습은
+  분산 폭주(Linear) 아니면 0 근처 평탄화 사이를 오갔다. 13번의 "변동 없는 예측 그래프"는
+  방어 우선 셋업과 평탄화 모드가 결합한 결과다.
+- 15번은 target을 h-step 누적수익률(추세)로 바꿔 "변동을 살린 예측"이 가능한지 본다.
+  risk gate(11번 계보)는 버리지 않고 T5에서 추세 정책과 융합해 MDD 방어를 함께 평가한다.
+
+engine/ 공용 패키지(12 fusion 결함 ①②③ 교정본)를 재사용한다. 원본 8~14는 read-only.
+build_risk_windows가 이미 h-step 누적수익 경로를 제공하므로 이를 회귀 target으로 쓴다.
+point/risk가 같은 윈도우와 decision_timestamp를 공유해 정렬(fix①)이 자명해진다.
+
+13번 crash 교훈 반영: 헤드리스 실행(Agg), per-case 그래프 없음, DataLoader num_workers=0,
+suite 단계 분리, 모든 결과는 test/results·test/images 아래 md/csv/png로 저장.
+
+실행 예시(서버):
+    uv run test/models/15_trend_capture_defense_test.py --suite t1_horizon --dry-run
+    uv run test/models/15_trend_capture_defense_test.py --suite t1_horizon
+    uv run test/models/15_trend_capture_defense_test.py --suite t2_objective --horizons 16         --models PatchTSTLike,DLinearLike,NLinearLike
+    uv run test/models/15_trend_capture_defense_test.py --suite t5_gate_fusion         --feature-sets coin_multitimeframe_structure,mtf_plus_momentum --seeds 42,7,123
+```
+
+---
+
+## 기초통계량(describe 표)
+
+> 2026-10-14 소급 추가(AGENTS.md 2.9k). 실행 당시가 아니라 현재 DB를 같은 테이블·창으로 다시 조회해 계산했다(업비트 과거 캔들은 바뀌지 않으므로 같은 창이면 같은 값이다). 데이터 범위 근거: T6·T7은 15번과 같은 `btc_15m_advance` 전체(max_rows 없음)를 읽고 최근 24,000개 창(stride 2)을 썼다. 이 테이블은 현재 DB에 그대로 있어 정확히 재현된다.
+
+### KRW-BTC(`btc_15m_advance` 전체)
+
+- 출처: `data/upbit_data.db`의 `btc_15m_advance`, 테이블 전체 이력, 1종목
+
+#### describe 표(pandas `describe()` 그대로, 종목별)
+
+> 숫자 형식: count는 정수, 나머지는 소수 둘째 자리(1 미만 값은 유효숫자 4자리). 로그수익률은 15분봉 기준 % 단위다. 행 단위 원자료라 무체결 구간(캔들 없음)은 포함되지 않는다.
+
+**종가(KRW)**
+
+| 종목 | count | mean | std | min | 25% | 50% | 75% | max |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| KRW-BTC | 104,865 | 105,904,816.71 | 38,566,257.22 | 34,171,000.00 | 82,714,000.00 | 101,593,000.00 | 139,548,000.00 | 179,810,000.00 |
+
+**거래량(코인 수)**
+
+| 종목 | count | mean | std | min | 25% | 50% | 75% | max |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| KRW-BTC | 104,865 | 32.38 | 54.95 | 0.0001955 | 9.23 | 17.93 | 35.42 | 2,856.91 |
+
+**거래대금(KRW)**
+
+| 종목 | count | mean | std | min | 25% | 50% | 75% | max |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| KRW-BTC | 104,865 | 3,174,053,806.73 | 5,428,411,505.38 | 19,979.49 | 906,143,036.86 | 1,718,542,728.25 | 3,394,250,383.70 | 317,019,670,845.50 |
+
+**로그수익률(%)**
+
+| 종목 | count | mean | std | min | 25% | 50% | 75% | max |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| KRW-BTC | 104,864 | 0.0008571 | 0.2385 | -11.24 | -0.09799 | 0 | 0.09936 | 10.99 |
+
+
+
+---
+
+
 ## 0. 한 줄 요약
 
 seed 앙상블(T6)은 추세 상관을 아주 조금 올렸지만(0.02→0.04) 진폭을 더 죽였고, 분산 보존

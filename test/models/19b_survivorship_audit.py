@@ -111,6 +111,13 @@ def current_krw_markets() -> list[str] | None:
 
 
 # %%
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="19b 생존편의 감사")
     args = parser.parse_args(argv)
@@ -149,6 +156,7 @@ def main(argv: list[str] | None = None) -> None:
     span["중도종료"] = span["종료지연_일"] >= STALE_DAYS
 
     emit("# 19b 생존편의 감사 원시 수치")
+    emit(_design_section())
     emit()
     emit(f"- 대상: `{SOURCE_TABLE}` {len(span):,}종목, 전역 마지막 봉 {global_last:%Y-%m-%d %H:%M}")
     emit(f"- '중도 종료' 판정: 마지막 봉이 전역 최대보다 **{STALE_DAYS}일 이상** 이른 종목")

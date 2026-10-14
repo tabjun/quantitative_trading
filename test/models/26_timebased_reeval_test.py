@@ -1255,6 +1255,13 @@ def emit_zero_split(store: dict, models: list[str]) -> pd.DataFrame:
     return zz
 
 
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h, truncated):
     from report_header import render_standard_header
     rd = rd[~rd["모델"].isin(DECISION_EXCLUDED)].copy()
@@ -1266,6 +1273,7 @@ def write_report(rd, store, fails_df, eda_df, heda_df, tickers, quick, elapsed_h
     qt.to_csv(RES / f"{STEM}_quarter_ranks.csv", index=False)
 
     emit(f"# 26번: 시간 기준 평가 재정립과 24번 재평가{' (quick 배관 확인, 결과 해석 금지)' if quick else ''}")
+    emit(_design_section())
     emit()
     btc_idx = M23.load_close("KRW-BTC").index
     split_frac = float(np.mean(btc_idx < SPLIT))

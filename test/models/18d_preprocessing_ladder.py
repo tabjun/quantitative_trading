@@ -424,6 +424,13 @@ def section_rules(table: pd.DataFrame) -> None:
 
 
 # %%
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="18d 전처리 사다리")
     parser.add_argument("--ticker", default=BASE_TICKER)
@@ -446,6 +453,7 @@ def main(argv: list[str] | None = None) -> None:
         frame = frame.tail(args.max_rows).reset_index(drop=True)
 
     emit(f"# 18d 전처리 사다리 원시 수치 — {args.ticker}")
+    emit(_design_section())
     emit()
     emit("생성: `uv run test/models/18d_preprocessing_ladder.py`. 자동 생성물이며 보고서가 인용한다.")
     emit()

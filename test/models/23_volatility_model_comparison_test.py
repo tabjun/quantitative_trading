@@ -741,6 +741,13 @@ def run_one(ticker: str, deper: bool, quick: bool) -> tuple[list[dict], dict]:
 
 
 # %%
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true")
@@ -753,6 +760,7 @@ def main(argv=None) -> None:
     conds = [False, True]
 
     emit("# 23번 — 변동성 예측 모델 통합 비교")
+    emit(_design_section())
     emit()
     emit(f"작성일 2026-09-08 · **{len(tickers)}종목** · 15분봉 · 예측 대상 **1시간 뒤 실현변동성**")
     emit()

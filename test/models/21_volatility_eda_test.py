@@ -454,6 +454,13 @@ def write_data_dictionary() -> None:
     emit()
 
 
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def main(argv=None) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--quick", action="store_true")
@@ -468,6 +475,7 @@ def main(argv=None) -> None:
 
     con = connect()
     emit(f"# 21번 변동성 EDA — 원시 수치 ({'quick' if args.quick else 'full'})")
+    emit(_design_section())
     emit()
     background()
     df = data_quality(con)

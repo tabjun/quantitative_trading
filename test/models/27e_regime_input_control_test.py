@@ -435,10 +435,18 @@ def fig_rnn_rank(rk: pd.DataFrame, sd: pd.DataFrame) -> Path:
 # ## 보고서
 
 # %%
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def write_report(t: pd.DataFrame, rk: pd.DataFrame, sd: pd.DataFrame, figs: dict, worst: float,
                  et: pd.DataFrame, ec: pd.DataFrame, sd_tickers: list[str]) -> None:
     rel = lambda p: os.path.relpath(p, RES)
     emit("# 27e번: 변동성 국면별 결과의 입력 통제 점검(시드 5개)")
+    emit(_design_section())
     emit()
     emit(D27.standard_header(sorted({tk for tk in sd_tickers}), D27.BASE_TRANSFORMS + [
         ("블록 입력 GRU·LSTM(27c 예측 재사용)", "병렬 딥러닝과 같은 H분 블록 로그 RV 입력·겹치지 않는 블록 표본으로 학습한 순환망. 재학습 없음"),

@@ -399,6 +399,13 @@ def figure_all(sweep: pd.DataFrame, cross: pd.DataFrame, transfer: pd.DataFrame,
 
 
 # %%
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="17b 브리프 추가확인 복원")
     parser.add_argument("--ticker", default=BASE_TICKER)
@@ -412,6 +419,7 @@ def main(argv: list[str] | None = None) -> None:
     try:
         frame = load(con, args.ticker)
         emit("# 17b 브리프 '추가 확인 7종' 재현 원시 수치")
+        emit(_design_section())
         emit()
         emit(f"- 대상 {args.ticker} {len(frame):,}행 · 데이터 `{SOURCE_TABLE}`")
         emit("- 브리프에 계산 정의가 없어 **가장 자연스러운 정의를 명시하고** 그 값을 낸다.")

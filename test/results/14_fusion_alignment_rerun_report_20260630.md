@@ -8,6 +8,37 @@
 ---
 
 
+## 실험 설계
+
+> 14번은 별도 계획서 없이 시작했다. 노트북 첫 설계 셀과 드라이버 설명 문자열 원문을 옮긴다(2026-10-14 소급, AGENTS.md 2.9k). 결함 교정의 배경은 2절, 테스트 케이스 전체는 4b절에 있다.
+
+### 14번: 정렬·활동하한 교정 fusion 재실행
+
+engine/ 공용 패키지(12 결함 ①②③ 교정본)를 import해 fusion 비교를 다시 돌린다. 원본 8~13은 read-only. 아래 한 셀이 `.py` 미러와 동일하다. 실행은 셀 하단 `if __name__` 가드 대신 `main([...])`을 직접 호출하거나 `.py`를 커널/터미널에서 돌린다.
+
+**드라이버 설명 문자열 원문**
+
+```text
+14번: 정렬·활동하한이 교정된 fusion 재실행 드라이버.
+
+12번 fusion의 결함을 `engine/` 공용 패키지에서 고친 뒤, 그 engine을 import해 fusion 비교를
+다시 돌린다. 원본 8~13 노트북은 건드리지 않는다(read-only). 교정 포인트:
+- ① point/risk를 decision_timestamp(진입 봉)로 inner-join 정렬 (기존 꼬리절단 폐기)
+- ② 텍스트 컬럼 없으면 coin_text_context를 텍스트 그룹으로 둔갑시키지 않음
+- ③ 활동 하한(active_share/trade_count)을 통과한 케이스만 우승 후보로 랭킹
+
+이 재실행의 목적: 정렬·활동하한이 적용된 새 리더보드를 확보해, 어떤 변수셋이 진짜 1순위인지
+다시 보고 13번 방향을 결정한다.
+
+import 계약: quantitative_trading을 sys.path 루트로 두고 top-level `import engine`
+(repo의 contexts/marts/analysis와 동일 관례).
+
+실행 예시(서버 커널/터미널):
+    uv run test/models/14_fusion_alignment_rerun_test.py         --feature-groups ohlcv_core,coin_multitimeframe_structure         --point-models Linear --risk-models Linear --preprocessings seasonal_diff16         --seeds 42 --epochs 6 --max-rows 12000 --max-windows 2048 --batch-size 256 --no-case-plots
+```
+
+---
+
 ## 기초통계량(describe 표)
 
 > 2026-10-14 소급 추가(AGENTS.md 2.9k). 실행 당시가 아니라 현재 DB를 같은 테이블·창으로 다시 조회해 계산했다(업비트 과거 캔들은 바뀌지 않으므로 같은 창이면 같은 값이다). 데이터 범위 근거: 14번은 앞 12,000행(피처 후 11,888행, 2023-05-21 22:15 ~ 2023-09-23 01:30, 종가 평균 37,251,569원·표준편차 2,091,816원, 본문)을 읽고 뒤쪽 2,048개 창을 썼다. 현재 DB에는 읽은 범위의 약 53%만 있어, 학습·평가 창 구간만 싣는다(시작 시각은 현재 DB로 역산한 근사값). 당시 `btc_15m_advance`(2026-05-20경 pyupbit로 받은 KRW-BTC 3년치, 2023-05-20 18:30 시작)는 2026-07-14 서버 초기화로 사라졌고 현재 DB의 KRW-BTC는 2023-07-19 19:00부터라 읽은 범위 전체는 재현할 수 없다. 겹치는 구간의 값은 같다(13번 보고서의 2026-05-20 OHLC가 현재 DB와 일치).

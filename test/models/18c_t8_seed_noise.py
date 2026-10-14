@@ -99,6 +99,13 @@ def load_runs() -> dict[str, pd.DataFrame]:
 
 
 # %%
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def main() -> None:
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)
     runs = load_runs()
@@ -106,6 +113,7 @@ def main() -> None:
         raise SystemExit("실행 결과가 3개 미만이다. run_t8_multiseed.sh를 먼저 돌려라.")
 
     emit("# t8 다중 시드 잡음 정량화 (자동 생성)")
+    emit(_design_section())
     emit()
     emit(f"- 대상 지표: `{METRIC}` · 실행 {len(runs)}개: {', '.join(runs)}")
     configs = {(df['model'].iloc[0], df['objective'].iloc[0]) for df in runs.values()}

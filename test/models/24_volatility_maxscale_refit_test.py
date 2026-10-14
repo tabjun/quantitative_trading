@@ -1557,6 +1557,13 @@ LITERATURE_NOTES: list[str] = [
 # ## 실행
 
 # %%
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def main(argv=None) -> None:
     from report_header import render_standard_header, study_universe, num
 
@@ -1707,6 +1714,7 @@ def main(argv=None) -> None:
     # ── 보고서 ──
     n_models = rd["모델"].nunique()
     emit(f"# 24번 — 변동성 예측 모델 최대 규모 재적합 ({n_models}개 모델)")
+    emit(_design_section())
     emit()
     emit(f"작성일 2026-09-28 · **{rd['종목'].nunique()}종목** · 15분봉 · 예측 대상 **1시간 뒤 실현변동성** · "
          f"총 실행 {(time.time() - t_start) / 60:.0f}분")

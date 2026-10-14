@@ -1238,6 +1238,13 @@ def section_d6(con: duckdb.DuckDBPyConnection, max_rows: int | None) -> dict:
 
 
 # %%
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="18번 차분 결정 EDA")
     parser.add_argument("--ticker", default=BASE_TICKER)
@@ -1254,6 +1261,7 @@ def main(argv: list[str] | None = None) -> None:
         frame = load_series(con, args.ticker, max_rows)
 
         emit(f"# 18번 차분 결정 원시 수치 — {args.ticker}")
+        emit(_design_section())
         emit()
         emit("생성: `uv run test/models/18_differencing_decision_test.py`. 자동 생성물이며,")
         emit("보고서(`18_differencing_decision_report_*.md`)가 여기의 숫자를 인용한다.")

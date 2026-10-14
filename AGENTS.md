@@ -178,9 +178,15 @@ test/images/ {번호}_{실험약칭}_{YYYYMMDD}/{번호}_{실험약칭}_{부분}
 - **브랜치별 역할 분리 (2026-08-09 확정)**: `stock`은 연구 브랜치라 작업 지침 파일을 포함한
   전량을 커밋한다. `develop`/`main`은 최종 결과물만 올라가는 브랜치라 아래 지침 파일 6종은
   **존재 자체를 제외**한다 — `AGENTS.md`, `CLAUDE.md`, `chat_history.md`, `history.md`,
-  `process.md`, `state.md`. 일반 `git merge stock`을 그대로 실행해도 되며, 이 파일들이
-  스테이징되면 `.githooks/check_repo_policy.py`(pre-commit)가 `develop`/`main`에서 커밋
-  자체를 자동 차단하고 되돌리는 명령을 안내한다(삭제는 허용). 훅이 막았을 때 되돌리는 예:
+  `process.md`, `state.md`. 이 파일들이 `develop`/`main`에 들어가는 길은 세 가지이고, 세 훅이
+  모두 `.githooks/check_repo_policy.py`의 같은 규칙으로 막고 되돌리는 명령을 안내한다(삭제는 허용).
+  ① 수동 커밋·충돌 해결 후 커밋은 `pre-commit`, ② 충돌 없이 자동으로 만들어지는 병합 커밋은
+  `pre-merge-commit`, ③ fast-forward 병합처럼 커밋 훅이 아예 없는 경우와 훅을 우회한 커밋은
+  `pre-push`가 `develop`/`main`으로 가는 push에서 막는다. **2026-10-14 실측(격리 복제본)**: 이전에는
+  `pre-commit`만 있어서 충돌 없는 `git merge`와 fast-forward 병합이 `develop`에 지침 파일을 그대로
+  들였다(문서의 "일반 `git merge stock`을 해도 차단된다"는 설명이 사실이 아니었다). 세 훅을 추가한
+  뒤 병합 두 경우와 `develop`/`main` push가 차단되고 `stock` push는 허용됨을 확인했다. 훅이 막았을
+  때 되돌리는 예:
   ```bash
   git restore --staged --worktree -- AGENTS.md CLAUDE.md chat_history.md history.md process.md state.md
   # 해당 브랜치에 그 파일이 원래 없었다면(신규 추가로 잡힌 경우)
@@ -189,7 +195,9 @@ test/images/ {번호}_{실험약칭}_{YYYYMMDD}/{번호}_{실험약칭}_{부분}
   `test/`, `pipelines/`, `marts/`, `engine/`, `analysis/` 등 코드·결과물은 그대로 병합된다.
   이 자동 차단은 로컬 git이 `core.hooksPath=quantitative_trading/.githooks`를 가리킬 때만
   동작한다 — 새로 clone한 환경에서는 `git config core.hooksPath quantitative_trading/.githooks`를
-  먼저 실행한다.
+  먼저 실행한다. **한계**: 훅은 각 PC의 로컬 설정이라 GitHub 서버는 강제하지 않는다. 서버 쪽
+  강제(브랜치 보호 규칙, 필수 상태 검사)가 켜져 있는지는 이 서버에서 `gh` CLI가 없어 확인하지
+  못했다. GitHub 저장소 설정(Branches)에서 직접 확인한다.
 - **서버 ↔ GitHub은 SSH 원격**(`git@github.com:tabjun/personal_ai_project.git`)이 기본이다.
   학교 서버는 인바운드 SSH(22번)는 방화벽에 막혀 있지만 아웃바운드는 열려 있어 서버에서
   `ssh -T git@github.com` 인증은 정상 동작한다(2026-07-14 확인). **로컬 PC ↔ GitHub은 이
@@ -341,7 +349,10 @@ RAW에서 시작해 파생변수가 생길 때마다 여기에 **정의/공식 �
 5. **강제**: pre-commit 훅(`.githooks/check_repo_policy.py`)이 ① `test/experiment_specs/` 신규
    파일, ② 문헌이 아닌 이름(plan·design·spec·catalog·brief·report)의 `research_materials/` 신규
    파일, ③ 28번 이상 드라이버의 설계 셀·`render_design_section` 호출 누락, ④ 28번 이상
-   `*_report.md`의 `## 실험 설계` 절·describe 표 누락을 커밋 단계에서 막는다.
+   `*_report.md`의 `## 실험 설계` 절·describe 표 누락을 커밋 단계에서 막는다. **소급 보호**: 2026-10-14에
+   2~27번 보고서와 드라이버에 이 구조를 이미 넣었으므로, ⑤ 그 절·표(해당 없음 표기 포함)·`render_design_section`
+   호출이 있던 파일에서 이후 수정으로 그것들이 사라지면 번호와 무관하게 막는다. 아직 이 구조가 없는
+   보조 문서(상태 보고서·복구 기록·템플릿·단계별 raw 출력)에는 새로 요구하지 않는다.
 
 ### 2.9h 모델을 돌리기 전에 타깃과 손실함수를 먼저 검증한다 (2026-09-08 신설)
 

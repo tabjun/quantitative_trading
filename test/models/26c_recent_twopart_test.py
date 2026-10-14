@@ -1585,6 +1585,13 @@ def emit_vs26(rd1, store1, models) -> None:
     emit()
 
 
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def write_report(rd, store, rd1, store1, fails_df, eda_df, heda_df, zdf, tickers, quick, elapsed_h, truncated):
     from report_header import render_standard_header, use_source
     models = [m for m in ALL_MODELS if m in set(rd["모델"])]
@@ -1595,6 +1602,7 @@ def write_report(rd, store, rd1, store1, fails_df, eda_df, heda_df, zdf, tickers
     qt.to_csv(RES / f"{STEM}_quarter_ranks.csv", index=False)
 
     emit(f"# 26c번: 최신 3년 창과 가격 정지 두 부분 모형{' (quick 배관 확인, 결과 해석 금지)' if quick else ''}")
+    emit(_design_section())
     emit()
     btc_idx = load_close("KRW-BTC").index
     split_frac = float(np.mean(btc_idx < SPLIT))

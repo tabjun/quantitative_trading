@@ -494,6 +494,13 @@ def figure_s13(con: duckdb.DuckDBPyConnection) -> None:
 SECTIONS = {"s10": figure_s10, "s11": figure_s11, "s12": figure_s12, "s13": figure_s13}
 
 
+def _design_section() -> str:
+    """AGENTS.md 2.9k: 드라이버 서두 설계 셀 원문을 보고서 서두에 그대로 싣는다(2026-10-14 소급 추가)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from report_header import render_design_section
+    return render_design_section(__file__)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="17번 준비작업 그림(s10~s13) 생성")
     parser.add_argument("--skip", nargs="*", default=[], choices=list(SECTIONS), help="건너뛸 섹션")
@@ -503,6 +510,7 @@ def main(argv: list[str] | None = None) -> None:
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     emit(f"# 17번 준비작업 그림 원시 수치 (source={SOURCE_TABLE})")
+    emit(_design_section())
     emit()
     emit("생성: `uv run test/models/17_eda_prep_figures.py`. 이 파일은 자동 생성물이며,")
     emit("보고서(`17_eda_prep_figures_report_*.md`)가 여기의 숫자를 인용한다.")
