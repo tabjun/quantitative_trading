@@ -37,6 +37,13 @@
 - `Defense First`: MDD 최소화와 잘못된 진입 회피를 우선 목표로 둡니다.
 - `Research / Runtime Split`: 연구 실험은 `test/`, 실제 활용 프레임워크는 루트 패키지로 분리합니다.
 
+### 서비스 트랙(2026-10-15~): 변동성 보조 지표 기반 LLM 위험 판단 MVP
+
+위 장기 비전을 연구와 별도 브랜치(`llm-agent`)에서 MVP로 다시 시작했다. 가격·뉴스·과거 유사 흐름을 읽고, 연구 트랙의
+변동성 예측(TimesFM 분위수, GARCH-t, 사전 국면)을 보조 지표로 써서 서버에 올린 로컬 LLM이 유지/축소/관망을 판단한다.
+방향 예측은 하지 않는다. 판단은 선택지 확률을 먼저 내고(결정 모델 방식) 근거 문장을 따로 붙이며, 국면별 모델 라우팅은
+연구 쪽 사전 등록 뒤에 켜도록 자리만 둔다. 설계는 [docs/service_design.md](docs/service_design.md), 단계별 할 일은 루트 `process.md`.
+
 ## 3. 도메인 지식 자료
 
 프로젝트의 도메인 지식 베이스는 [WikiDocs: Cherry Quant](https://wikidocs.net/148475)를 정리한 [materials/quant_and_stock.md](materials/quant_and_stock.md)입니다.
