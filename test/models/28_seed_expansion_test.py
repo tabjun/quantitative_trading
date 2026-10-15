@@ -17,11 +17,20 @@
 # 1. 학습 절차를 맞춘 뒤에도 27번의 결론(순환 신경망 > 병렬 딥러닝, 구간·국면별 최선)이 유지되는가?
 # 2. 시드 오차를 검정에 넣고 시드를 충분히 늘렸을 때, 어떤 우위가 남고 어떤 우위가 "구분 안 됨"으로 바뀌는가?
 #
-# **비교 대상.** 27번 로스터 그대로 27종(naive 포함). 결정론 모델: GARCH-t·MS-GARCH·TAR-GARCH(최우추정),
-# KernelRidge-RBF·SVR-RBF(결정적 해), 파운데이션 7종(zero-shot). 시드로 흔들리는 모델 15종: 트리 3종(LightGBM·XGBoost·
+# **비교 대상.** 27번 로스터에서 KernelRidge-RBF·SVR-RBF를 뺀 26종(naive 포함, 아래 "설계 변경"). 결정론 모델:
+# GARCH-t·MS-GARCH·TAR-GARCH(최우추정), 파운데이션 7종(zero-shot). 시드로 흔들리는 모델 15종: 트리 3종(LightGBM·XGBoost·
 # HistGBM), GARCH+LightGBM, Nystroem+Ridge, GRU·LSTM, neuralforecast 6종(PatchTST·iTransformer·TCN·Autoformer·TimesNet·
 # TimeXer), 공식 코드 2종(ModernTCN·S-Mamba). 선형 예측기(Linear·Ridge·HAR-RV·DLinear·NLinear)는 2026-09-07·10-05
 # 결정대로 넣지 않는다.
+#
+# **설계 변경(2026-10-15, 시범 실행 시드 0 도중 사용자 결정, 요청 177·179).** KernelRidge-RBF·SVR-RBF를 적합하지 않고
+# 순위·검정·결론에서 뺀다. 두 모델만 계산량 때문에 학습 데이터를 잘라 쓴다(SVR 최근 8,000행, KernelRidge 메모리 예산
+# 1.5GB로 최근 14,188행, 내부학습 구간 약 6만 2천 행의 13%·23%). 그래서 성적이 알고리즘 때문인지 덜 본 데이터 때문인지
+# 구분할 수 없어 공정 비교가 성립하지 않는다. 시드 0에서 먼저 끝난 3종목(BTC·XRP·DOGE)에서 SVR은 무재적합으로 잘라 쓰는
+# 창이 평가에서 멀어지자 26c보다 QLIKE가 0.015~0.087 나빠졌다. 지금까지 상위권이었던 적이 없고 개선 여지도 불분명한데
+# 실행 시간과 메모리(CPU 작업 최대 5.6GB의 대부분)를 가장 많이 쓴다. 커널 계열은 학습 데이터 전체를 쓰는 Nystroem+Ridge가
+# 계속 대표하므로, 2026-09-07 "선형 → 비선형·커널 계열로 대체" 결정의 취지는 유지된다. 이미 끝난 3종목의 두 모델 값은
+# 작업 캐시에 기록으로만 남고 결과 파일·검정에 들어가지 않는다.
 #
 # **고정 조건(26c·27과 같음).** DB `upbit_data_20261005.db`, 20종목(`study_universe`), 15분봉, 창 2023-10-06 ~
 # 2026-10-05, 분할 2025-11-11(전 종목 공통), 내부학습 85%/내부검증 15%(시간순), 예측 구간 15분·30분·1시간·4시간·
@@ -134,7 +143,9 @@ BLOCK_MODELS = NF_MODELS + OFFICIAL_MODELS
 GPU_MODELS = RNN_MODELS + BLOCK_MODELS
 CPU_STOCH = ("Nystroem+Ridge", "LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM")
 STOCHASTIC = CPU_STOCH + GPU_MODELS                       # 15종
-CPU_DET = ("GARCH-t", "MS-GARCH", "TAR-GARCH", "KernelRidge-RBF", "SVR-RBF")
+CPU_DET = ("GARCH-t", "MS-GARCH", "TAR-GARCH")
+# 설계 변경(2026-10-15, 요청 177·179): 학습 데이터를 잘라 쓰는 두 커널 모델은 적합하지 않는다(설계 셀 참고).
+DECISION_EXCLUDED = ("KernelRidge-RBF", "SVR-RBF")
 FM_MODELS = X.FM_MODELS
 TTM_UNSUPPORTED_H = X.TTM_UNSUPPORTED_H
 ALL_MODELS = ("naive",) + CPU_DET + CPU_STOCH + GPU_MODELS + FM_MODELS
@@ -223,8 +234,6 @@ def pi_job(tk: str, quick: bool) -> str:
 def run_cpu_job(tk: str, seed: int, quick: bool) -> dict:
     from sklearn.linear_model import Ridge
     from sklearn.preprocessing import StandardScaler
-    from sklearn.kernel_ridge import KernelRidge
-    from sklearn.svm import SVR
     from sklearn.kernel_approximation import Nystroem
     from sklearn.pipeline import make_pipeline
     from sklearn.ensemble import HistGradientBoostingRegressor
@@ -335,38 +344,8 @@ def run_cpu_job(tk: str, seed: int, quick: bool) -> dict:
         def chunked(mdl, Z, chunk=4000):
             return np.concatenate([mdl.predict(Z[i:i + chunk]) for i in range(0, len(Z), chunk)])
 
-        if det:
-            n_kr = min(M.kernel_max_n(), len(Zi)) if not quick else min(1500, len(Zi))
-            n_svr = min(M.SVR_MAX_N, len(Zi)) if not quick else min(1200, len(Zi))
-
-            def fit_kr():
-                sl = slice(len(Zi) - n_kr, len(Zi))
-                g0 = 1.0 / Zi.shape[1]
-                best = None
-                for a in (0.1, 1.0, 10.0):
-                    for g in (g0 / 4, g0, g0 * 4):
-                        mdl = KernelRidge(kernel="rbf", alpha=a, gamma=g).fit(Zi[sl], yi_s[sl])
-                        pv = chunked(mdl, Zv) * ysi + ymi
-                        q = S.select_score(S.to_raw(pv, va))
-                        if best is None or q < best[0]:
-                            best = (q, (a, g), pv, chunked(mdl, Zt) * ysi + ymi)
-                        del mdl
-                meta[f"kr_h{H}"] = best[1]
-                return best[2], best[3]
-            fit_log_model("KernelRidge-RBF", fit_kr, f"n={n_kr} · 무재적합")
-
-            def fit_svr():
-                sl = slice(len(Zi) - n_svr, len(Zi))
-                best = None
-                for cc in (1.0, 10.0, 100.0):
-                    mdl = SVR(kernel="rbf", C=cc, epsilon=0.05, cache_size=1000).fit(Zi[sl], yi_s[sl])
-                    pv = chunked(mdl, Zv) * ysi + ymi
-                    q = S.select_score(S.to_raw(pv, va))
-                    if best is None or q < best[0]:
-                        best = (q, cc, pv, chunked(mdl, Zt) * ysi + ymi)
-                meta[f"svr_C_h{H}"] = best[1]
-                return best[2], best[3]
-            fit_log_model("SVR-RBF", fit_svr, f"n={n_svr} · 무재적합")
+        # KernelRidge-RBF·SVR-RBF는 적합하지 않는다(DECISION_EXCLUDED, 설계 변경 2026-10-15). 26c의 두 함수는
+        # 학습 데이터 최근 14,188행·8,000행만 써서 다른 모델과 공정 비교가 성립하지 않는다.
 
         def fit_nys():
             nc = M.NYSTROEM_COMPONENTS if not quick else 256
@@ -761,6 +740,7 @@ def _gpu_task(tk, H, name, seed, quick):
 LIMITS = RES / "parts" / "_limits.json"
 LIMIT_DEFAULT = {"reserve_gb": 6.0, "floor_gb": 4.5, "gpu_reserve_gb": 4.0, "max_gpu_workers": 3, "max_cpu_workers": 4,
                  "est_gb": {"cpu_s0": 6.0, "cpu": 3.0, "gpu": 2.8, "pi": 2.0}}
+# cpu_s0 6.0GB는 커널 2종을 포함한 실측 5.6GB 기준이다. 제외 뒤 첫 작업의 최대 RSS로 다시 재서 낮춘다.
 
 
 def limits() -> dict:
@@ -1126,7 +1106,7 @@ def measure_and_decide(tickers: list[str]) -> dict:
 
 # %%
 SEQ = ("GARCH-t", "MS-GARCH", "TAR-GARCH", "GRU", "LSTM")
-PAR_FEAT = ("LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM", "Nystroem+Ridge", "KernelRidge-RBF", "SVR-RBF")
+PAR_FEAT = ("LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM", "Nystroem+Ridge")   # 커널 2종 제외(DECISION_EXCLUDED)
 PAR_DEEP = BLOCK_MODELS + tuple(FM_MODELS)
 GROUP_OF = {**{m: "순차" for m in SEQ}, **{m: "병렬(특징 기반)" for m in PAR_FEAT}, **{m: "병렬(딥러닝)" for m in PAR_DEEP}}
 GROUP_COLOR = {"순차": "#2a78d6", "병렬(특징 기반)": "#eb6834", "병렬(딥러닝)": "#8a6b2e", "기준선": "#888888"}
@@ -1511,6 +1491,9 @@ def write_report(tickers: list[str]) -> None:
     e("")
     e("## 7. 한계")
     e("")
+    e("- KernelRidge-RBF·SVR-RBF는 학습 데이터를 최근 14,188행·8,000행만 잘라 써서 공정 비교가 성립하지 않아 이번 회차에서 "
+      "적합하지 않았다(설계 변경, 2026-10-15 사용자 결정). 커널 계열은 학습 데이터 전체를 쓰는 Nystroem+Ridge가 대표한다. "
+      "27번 대비 순위 비교에서도 두 모델을 뺐다.")
     e("- 무재적합이라 평가 예측 모델이 학습 구간 끝 15%를 학습하지 않는다(입력 창으로는 본다). 27번보다 모든 학습 모델이 같은 정도로 불리하다.")
     e("- 학습률은 시드 0에서 골라 고정했다. 시드 0은 자기 검증 구간에서 고른 학습률을 쓰므로 미세하게 유리할 수 있다.")
     e("- 시드는 같은 데이터·설정 안의 학습 난수만 다룬다. 분할 시점, 하이퍼파라미터 선택, 평가 기간 선택의 변동은 다루지 않는다(Bouthillier 외 2021).")
@@ -1541,6 +1524,7 @@ def selftest() -> None:
     # 학습률 격자
     assert lr_grid("PatchTST") == (2.5e-5, 1e-4, 4e-4)
     assert len(STOCHASTIC) == 15 and not set(STOCHASTIC) & set(CPU_DET + FM_MODELS)
+    assert not set(DECISION_EXCLUDED) & set(ALL_MODELS + PAR_FEAT + PAR_DEEP + SEQ)
     # π 교체식: π가 같으면 예측이 그대로
     p27, pi = rng.uniform(.1, 1, 50), rng.uniform(0, .5, 50)
     assert np.allclose(p27 * np.sqrt((1 - pi) / (1 - pi)), p27)
