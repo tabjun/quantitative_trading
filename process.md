@@ -17,14 +17,14 @@ README §2 "장기 비전"의 원래 목표를 MVP로 구현한다: 가격·뉴�
 
 ## 현재 자산 (2026-10-15 확인)
 
-- `marts/historical_flow.py`: DTW 기반 과거 유사 흐름 마트 코드(1,039줄). DB에 마트 테이블이 없어 한 번도 생성되지 않았다.
+- `marts/historical_flow.py`: DTW 기반 과거 유사 흐름 마트 코드. (2026-10-15 정정) 마트는 `upbit_data.db` 안에 이미 있다: 2026-07-22~23 14회 실행, 50종목, 창 16·48·96·288 각 10만 창, 2025-12-31~2026-07-18. "한 번도 생성되지 않음"은 07-18 기록이 옮겨진 오류였다. 2026-10-15부터 마트 저장 위치는 `data/llm_agent.db`.
 - `contexts/text_context.py`: RSS·네이버 뉴스 수집, 15분 단위 텍스트 특징. 텍스트 테이블 없음.
 - `agents/` 3개, `main.py`: 하드코딩 데모(키워드·종목 고정).
 - TimesFM 2.5 사용 예: `test/models/27_fm_run.py`(`TimesFM_2p5_200M_torch`, `ForecastConfig`).
 
 ## MVP 단계
 
-- [ ] 0. 환경: worktree `data/`에 원본 DB 읽기 전용 링크, `contexts/text_context.py`·`marts/historical_flow.py` 쓰기 경로를 `llm_agent.db`로 변경, 테이블 스키마 확정, LLM 실행기(llama.cpp 계열, cron 상주) 설치와 Qwen3.5-4B 4비트 소량 시험(GPU 메모리·속도·JSON 강제·선택지 확률 추출), Clef-Flash 비교
+- [~] 0. 환경(2026-10-15 1차 완료, 결과 `docs/service_design.md` §10): ✅ DB 읽기 전용 링크·쓰기 경로 분리·합성 시험, ✅ llama.cpp b11630 CUDA 12.8, ✅ Qwen3.5-4B Q4 GPU 3.76GB·속도·JSON·선택지 확률, ✅ Q4 대 BF16. 남음: 보기 기준 정의·위치 편향, cron 상주, Clef-Flash 비교. 원래 계획: worktree `data/`에 원본 DB 읽기 전용 링크, `contexts/text_context.py`·`marts/historical_flow.py` 쓰기 경로를 `llm_agent.db`로 변경, 테이블 스키마 확정, LLM 실행기(llama.cpp 계열, cron 상주) 설치와 Qwen3.5-4B 4비트 소량 시험(GPU 메모리·속도·JSON 강제·선택지 확률 추출), Clef-Flash 비교
 - [ ] 1. 데이터 층: 텍스트 수집 1회 실행·저장, 과거 유사 흐름 마트 소규모 생성(행 수·소요 시간 보고 후 확장)
 - [ ] 2. 보조 지표 층: 종목별 TimesFM 로그 RV 분위수(1h·4h·12h), GARCH-t, 사전 국면(직전 RV 분위, 경계는 2026-10-05 이전에 한 번 계산해 테이블에 고정), 가격 정지 비율을 하나의 JSON 스키마로 출력(출처 모델·적합 종료 시각·예측 시각 포함). 국면별 모델 라우팅은 설정 테이블과 조회 함수 자리만 만들고 비활성으로 둔다.
 - [ ] 3. 맥락 층: 최근 뉴스 묶음, 유사 과거 구간 상위 k개와 그 뒤 실현 변동성·최대 낙폭
