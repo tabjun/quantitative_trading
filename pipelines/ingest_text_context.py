@@ -19,11 +19,11 @@ from pathlib import Path
 import duckdb
 
 from contexts.text_context import TextDataCollector, TextFeatureBuilder
-from database.paths import resolve_db_path
+from database.paths import resolve_db_path, resolve_service_db_path
 
 
 def load_recent_price_index(db_path: str, table_name: str = "btc_15m_advance", limit: int = 500):
-    with duckdb.connect(db_path) as con:
+    with duckdb.connect(db_path, read_only=True) as con:
         return con.execute(
             f"""
             SELECT timestamp
@@ -34,7 +34,7 @@ def load_recent_price_index(db_path: str, table_name: str = "btc_15m_advance", l
         ).df()
 
 
-def write_feature_report(inserted_count: int, feature_count: int, db_path: str, output_dir: str = "test/results") -> Path:
+def write_feature_report(inserted_count: int, feature_count: int, db_path: str, output_dir: str = "logs/text_context") -> Path:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     report_path = output_path / f"text_context_feature_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
@@ -62,10 +62,11 @@ def write_feature_report(inserted_count: int, feature_count: int, db_path: str, 
 
 
 def main() -> None:
-    db_path = resolve_db_path("data/upbit_data.db")
+    db_path = resolve_db_path("data/upbit_data.db")  # 시세(읽기 전용)
+    service_db_path = resolve_service_db_path()  # 텍스트 테이블 저장
     collector = TextDataCollector()
     records = collector.collect_all(max_items_per_source=30)
-    builder = TextFeatureBuilder(db_path=db_path)
+    builder = TextFeatureBuilder(db_path=service_db_path)
     inserted_count = builder.persist_raw_records(records)
 
     try:
@@ -75,7 +76,7 @@ def main() -> None:
         price_index = None
 
     features = builder.build_and_persist_15m_features(price_index=price_index)
-    report_path = write_feature_report(inserted_count, len(features), db_path)
+    report_path = write_feature_report(inserted_count, len(features), service_db_path)
     print(f"[SUCCESS] Inserted/refreshed {inserted_count} text records.")
     print(f"[SUCCESS] Generated {len(features)} 15-minute text feature rows.")
     print(f"[SUCCESS] Report saved to {report_path}")

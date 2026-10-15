@@ -19,7 +19,7 @@ def attach_realtime_text_context(df: pd.DataFrame, db_path: str) -> pd.DataFrame
     try:
         collector = TextDataCollector()
         records = collector.collect_all(max_items_per_source=20)
-        builder = TextFeatureBuilder(db_path=db_path)
+        builder = TextFeatureBuilder()  # 텍스트 테이블은 서비스 DB(data/llm_agent.db)에 쓴다
         inserted_count = builder.persist_raw_records(records)
         builder.build_and_persist_15m_features(price_index=df[["timestamp"]])
         enriched = builder.enrich_price_frame(df)
@@ -51,7 +51,7 @@ def run_database_simulation_and_generate_report_v2():
         print(f"[ERROR] Database file not found at {db_path}")
         return
         
-    con = duckdb.connect(db_path)
+    con = duckdb.connect(db_path, read_only=True)
     query = """
     SELECT timestamp, open, high, low, close, volume, value
     FROM btc_15m_advance

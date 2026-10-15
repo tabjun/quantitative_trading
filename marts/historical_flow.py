@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -29,7 +29,7 @@ try:  # C-optimized banded (Sakoe-Chiba) DTW; ~135x faster than pure-python fast
     _HAS_DTAI = True
 except Exception:  # pragma: no cover - fallback keeps the mart runnable without the dep
     _HAS_DTAI = False
-from database.paths import resolve_db_path
+from database.paths import resolve_db_path, resolve_service_db_path
 
 
 SOURCE_TABLE = "upbit_krw_candle"
@@ -84,7 +84,8 @@ CONTEXT_VECTOR_COLUMNS = [
 
 @dataclass(frozen=True)
 class HistoricalFlowConfig:
-    db_path: str = "data/upbit_data.db"
+    db_path: str = "data/upbit_data.db"  # 원천 시세(읽기 전용)
+    mart_db_path: str = "data/llm_agent.db"  # 마트 테이블 저장·조회, 텍스트 특징 조회
     source_table: str = SOURCE_TABLE
     interval: str = "minute15"
     window_lengths: tuple[int, ...] = (16, 48, 96, 288)
@@ -119,24 +120,10 @@ class HistoricalFlowMart:
     def __init__(self, config: HistoricalFlowConfig | None = None):
         self.config = config or HistoricalFlowConfig()
         if self.config.db_path:
-            self.config = HistoricalFlowConfig(
+            self.config = replace(
+                self.config,
                 db_path=resolve_db_path(self.config.db_path),
-                source_table=self.config.source_table,
-                interval=self.config.interval,
-                window_lengths=self.config.window_lengths,
-                stride=self.config.stride,
-                top_k=self.config.top_k,
-                liquid_top_n=self.config.liquid_top_n,
-                index_universe=self.config.index_universe,
-                max_windows_per_ticker=self.config.max_windows_per_ticker,
-                allow_btc_fallback=self.config.allow_btc_fallback,
-                shape_weight=self.config.shape_weight,
-                factor_weight=self.config.factor_weight,
-                context_weight=self.config.context_weight,
-                n_archetypes=self.config.n_archetypes,
-                liquid_only=self.config.liquid_only,
-                rerank_pool_m=self.config.rerank_pool_m,
-                dtw_band=self.config.dtw_band,
+                mart_db_path=resolve_service_db_path(self.config.mart_db_path),
             )
 
     def load_source_candles(self) -> pd.DataFrame:
@@ -205,7 +192,9 @@ class HistoricalFlowMart:
         query_factor = np.asarray(json.loads(query_vector["factor"]["factor_vector_json"]), dtype=float)
         query_context = np.asarray(json.loads(query_vector["context"]["context_vector_json"]), dtype=float)
 
-        with duckdb.connect(self.config.db_path, read_only=True) as con:
+        if not Path(self.config.mart_db_path).exists():
+            return pd.DataFrame()
+        with duckdb.connect(self.config.mart_db_path, read_only=True) as con:
             exists = self._relation_exists(con, FEATURE_TABLE)
             if not exists:
                 return pd.DataFrame()
@@ -294,7 +283,9 @@ class HistoricalFlowMart:
         """
         df = candles.copy()
         try:
-            with duckdb.connect(self.config.db_path, read_only=True) as con:
+            if not Path(self.config.mart_db_path).exists():
+                raise duckdb.IOException("서비스 DB가 아직 없다")
+            with duckdb.connect(self.config.mart_db_path, read_only=True) as con:
                 if not self._relation_exists(con, "text_features_15m"):
                     for column in CONTEXT_COLUMNS:
                         df[column] = 0.0
@@ -776,15 +767,15 @@ class HistoricalFlowMart:
         shape_features = pd.DataFrame([bundle["shape"] for bundle in feature_bundles])
         factor_features = pd.DataFrame([bundle["factor"] for bundle in feature_bundles])
         context_features = pd.DataFrame([bundle["context"] for bundle in feature_bundles])
-        db_path = Path(self.config.db_path)
+        db_path = Path(self.config.mart_db_path)
         try:
-            con_ctx = duckdb.connect(self.config.db_path)
+            con_ctx = duckdb.connect(self.config.mart_db_path)
         except duckdb.IOException as exc:
             if "not a valid DuckDB database file" not in str(exc):
                 raise
             if db_path.exists():
                 db_path.unlink()
-            con_ctx = duckdb.connect(self.config.db_path)
+            con_ctx = duckdb.connect(self.config.mart_db_path)
 
         with con_ctx as con:
             for relation_name in [FEATURE_TABLE, SHAPE_TABLE, FACTOR_TABLE, CONTEXT_TABLE]:
@@ -994,7 +985,8 @@ def _classify_event(
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build KRW-wide historical flow DuckDB mart.")
-    parser.add_argument("--db-path", default="data/upbit_data.db")
+    parser.add_argument("--db-path", default="data/upbit_data.db", help="원천 시세 DB(읽기 전용)")
+    parser.add_argument("--mart-db-path", default="data/llm_agent.db", help="마트 저장 DB(서비스)")
     parser.add_argument("--window-lengths", default="16,48,96,288")
     parser.add_argument("--stride", type=int, default=4)
     parser.add_argument("--top-k", type=int, default=10)
@@ -1012,6 +1004,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def config_from_args(args: argparse.Namespace) -> HistoricalFlowConfig:
     return HistoricalFlowConfig(
         db_path=args.db_path,
+        mart_db_path=args.mart_db_path,
         window_lengths=parse_window_lengths(args.window_lengths),
         stride=args.stride,
         top_k=args.top_k,

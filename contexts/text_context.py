@@ -24,7 +24,7 @@ from typing import Iterable, Sequence
 
 import duckdb
 import pandas as pd
-from database.paths import resolve_db_path
+from database.paths import resolve_db_path, resolve_service_db_path
 
 
 DEFAULT_RSS_QUERIES = [
@@ -259,8 +259,8 @@ def deduplicate_records(records: Iterable[TextRecord]) -> list[TextRecord]:
 class TextFeatureBuilder:
     """Builds 15-minute text factors aligned to the existing candle mart."""
 
-    def __init__(self, db_path: str = "data/upbit_data.db"):
-        self.db_path = resolve_db_path(db_path)
+    def __init__(self, db_path: str = "data/llm_agent.db"):
+        self.db_path = resolve_service_db_path(db_path)
 
     def persist_raw_records(self, records: Sequence[TextRecord]) -> int:
         with duckdb.connect(self.db_path) as con:
@@ -335,7 +335,9 @@ class TextFeatureBuilder:
         return features
 
     def load_raw_records(self) -> pd.DataFrame:
-        with duckdb.connect(self.db_path) as con:
+        if not Path(self.db_path).exists():
+            return pd.DataFrame()
+        with duckdb.connect(self.db_path, read_only=True) as con:
             exists = con.execute(
                 """
                 SELECT COUNT(*)
@@ -467,7 +469,7 @@ class TextFeatureBuilder:
         return frame[columns]
 
 
-def ingest_realtime_text_context(db_path: str = "data/upbit_data.db", max_items_per_source: int = 30) -> tuple[int, pd.DataFrame]:
+def ingest_realtime_text_context(db_path: str = "data/llm_agent.db", max_items_per_source: int = 30) -> tuple[int, pd.DataFrame]:
     collector = TextDataCollector()
     records = collector.collect_all(max_items_per_source=max_items_per_source)
     builder = TextFeatureBuilder(db_path=db_path)
@@ -480,9 +482,10 @@ def load_price_with_text_context(
     db_path: str = "data/upbit_data.db",
     price_table: str = "btc_15m_advance",
     limit: int | None = None,
+    text_db_path: str = "data/llm_agent.db",
 ) -> pd.DataFrame:
     limit_sql = f"LIMIT {int(limit)}" if limit else ""
-    with duckdb.connect(db_path) as con:
+    with duckdb.connect(resolve_db_path(db_path), read_only=True) as con:
         price_df = con.execute(
             f"""
             SELECT timestamp, open, high, low, close, volume, value
@@ -492,4 +495,4 @@ def load_price_with_text_context(
             """
         ).df()
     price_df = price_df.sort_values("timestamp").reset_index(drop=True)
-    return TextFeatureBuilder(db_path=db_path).enrich_price_frame(price_df)
+    return TextFeatureBuilder(db_path=text_db_path).enrich_price_frame(price_df)

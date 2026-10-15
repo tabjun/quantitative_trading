@@ -10,14 +10,15 @@ from marts.historical_flow import HistoricalFlowConfig, HistoricalFlowMart
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Query similar historical KRW-market flows.")
-    parser.add_argument("--db-path", default="data/upbit_data.db")
+    parser.add_argument("--db-path", default="data/upbit_data.db", help="원천 시세 DB(읽기 전용)")
+    parser.add_argument("--mart-db-path", default="data/llm_agent.db", help="마트가 저장된 서비스 DB")
     parser.add_argument("--ticker", required=True, help="Example: KRW-BTC, KRW-ETH, KRW-SOL")
     parser.add_argument("--window-length", type=int, default=96)
     parser.add_argument("--top-k", type=int, default=10)
     parser.add_argument("--include-all-index", action="store_true")
     args = parser.parse_args()
 
-    mart = HistoricalFlowMart(HistoricalFlowConfig(db_path=resolve_db_path(args.db_path)))
+    mart = HistoricalFlowMart(HistoricalFlowConfig(db_path=resolve_db_path(args.db_path), mart_db_path=args.mart_db_path))
     result = mart.query_similar_flows(
         ticker=args.ticker,
         window_length=args.window_length,
