@@ -55,10 +55,15 @@ def halt_labels(con: duckdb.DuckDBPyConnection, start: pd.Timestamp, end: pd.Tim
     return pd.DatetimeIndex(sorted(set.intersection(*missing)))
 
 
-def log_returns(close: pd.Series, halts: pd.DatetimeIndex) -> tuple[pd.DatetimeIndex, np.ndarray]:
-    """15분 격자 로그수익률. 점검 봉과 점검 뒤 첫 체결 봉까지는 NaN(26c build_from_close와 같음)."""
+def log_returns(
+    close: pd.Series, halts: pd.DatetimeIndex, end: pd.Timestamp | None = None
+) -> tuple[pd.DatetimeIndex, np.ndarray]:
+    """15분 격자 로그수익률. 점검 봉과 점검 뒤 첫 체결 봉까지는 NaN(26c build_from_close와 같음).
+
+    end를 주면 격자를 그 봉까지 늘린다(실시간 판단에서 종목 간 기준 시각을 맞출 때). 마지막 체결 뒤의
+    무체결 봉은 종가를 이어 받아 수익률 0이 된다(26c의 무체결 봉 처리와 같음)."""
     close = close.sort_index()
-    grid = pd.date_range(close.index.min(), close.index.max(), freq=BAR)
+    grid = pd.date_range(close.index.min(), max(close.index.max(), end) if end is not None else close.index.max(), freq=BAR)
     c = close.reindex(grid)
     traded = c.notna().to_numpy()
     is_halt = grid.isin(halts) & ~traded
