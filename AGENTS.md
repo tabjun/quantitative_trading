@@ -594,7 +594,7 @@ Modes(Kitchen Sink/Wrong Abstraction/Optimistic Path/Runaway Refactor 경계).
   트랙이 메모리를 쓰는 동안 자동으로 덜 띄운다. 구현 예: `test/models/28_seed_expansion_test.py`의 `run_pool`과
   `limits()`. 한도는 결과 폴더의 `parts/_limits.json`으로 실행 중에도 바꾼다.
 - **작업당 최대 메모리를 재서 쓴다**: 추정치는 짐작하지 않고 소량 실행에서 잰 최대 RSS(`resource.getrusage`)를 쓴다.
-  측정값(2026-10-15): 28번 GPU 작업 1.6~2.3GB, CPU 시드 0 작업(GARCH 3종·커널 포함) 최대 5.6GB/워커.
+  측정값(2026-10-15): 28번 GPU 작업 1.6~2.3GB, CPU 시드 0 작업 최대 5.6GB/워커(커널 2종 포함) → 3.15GB(커널 2종 제외, 2026-10-17).
 - **트랙별 기본 몫(두 트랙이 동시에 무거운 작업을 할 때)**: 연구 RAM 15GB·GPU 12GB·CPU 24스레드, 서비스 RAM
   6GB·GPU 10GB·CPU 8스레드. 나머지는 여유분이다. 한쪽이 쉬면 다른 쪽이 메모리 기반 투입으로 더 쓸 수 있다.
   상주하는 프로세스(서비스의 로컬 LLM 서버 등)는 자기 몫 안에서 최대 메모리를 고정한다(예: GPU 메모리 비율 제한).

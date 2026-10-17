@@ -32,6 +32,26 @@
 # 계속 대표하므로, 2026-09-07 "선형 → 비선형·커널 계열로 대체" 결정의 취지는 유지된다. 이미 끝난 3종목의 두 모델 값은
 # 작업 캐시에 기록으로만 남고 결과 파일·검정에 들어가지 않는다.
 #
+# **설계 변경 2(2026-10-18, 버그 수정, 요청 185).** 26c에서 물려받은 GARCH-t 적합(`garch_t_fit`, 수익률 ×100 척도 1회)이
+# 일부 종목에서 arch 시작값(α = 0.1, β = 0.88)에 고착된 채 끝나 최대우도 추정이 아니었다(28번 내부학습 적합 5종목, 26c 전체 적합
+# 6종목). 여러 척도로 적합해 수렴했고 시작값이 아닌 해 중 로그우도 최대를 쓰는 `garch_t_fit_robust`로 바꾸고, GARCH-t와 그 예측을
+# 특징으로 쓰는 GARCH+LightGBM이 들어 있는 CPU 작업(시드 0~4)을 다시 돌린다. GPU 작업(신경망)은 GARCH를 쓰지 않아 그대로 둔다.
+# 고치기 전 CPU 작업 결과는 `parts/s{시드}/cpu_garch_x100/`에 보존해 보고서에서 전후를 비교한다. 26·26c·27번 결과는 완료 실험이라
+# 다시 돌리지 않고, 영향 범위를 28번 보고서에 적는다.
+#
+# **설계 변경 3(2026-10-18, 버그 수정, 요청 185).** 26c가 쓰던 `fit_tar_garch`(τ 후보 × 시작점 2개, Nelder-Mead 600회)가
+# 반복 상한에서 멈춘 해를 그대로 쓰고 예외를 조용히 건너뛰었다(ETH·BTC 등에서 이어서 최적화하면 로그우도 +40~+93). τ 후보마다 수렴할
+# 때까지 이어서 최적화한 로그우도로 τ를 고르는 `fit_tar_garch_robust`로 바꾸고 진단을 남긴다. GARCH-t 수정과 함께 CPU 작업을 다시 돌린다.
+# 같은 날 재사용 적합 함수를 모두 점검했다: MS-GARCH(제약판)는 20종목 수렴 표시이나 9종목이 허용 경계에 닿아 있다(26c부터 기록된 한계).
+#
+# **설계 변경 4(2026-10-18, 사용자 결정, 요청 187).** GARCH 사양을 데이터로 고르는 결정론 모델 `GARCH-BIC`를 순차 묶음에 더한다.
+# 2026-09-07 가정 진단에서 상위 14개 사양이 모두 FIGARCH였는데 번호 실험은 GARCH(1,1)-t만 썼다. 후보(실행 전 고정): 변동성 식
+# GARCH(1,1)·GARCH(2,1)·GARCH(1,2)·GJR-GARCH(1,1,1)·FIGARCH(1,d,1) × 분포 t·skew-t = 10개, 평균 0. 종목마다 내부학습 구간에서 각 후보를
+# ×100·×1000·×10 척도로 적합해(수렴한 해 중 로그우도 최대) ×100 척도 BIC가 가장 작은 사양을 고른다. 예측은 고른 사양을 고정 모수로
+# 전체 계열에 걸어 arch의 해석적 다단계 분산 예측을 쓰고, 보정·두 부분 처리 없음은 GARCH-t와 같다. EGARCH는 해석적 다단계 예측이 없어
+# 후보에서 뺐다. 기존 GARCH(1,1)-t는 그대로 두어 사양 선택의 효과를 비교한다. 게이트: GARCH(1,1)-t 후보의 arch 예측 경로가
+# 26c 닫힌 식 경로(`garch_multistep`)와 같아야 한다(예측 시점 정렬 확인).
+#
 # **고정 조건(26c·27과 같음).** DB `upbit_data_20261005.db`, 20종목(`study_universe`), 15분봉, 창 2023-10-06 ~
 # 2026-10-05, 분할 2025-11-11(전 종목 공통), 내부학습 85%/내부검증 15%(시간순), 예측 구간 15분·30분·1시간·4시간·
 # 12시간, 정시 비겹침 평가, 손실 QLIKE, 가격 정지 두 부분 모형(정지 확률 π × 크기), 모델별 입력 표현은 27번과 같다
@@ -144,16 +164,19 @@ GPU_MODELS = RNN_MODELS + BLOCK_MODELS
 CPU_STOCH = ("Nystroem+Ridge", "LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM")
 STOCHASTIC = CPU_STOCH + GPU_MODELS                       # 15종
 CPU_DET = ("GARCH-t", "MS-GARCH", "TAR-GARCH")
+GARCH_BIC = "GARCH-BIC"            # 설계 변경 4: 시드 0에서 한 번 적합하는 결정론 모델(parts/s0/garchbic)
 # 설계 변경(2026-10-15, 요청 177·179): 학습 데이터를 잘라 쓰는 두 커널 모델은 적합하지 않는다(설계 셀 참고).
 DECISION_EXCLUDED = ("KernelRidge-RBF", "SVR-RBF")
 FM_MODELS = X.FM_MODELS
 TTM_UNSUPPORTED_H = X.TTM_UNSUPPORTED_H
-ALL_MODELS = ("naive",) + CPU_DET + CPU_STOCH + GPU_MODELS + FM_MODELS
+ALL_MODELS = ("naive",) + CPU_DET + (GARCH_BIC,) + CPU_STOCH + GPU_MODELS + FM_MODELS
 R_PAIRS_A = RNN_MODELS
 R_PAIRS_B = BLOCK_MODELS                                  # 학습하는 병렬 딥러닝 8종
 
-FAMILY = {**{m: X.NEW_FAMILY.get(m, M.FAMILY.get(m)) for m in ALL_MODELS}}
-PROCESS = {**M.PROCESS, **X.NEW_PROCESS}
+FAMILY = {**{m: X.NEW_FAMILY.get(m, M.FAMILY.get(m)) for m in ALL_MODELS}, GARCH_BIC: M.FAMILY.get("GARCH-t")}
+PROCESS = {**M.PROCESS, **X.NEW_PROCESS, GARCH_BIC: "다단계 예측(사양 BIC 선택)"}
+M.FAMILY[GARCH_BIC] = M.FAMILY["GARCH-t"]          # 26c Scorer가 행을 만들 때 읽는 사전에도 등록
+M.PROCESS[GARCH_BIC] = PROCESS[GARCH_BIC]
 
 
 def lr_grid(name: str) -> tuple:
@@ -228,6 +251,199 @@ def pi_job(tk: str, quick: bool) -> str:
 
 
 # %% [markdown]
+# ## GARCH-t 적합(2026-10-18 버그 수정)
+#
+# 26c의 `garch_t_fit`은 수익률 ×100 척도로 `arch`를 한 번 적합한다. 이 척도에서 일부 종목은 최적화가 arch의 시작값
+# (α = 0.1, β = 0.88)에서 움직이지 않은 채 "수렴"으로 끝난다. 26c 전체 적합은 6종목(AQT·BTC·MOC·STRAX·XLM·XRP), 28번 내부학습
+# 적합은 5종목(BTC·DOGE·SHIB·XLM·TOKAMAK)이 그랬고, ×1000 척도로 다시 적합하면 로그우도가 68~639 높았다(서비스 트랙 S194 발견,
+# 연구 세션 재확인). 최대우도 추정이 아니므로 고친다. 여러 척도(×100·×1000·×10)로 적합해, 수렴 플래그가 0이고 시작값에 고착되지
+# 않은 해 중 ×100 척도로 환산한 로그우도가 가장 큰 해를 쓴다. 반환 형식(×100 척도의 ω와 조건부 분산)은 26c와 같다.
+
+# %%
+GARCH_SCALES = (100, 1000, 10)
+
+
+def garch_t_fit_robust(dc: np.ndarray, split_c: int) -> dict:
+    from arch import arch_model
+    from scipy.signal import lfilter
+    tried, best = [], None
+    for k in GARCH_SCALES:
+        try:
+            res = arch_model(dc[:split_c] * k, mean="Zero", vol="GARCH", p=1, q=1, dist="t").fit(disp="off", show_warning=False)
+        except Exception as e:
+            tried.append({"척도": k, "오류": type(e).__name__})
+            continue
+        p = res.params
+        al, be, nu = float(p["alpha[1]"]), float(p["beta[1]"]), float(p["nu"])
+        stuck = abs(al - 0.1) < 1e-6 and abs(be - 0.88) < 1e-6
+        ll100 = float(res.loglikelihood) + split_c * np.log(k / 100)       # ×k 척도 로그우도를 ×100 척도로 환산
+        ok = int(res.convergence_flag) == 0 and not stuck and np.isfinite(ll100)
+        r = {"척도": k, "수렴플래그": int(res.convergence_flag), "시작값고착": stuck, "LL100": ll100, "ok": ok,
+             "omega": float(p["omega"]) * (100 / k) ** 2, "alpha": al, "beta": be, "nu": nu,
+             "cv_in": np.asarray(res.conditional_volatility) ** 2 * (100 / k) ** 2}
+        tried.append({kk: v for kk, v in r.items() if kk != "cv_in"})
+        if best is None or (r["ok"], r["LL100"]) > (best["ok"], best["LL100"]):
+            best = r
+    if best is None or not best["ok"]:
+        raise RuntimeError(f"GARCH-t: 모든 척도에서 정상 수렴 실패 {tried}")
+    x = dc * 100.0
+    n = len(x)
+    cv = np.full(n, np.nan)
+    cv[:split_c] = best["cv_in"]
+    drive = best["omega"] + best["alpha"] * x[split_c - 1:n - 1] ** 2
+    cv[split_c:], _ = lfilter([1.0], [1.0, -best["beta"]], drive, zi=np.array([best["beta"] * cv[split_c - 1]]))
+    ll100 = {t_["척도"]: t_.get("LL100", np.nan) for t_ in tried}
+    return dict(cv=cv, omega=best["omega"], alpha=best["alpha"], beta=best["beta"], nu=best["nu"], scale=best["척도"],
+                ll_gain_vs_x100=float(best["LL100"] - ll100.get(100, np.nan)),
+                x100_stuck=any(t_.get("척도") == 100 and t_.get("시작값고착") for t_ in tried), tried=tried)
+
+
+# %% [markdown]
+# ## TAR-GARCH 적합(2026-10-18 버그 수정)
+#
+# 26c는 `engine.regime_garch.fit_tar_garch`를 τ 후보 4개 × 시작점 2개, Nelder-Mead 최대 600회로 부른다. 이 함수는 최적화가 반복
+# 상한에 닿아 멈춰도 수렴 여부를 보지 않고, 예외도 조용히 건너뛴다. 20종목 진단(2026-10-18)에서 고른 해가 상한 600회에서 멈췄고,
+# 같은 τ에서 최적화를 이어가면 로그우도가 더 올랐다(ETH +92.5, BTC +40.1). 그래서 τ 후보마다 같은 시작점 탐색을 한 뒤 가장 나은 해에서
+# 수렴할 때까지(최대 TAR_POLISH_ITER회, 허용오차 1e-4) 이어서 최적화하고, 이어간 로그우도로 τ를 고른다(프로파일 우도). 예외와 미수렴은
+# 진단에 남긴다. 공용 engine은 24·26번 재현을 위해 고치지 않고 이 함수를 28번에만 쓴다.
+
+# %%
+TAR_POLISH_ITER = 4000
+
+
+def fit_tar_garch_robust(r_pct: np.ndarray, sw: np.ndarray, split_idx: int, taus, n_restarts: int, maxiter: int,
+                         quick: bool = False) -> tuple[float, dict, dict]:
+    from scipy.optimize import minimize
+    from engine import regime_garch as rg
+    eps, swt = r_pct[:split_idx], sw[:split_idx]
+    diag = {"τ후보": [], "예외": 0}
+    best_all = None
+    for tau in taus:
+        best = None
+        for x0 in rg._TAR_INITS[:n_restarts]:
+            try:
+                res = minimize(lambda th: -rg.tar_filter(eps, swt, tau, th)[0], x0, method="Nelder-Mead",
+                               options=dict(maxiter=maxiter, xatol=1e-3, fatol=1e-3))
+            except Exception:
+                diag["예외"] += 1
+                continue
+            if best is None or -res.fun > best[0]:
+                best = (-res.fun, res.x, bool(res.success), int(res.nit))
+        if best is None:
+            diag["τ후보"].append({"tau": float(tau), "상태": "모든 시작점 예외"})
+            continue
+        res2 = minimize(lambda th: -rg.tar_filter(eps, swt, tau, th)[0], best[1], method="Nelder-Mead",
+                        options=dict(maxiter=TAR_POLISH_ITER if not quick else 200, xatol=1e-4, fatol=1e-4))
+        ll2 = -res2.fun if np.isfinite(res2.fun) and -res2.fun >= best[0] else best[0]
+        x2 = res2.x if ll2 > best[0] else best[1]
+        diag["τ후보"].append({"tau": float(tau), "탐색_ll": float(best[0]), "탐색_수렴": best[2], "탐색_반복": best[3],
+                             "이어서_ll": float(ll2), "이어서_수렴": bool(res2.success), "이어서_반복": int(res2.nit),
+                             "ll이득": float(ll2 - best[0])})
+        if best_all is None or ll2 > best_all[0]:
+            best_all = (ll2, x2, float(tau), bool(res2.success))
+    if best_all is None:
+        raise RuntimeError(f"TAR-GARCH: 모든 τ에서 적합 실패 {diag}")
+    ll, theta, tau, conv = best_all
+    _, info = rg.tar_filter(r_pct, sw, tau, theta, loglik_upto=split_idx)
+    if info is None:
+        raise RuntimeError("TAR-GARCH: 최종 필터가 발산(info=None)")
+    diag.update(선택_tau=tau, 선택_ll=float(ll), 선택_수렴=conv,
+                최대_ll이득=float(max(c.get("ll이득", 0.0) for c in diag["τ후보"])))
+    return tau, info, diag
+
+
+# %% [markdown]
+# ## GARCH 사양 선택(설계 변경 4): GARCH-BIC
+
+# %%
+GARCH_BIC_CANDS = tuple((f"{nm}-{dist}", vol, kw, dist) for nm, vol, kw in (
+    ("GARCH(1,1)", "GARCH", dict(p=1, o=0, q=1)), ("GARCH(2,1)", "GARCH", dict(p=2, o=0, q=1)),
+    ("GARCH(1,2)", "GARCH", dict(p=1, o=0, q=2)), ("GJR(1,1,1)", "GARCH", dict(p=1, o=1, q=1)),
+    ("FIGARCH(1,d,1)", "FIGARCH", dict(p=1, q=1))) for dist in ("t", "skewt"))
+
+
+def fit_garch_spec(x100: np.ndarray, vol: str, kw: dict, dist: str) -> dict:
+    """한 사양을 여러 척도로 적합해 수렴한 해 중 ×100 환산 로그우도 최대를 고른다(P8: 한 번 적합 금지)."""
+    from arch import arch_model
+    n, best, tried = len(x100), None, []
+    for k in GARCH_SCALES:
+        try:
+            r = arch_model(x100 * (k / 100), mean="Zero", vol=vol, dist=dist, **kw).fit(disp="off", show_warning=False)
+        except Exception as e:
+            tried.append(f"×{k} {type(e).__name__}")
+            continue
+        ll = float(r.loglikelihood) + n * np.log(k / 100)
+        tried.append(f"×{k} 플래그 {int(r.convergence_flag)} LL {ll:.1f}")
+        if int(r.convergence_flag) == 0 and np.isfinite(ll) and (best is None or ll > best["LL100"]):
+            best = {"LL100": ll, "scale": k, "params": r.params, "npar": len(r.params)}
+    if best is None:
+        return {"ok": False, "tried": tried}
+    best.update(ok=True, BIC=float(-2 * best["LL100"] + best["npar"] * np.log(n)), tried=tried)
+    return best
+
+
+def garch_spec_paths(dc: np.ndarray, spec: tuple, fit: dict, pos: np.ndarray, m: int) -> np.ndarray:
+    """고정 모수로 전체 계열에 걸어 예측 시점 pos(목표 창 첫 봉)마다 m봉 분산 경로(×100 척도 퍼센트²)."""
+    from arch import arch_model
+    _, vol, kw, dist = spec
+    k = fit["scale"]
+    start = int(pos.min()) - 1
+    am = arch_model(dc * k, mean="Zero", vol=vol, dist=dist, **kw)
+    var = am.forecast(params=fit["params"], horizon=m, start=start, method="analytic", reindex=False).variance.to_numpy()
+    return var[pos - 1 - start] * (100 / k) ** 2
+
+
+def garchbic_job(tk: str, quick: bool) -> dict:
+    t0 = time.time()
+    D = M.build_data(tk)
+    comp, dc, _ = M._compact(D)
+    HDs = {H: M.horizon_data(D, H) for H in M.HORIZONS_H}
+    inner = HDs[M.HORIZONS_H[0]]["inner"]
+    if any(HD["inner"] != inner for HD in HDs.values()):
+        raise AssertionError("구간마다 내부학습 경계가 다르다")
+    ic = int(np.searchsorted(D["grid"][comp], inner))
+    cands = GARCH_BIC_CANDS if not quick else GARCH_BIC_CANDS[:2]
+    fits = {c[0]: fit_garch_spec(dc[:ic] * 100, c[1], c[2], c[3]) for c in cands}
+    ok = {k_: v for k_, v in fits.items() if v["ok"]}
+    if not ok:
+        raise RuntimeError(f"{tk}: GARCH 사양 후보가 모두 수렴 실패")
+    chosen = min(ok, key=lambda k_: ok[k_]["BIC"])
+    spec = next(c for c in cands if c[0] == chosen)
+    # 게이트: GARCH(1,1)-t 후보의 arch 예측 경로 = 닫힌 식 경로(시점 정렬 확인)
+    G = garch_t_fit_robust(dc, ic)
+    HDg = HDs[60] if 60 in HDs else HDs[M.HORIZONS_H[0]]
+    pos_g = M._origin_pos(comp, HDg["j"], HDg["m"])[HDg["te"]][:200]
+    f11 = fit_garch_spec(dc[:ic] * 100, "GARCH", dict(p=1, o=0, q=1), "t")
+    a = garch_spec_paths(dc, GARCH_BIC_CANDS[0], f11, pos_g, HDg["m"])
+    b = M.garch_multistep(G, pos_g, HDg["m"])
+    gap = float(np.max(np.abs(a / b - 1)))
+    if gap > 1e-3:
+        raise AssertionError(f"{tk}: arch 예측 경로와 닫힌 식 경로가 다르다(최대 상대차 {gap:.3g})")
+    results = []
+    for H, HD in HDs.items():
+        S = M.Scorer(tk, HD)
+        j, te, va, m = HD["j"], HD["te"], HD["va"], HD["m"]
+        pos_all = M._origin_pos(comp, j, m)
+        rawv, _ = M.var_to_rv(garch_spec_paths(dc, spec, ok[chosen], pos_all[va], m), D["cfac"], j[va])
+        raw, _ = M.var_to_rv(garch_spec_paths(dc, spec, ok[chosen], pos_all[te], m), D["cfac"], j[te])
+        c = S.calib(rawv)
+        S.score(GARCH_BIC, raw, c=c, note=f"{chosen} · BIC 선택 · 무재적합")
+        results.append(dict(H=H, rows=S.rows, preds=S.preds, act=S.act.astype(np.float32), T=M._ns(HD["T"][te])))
+    table = [{"사양": k_, "수렴": v["ok"], "BIC": v.get("BIC", np.nan), "LL100": v.get("LL100", np.nan),
+              "척도": v.get("scale"), "시도": "; ".join(v["tried"])} for k_, v in fits.items()]
+    return dict(ticker=tk, chosen=chosen, table=table, gate_gap=gap, results=results, elapsed=time.time() - t0)
+
+
+def _garchbic_task(tk, quick):
+    f = PARTS / f"s0{'_quick' if quick else ''}" / "garchbic" / f"{tk}.pkl"
+    if f.exists():
+        return "skip", tk
+    res = garchbic_job(tk, quick)
+    _atomic_write(f, pickle.dumps(res))
+    return f"{res['elapsed']:.0f}s {res['chosen']} 게이트 {res['gate_gap']:.1e}", tk
+
+
+# %% [markdown]
 # ## CPU 작업: 결정론 모델(시드 0만)과 트리·커널 근사(모든 시드), 무재적합
 
 # %%
@@ -256,7 +472,10 @@ def run_cpu_job(tk: str, seed: int, quick: bool) -> dict:
         f_ = {}
         t = time.time()
         try:
-            f_["GARCH-t"] = M.garch_t_fit(dc, ic)
+            f_["GARCH-t"] = garch_t_fit_robust(dc, ic)
+            g_ = f_["GARCH-t"]
+            meta.update({f"garch_{pd.Timestamp(inner).strftime('%Y%m%d')}_{k}": g_[k]
+                         for k in ("scale", "alpha", "beta", "nu", "ll_gain_vs_x100", "x100_stuck")})
         except Exception as e:
             fails.append(("GARCH-t", "*", type(e).__name__, str(e)[:160]))
         timings["GARCH-t"] = timings.get("GARCH-t", 0) + time.time() - t
@@ -273,13 +492,12 @@ def run_cpu_job(tk: str, seed: int, quick: bool) -> dict:
             try:
                 sw_ = M.tar_switch(dc)
                 taus_ = np.quantile(sw_[M.TAR_SWITCH_BARS:ic], list(M.TAR_TAU_Q))
-                _, tau_, _, info_ = rg.fit_tar_garch(dc * 100, sw_, ic, taus_,
-                                                     n_restarts=M.TAR_RESTARTS if not quick else 1,
-                                                     maxiter=M.TAR_MAXITER if not quick else 100)
-                if info_ is None:
-                    raise RuntimeError("최종 필터가 발산(info=None)")
+                tau_, info_, tdiag = fit_tar_garch_robust(dc * 100, sw_, ic, taus_,
+                                                          n_restarts=M.TAR_RESTARTS if not quick else 1,
+                                                          maxiter=M.TAR_MAXITER if not quick else 100, quick=quick)
                 f_["TAR-GARCH"] = info_
-                meta["tar_tau"] = float(tau_)
+                meta.update(tar_tau=float(tau_), tar_선택_수렴=tdiag["선택_수렴"], tar_최대_ll이득=tdiag["최대_ll이득"],
+                            tar_예외=tdiag["예외"], tar_진단=json.dumps(tdiag["τ후보"], ensure_ascii=False))
             except Exception as e:
                 fails.append(("TAR-GARCH", "*", type(e).__name__, str(e)[:160]))
             timings["TAR-GARCH"] = timings.get("TAR-GARCH", 0) + time.time() - t
@@ -739,8 +957,9 @@ def _gpu_task(tk, H, name, seed, quick):
 # 한도는 LIMITS 파일로 실행 중에도 바꿀 수 있다(다른 세션이 무거운 작업을 할 때 낮춘다).
 LIMITS = RES / "parts" / "_limits.json"
 LIMIT_DEFAULT = {"reserve_gb": 6.0, "floor_gb": 4.5, "gpu_reserve_gb": 4.0, "max_gpu_workers": 3, "max_cpu_workers": 4,
-                 "est_gb": {"cpu_s0": 6.0, "cpu": 3.0, "gpu": 2.8, "pi": 2.0}}
-# cpu_s0 6.0GB는 커널 2종을 포함한 실측 5.6GB 기준이다. 제외 뒤 첫 작업의 최대 RSS로 다시 재서 낮춘다.
+                 "track_ram_gb": 15.0,
+                 "est_gb": {"cpu_s0": 3.5, "cpu": 3.0, "gpu": 2.8, "pi": 2.0}}
+# cpu_s0 실측: 커널 2종 포함 5.6GB(종목당 약 20분) → 제외 후 3.15GB(약 10~12분), 2026-10-17 ETH·SOL.
 
 
 def limits() -> dict:
@@ -775,6 +994,20 @@ def _pool_rss_gb(pool) -> float:
     return tot
 
 
+def _track_rss_gb() -> float:
+    """연구 대기열 전체(같은 세션 ID = setsid로 띄운 queue.sh와 그 하위 프로세스)의 상주 메모리 합(GB).
+    GPU 줄과 CPU 줄이 서로 다른 프로세스라, 트랙 몫(AGENTS.md 2.14 연구 RAM 15GB)은 세션 단위로 센다."""
+    import psutil
+    sid, tot = os.getsid(0), 0.0
+    for p in psutil.process_iter(["pid"]):
+        try:
+            if os.getsid(p.info["pid"]) == sid:
+                tot += p.memory_info().rss / 1024 ** 3
+        except Exception:
+            pass
+    return tot
+
+
 def run_pool(tasks: list, fn, workers: int, label: str, retries: int = 1, kind: str = "cpu") -> list:
     """작업을 메모리 한도 안에서 병렬로 돌린다. workers는 상한이고, 실제 동시 실행 수는 메모리가 정한다.
     실패한 작업은 retries번 다시 돌리고, 끝까지 실패한 작업 목록을 돌려준다."""
@@ -795,13 +1028,14 @@ def run_pool(tasks: list, fn, workers: int, label: str, retries: int = 1, kind: 
                     owed = max(0.0, len(running) * est - _pool_rss_gb(pool))       # 돌고 있는 작업이 더 쓸 몫(추정)
                     room = _avail_gb() - owed
                     gpu_ok = kind != "gpu" or _gpu_free_gb() >= float(L["gpu_reserve_gb"])
+                    track_ok = _track_rss_gb() + owed + est <= float(L["track_ram_gb"])
                     if (not running) and _avail_gb() >= float(L["floor_gb"]) + est and gpu_ok or \
-                            room >= float(L["reserve_gb"]) + est and gpu_ok:
+                            room >= float(L["reserve_gb"]) + est and gpu_ok and track_ok:
                         t = queue.pop(0)
                         running[pool.submit(fn, *t)] = t
                         continue
                     if time.time() - last_note > 600:
-                        print(f"  [{label}] 메모리 대기: 사용 가능 {_avail_gb():.1f}GB, 예약 {owed:.1f}GB, "
+                        print(f"  [{label}] 메모리 대기: 사용 가능 {_avail_gb():.1f}GB, 연구 합계 {_track_rss_gb():.1f}GB, 예약 {owed:.1f}GB, "
                               f"동시 {len(running)}/{cap}", flush=True)
                         last_note = time.time()
                 if not running:
@@ -857,6 +1091,16 @@ def combine_seed(seed: int, tickers: list[str], quick: bool = False) -> dict:
         c0 = pickle.loads(part_path("cpu", tk, 0, quick=quick).read_bytes())
         cs = c0 if seed == 0 else pickle.loads(part_path("cpu", tk, seed, quick=quick).read_bytes())
         fails += [dict(종목=tk, 시드=seed, 모델=f[0], H=f[1], 예외=f[2], 메시지=f[3]) for f in cs["fails"]]
+        # 적합 품질 게이트(known_pitfalls P8): 최대우도 적합이 시작값에 멈춘 채 "수렴"으로 끝나면 결과를 쓰지 않는다
+        for mt in (c0["meta"], cs["meta"]):
+            if not any(k.startswith("garch_") and k.endswith("_alpha") for k in mt):
+                raise RuntimeError(f"[적합 품질 게이트] {tk} 시드 {mt.get('시드')}: GARCH-t 진단이 없다(수정 전 CPU 작업 결과)")
+            for k in [k for k in mt if k.startswith("garch_") and k.endswith("_alpha")]:
+                be = mt[k.replace("_alpha", "_beta")]
+                if abs(mt[k] - 0.1) < 1e-6 and abs(be - 0.88) < 1e-6:
+                    raise RuntimeError(f"[적합 품질 게이트] {tk} GARCH-t가 arch 시작값(α=0.1, β=0.88)에 고착")
+        if "tar_선택_수렴" not in c0["meta"]:
+            raise RuntimeError(f"[적합 품질 게이트] {tk}: TAR-GARCH 수렴 진단이 없다(수정 전 CPU 작업 결과)")
         r0 = {R["H"]: R for R in c0["results"]}
         for R in cs["results"]:
             H = R["H"]
@@ -877,6 +1121,15 @@ def combine_seed(seed: int, tickers: list[str], quick: bool = False) -> dict:
                     S["preds"][nm] = R["preds"][nm]
             rows += [r for r in R["rows"] if r["모델"] in CPU_STOCH]
         metas.append(cs["meta"])
+        gb_f = PARTS / f"s0{'_quick' if quick else ''}" / "garchbic" / f"{tk}.pkl"
+        if not gb_f.exists():
+            raise RuntimeError(f"[시드 완전성 게이트] {tk}: GARCH-BIC 저장분이 없다(--family garchbic를 먼저 실행)")
+        gb = pickle.loads(gb_f.read_bytes())
+        for R in gb["results"]:
+            if not np.array_equal(R["T"], store[(tk, R["H"])]["T"]):
+                raise RuntimeError(f"[정렬 게이트] {tk} H={R['H']} GARCH-BIC 평가 시각이 다르다")
+            store[(tk, R["H"])]["preds"][GARCH_BIC] = R["preds"][GARCH_BIC]
+            rows += R["rows"]
         for H in M.HORIZONS_H:
             for nm in GPU_MODELS:
                 f = part_path("gpu", tk, seed, H, nm, quick)
@@ -918,7 +1171,7 @@ def check_complete(store: dict, seed: int, tickers: list[str]) -> list[str]:
     for tk in tickers:
         for H in M.HORIZONS_H:
             have = set(store.get((tk, H), {}).get("preds", {}))
-            for nm in STOCHASTIC + CPU_DET + ("naive",):
+            for nm in STOCHASTIC + CPU_DET + (GARCH_BIC, "naive"):
                 if nm not in have:
                     miss.append(f"{tk}|{H}|{nm}")
     return miss
@@ -1087,7 +1340,7 @@ def measure_and_decide(tickers: list[str]) -> dict:
     allp = eb_shrink_R(seed_error_table(stores, STOCHASTIC, STOCHASTIC + CPU_DET))
     allp = allp[allp["A"] != allp["B"]]
     allp.to_csv(RES / f"{STEM}_seed_error_ratio_allpairs.csv", index=False)
-    fig_R(t, R90, S, IMG / f"{STEM}_fig1_seed_error_ratio.png")
+    fig_R(t, R90, S, IMG / f"{STEM}_fig2_seed_error_ratio.png")
     dec = {"R_중앙": float(t["R"].median()), "R90": R90, "R_최대": float(t["R"].max()), "S": S, "근거": why,
            "쌍수": len(t), "축소가중": t.attrs["축소가중"], "R_원시_중앙": float(t["R_원시"].median()),
            "R_원시_90": float(t["R_원시"].quantile(.9)), "결정시각": time.strftime("%F %T"),
@@ -1105,7 +1358,7 @@ def measure_and_decide(tickers: list[str]) -> dict:
 # σ²_시드는 시드별 평균 손실차(시각 평균)의 시드 간 분산이다. 결정론 모델끼리는 σ²_시드 = 0이다.
 
 # %%
-SEQ = ("GARCH-t", "MS-GARCH", "TAR-GARCH", "GRU", "LSTM")
+SEQ = ("GARCH-t", "GARCH-BIC", "MS-GARCH", "TAR-GARCH", "GRU", "LSTM")
 PAR_FEAT = ("LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM", "Nystroem+Ridge")   # 커널 2종 제외(DECISION_EXCLUDED)
 PAR_DEEP = BLOCK_MODELS + tuple(FM_MODELS)
 GROUP_OF = {**{m: "순차" for m in SEQ}, **{m: "병렬(특징 기반)" for m in PAR_FEAT}, **{m: "병렬(딥러닝)" for m in PAR_DEEP}}
@@ -1114,7 +1367,7 @@ COMPARISONS = (("순차 − 병렬 전체", SEQ, PAR_FEAT + PAR_DEEP), ("순차 
                ("순차 − 병렬(딥러닝)", SEQ, PAR_DEEP), ("순환 신경망 − 병렬(딥러닝)", ("GRU", "LSTM"), PAR_DEEP))
 SCOPES = ("전체", "Q1", "Q2", "Q3", "Q4", "Q5")
 ALPHA = 0.05
-SHORT = {**M.SHORT, **X.SHORT, "KernelRidge-RBF": "KRR", "SVR-RBF": "SVR"} if hasattr(X, "SHORT") else dict(M.SHORT)
+SHORT = {**M.SHORT, **(X.SHORT if hasattr(X, "SHORT") else {}), "GARCH-BIC": "G-BIC"}
 
 
 def sname(m: str) -> str:
@@ -1344,6 +1597,279 @@ def fig_vs27(tt: pd.DataFrame, t27: pd.DataFrame, path: Path) -> None:
     fig.tight_layout(); fig.savefig(path, dpi=300); plt.close(fig)
 
 
+GROUP_ORDER = ("순차", "병렬(특징 기반)", "병렬(딥러닝)")
+INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e5e5e0"
+GROUP_LABEL = ["순차(GARCH·GRU·LSTM)", "병렬 특징 기반(트리·커널 근사)", "병렬 딥러닝(어텐션·합성곱·파운데이션)"]
+
+
+def fig_regime_lines(tt: pd.DataFrame, path: Path, S: int) -> None:
+    """포스터 그림 3 자리(27d fig1b와 같은 형식): 구간마다 처리 방식 묶음별 가장 나은 모델의 1위 대비 격차를 국면 순서로 잇는다."""
+    Hs = list(M.HORIZONS_H)
+    fig, axes = plt.subplots(1, len(Hs), figsize=(19, 5.6))
+    x = np.arange(len(SCOPES) - 1)
+    for ax, H in zip(axes, Hs):
+        for grp in GROUP_ORDER:
+            ys, tie = [], []
+            for sc in SCOPES[1:]:
+                g = tt[(tt["H"] == H) & (tt["범위"] == sc) & tt["모델"].map(GROUP_OF).eq(grp)]
+                ys.append(max(float(g["평균차"].min()), 0.0))
+                tie.append(bool(g["동률"].any()))
+            ax.plot(x, ys, color=GROUP_COLOR[grp], lw=2.4, zorder=2)
+            for xi, yi, ti in zip(x, ys, tie):
+                ax.scatter(xi, yi, s=70, zorder=3, color=GROUP_COLOR[grp] if ti else "white",
+                           edgecolor=GROUP_COLOR[grp], linewidth=2)
+        ax.axhline(0, color=MUTED, lw=1)
+        ax.set_xticks(x, ["Q1\n잔잔", "Q2", "Q3", "Q4", "Q5\n요동"])
+        ax.set_title(hlabel(H), fontsize=13, loc="left", color=INK, fontweight="bold")
+        ax.grid(axis="y", color=GRID)
+        for s_ in ("top", "right"):
+            ax.spines[s_].set_visible(False)
+    fig.supylabel(f"1위 모델 대비 QLIKE 격차(0 = 그 묶음의 모델이 1위, 시드 {S}개 평균)", fontsize=11.5, x=0.0)
+    handles = [plt.Line2D([], [], color=GROUP_COLOR[g_], lw=2.4, marker="o", markersize=8, label=lb)
+               for g_, lb in zip(GROUP_ORDER, GROUP_LABEL)]
+    handles += [plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=8,
+                           label="채운 점 = 그 묶음에 1위와 구분 안 되는 모델이 있음(시드 항 포함 검정, Holm p ≥ 0.05)"),
+                plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=8, markerfacecolor="white",
+                           label="빈 점 = 그 묶음 모델이 모두 1위보다 유의하게 나쁨")]
+    fig.legend(handles=handles, loc="lower center", ncol=3, frameon=False, fontsize=10.5, bbox_to_anchor=(0.5, -0.02))
+    fig.tight_layout(rect=(0, 0.1, 1, 1))
+    fig.savefig(path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+
+def fig_top5(tt: pd.DataFrame, path: Path, S: int) -> None:
+    """포스터 그림 2 자리(27d fig5와 같은 형식): 예측 구간별 상위 5개(위 전체 기간, 아래 가장 요동 Q5)."""
+    Hs = list(M.HORIZONS_H)
+    rows = (("전체", "전체 기간"), ("Q5", "가장 요동칠 때(Q5)"))
+    fig, axes = plt.subplots(len(rows), len(Hs), figsize=(25, 6.3))
+    for r, (sc, rlab) in enumerate(rows):
+        for c, H in enumerate(Hs):
+            ax = axes[r, c]
+            g = tt[(tt["H"] == H) & (tt["범위"] == sc) & (tt["모델"] != "naive")].sort_values("평균QLIKE").reset_index(drop=True)
+            g["등수"] = np.arange(1, len(g) + 1)
+            g["격차"] = g["평균QLIKE"] - g["평균QLIKE"].iloc[0]
+            deep = g[g["모델"].map(GROUP_OF).eq("병렬(딥러닝)")].head(1)
+            extra = deep if len(deep) and int(deep["등수"].iloc[0]) > 5 else deep.iloc[0:0]
+            items = list(g.head(5).itertuples()) + list(extra.itertuples())
+            ys = np.arange(len(items))[::-1].astype(float)
+            if len(extra):
+                ys[-1] -= 0.6
+                ax.axhline(ys[-1] + 0.8, color=MUTED, lw=0.8, ls=(0, (3, 3)))
+            xmax = max(float(it.격차) for it in items) * 1.45 or 1e-3
+            for y, it in zip(ys, items):
+                col = GROUP_COLOR[GROUP_OF[it.모델]]
+                v = max(float(it.격차), 0.0)
+                ax.plot([0, v], [y, y], color=col, lw=2.2, alpha=0.6, zorder=1)
+                ax.scatter(v, y, s=80, zorder=3, color=col if it.동률 else "white", edgecolor=col, linewidth=2.2)
+                lab = "1위" if it.등수 == 1 else (f"+{v:.4f}" if v < 0.001 else f"+{v:.3f}")
+                ax.text(v + xmax * 0.05, y, lab, va="center", fontsize=10.5, color=INK)
+            ax.set_yticks(ys, [f"{it.등수}. {it.모델}" for it in items], fontsize=11.5)
+            for tl, it in zip(ax.get_yticklabels(), items):
+                tl.set_color(GROUP_COLOR[GROUP_OF[it.모델]])
+            ax.set_xlim(-xmax * 0.03, xmax)
+            ax.set_ylim(min(ys) - 0.6, max(ys) + 0.6)
+            ax.grid(axis="x", color=GRID)
+            ax.tick_params(axis="y", length=0)
+            ax.tick_params(axis="x", labelsize=9.5)
+            for s_ in ("top", "right", "left"):
+                ax.spines[s_].set_visible(False)
+            if r == 0:
+                ax.set_title(hlabel(H), fontsize=15, loc="left", color=INK, fontweight="bold", pad=12)
+            if c == 0:
+                ax.annotate(rlab, xy=(-0.78, 0.5), xycoords="axes fraction", rotation=90, va="center", ha="center",
+                            fontsize=14, fontweight="bold", color=INK)
+    fig.supxlabel(f"1위 모델 대비 QLIKE 격차(0 = 1위, 작을수록 좋음, 시드 {S}개 평균, 칸마다 가로축 다름)", fontsize=12.5)
+    handles = [plt.Line2D([], [], color=GROUP_COLOR[g_], lw=0, marker="o", markersize=10, label=lb)
+               for g_, lb in zip(GROUP_ORDER, GROUP_LABEL)]
+    handles += [plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=10, label="채운 점 = 1위와 통계적으로 구분 안 됨(시드 항 포함, Holm p ≥ 0.05)"),
+                plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=10, markerfacecolor="white", label="빈 점 = 1위보다 유의하게 나쁨"),
+                plt.Line2D([], [], color=MUTED, lw=0.8, ls=(0, (3, 3)), label="점선 아래 = 5위 밖 병렬 딥러닝 중 가장 나은 모델")]
+    fig.legend(handles=handles, loc="lower center", ncol=3, frameon=False, fontsize=12, bbox_to_anchor=(0.5, -0.1))
+    fig.tight_layout(rect=(0.015, 0.0, 1, 1), h_pad=2.5, w_pad=5.5)
+    fig.savefig(path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+
+def data_target_check(s0: dict, path: Path) -> str:
+    """0절: 타깃(RV)과 이번 회차에 바뀐 정지 확률 π를 점검한다(AGENTS.md 2.9h ①②를 이번 변경분에 다시 적용).
+    타깃·손실 정의는 26c와 같고, 바뀐 것은 π(전체 재적합 분류기 → 내부 분류기)뿐이라 π가 실제 정지 비율을 얼마나 따라가는지 본다."""
+    from report_header import describe_markdown
+    z27 = np.load(FM_SRC) if FM_SRC.exists() else None
+    rows, rv_desc, pi_desc = [], {}, {}
+    for H in M.HORIZONS_H:
+        acts, pis = [], []
+        for (tk, h), S in sorted(s0.items()):
+            if h != H:
+                continue
+            a, pi = S["act"].astype(float), S["pi"].astype(float)
+            p27 = z27[f"{tk}|{H}|정지확률"].astype(float) if z27 is not None and f"{tk}|{H}|정지확률" in z27.files else np.full(len(a), np.nan)
+            rows.append({"H": H, "종목": tk, "실제정지": float(np.mean(a == 0)), "π28": float(pi.mean()), "π27": float(np.nanmean(p27)),
+                         "평가시각": len(a)})
+            acts.append(a); pis.append(pi)
+        rv_desc[hlabel(H)] = pd.Series(np.concatenate(acts) * 100).describe()
+        pi_desc[hlabel(H)] = pd.Series(np.concatenate(pis)).describe()
+    d = pd.DataFrame(rows)
+    d.to_csv(RES / f"{STEM}_data_target_check.csv", index=False)
+    fig, axes = plt.subplots(1, len(M.HORIZONS_H), figsize=(19, 4.2))
+    for ax, H in zip(axes, M.HORIZONS_H):
+        g = d[d["H"] == H]
+        mx = max(0.02, float(np.nanmax(g[["실제정지", "π28", "π27"]].to_numpy())) * 1.1)
+        ax.plot([0, mx], [0, mx], color=MUTED, lw=0.8, ls=":")
+        ax.scatter(g["실제정지"], g["π27"], s=30, facecolor="white", edgecolor="#8a6b2e", label="27번 π(전체 재적합 분류기)")
+        ax.scatter(g["실제정지"], g["π28"], s=30, color="#2a78d6", label="28번 π(내부 분류기, 무재적합)")
+        ax.set_xlim(0, mx); ax.set_ylim(0, mx)
+        ax.set_title(hlabel(H), fontsize=12, loc="left", fontweight="bold")
+        ax.set_xlabel("평가 기간 실제 정지 비율(RV = 0)")
+    axes[0].set_ylabel("평가 기간 평균 정지 확률 π")
+    axes[0].legend(fontsize=8, loc="upper left")
+    fig.tight_layout(); fig.savefig(path, dpi=300); plt.close(fig)
+    m = d.groupby("H")[["실제정지", "π28", "π27"]].mean()
+    L = ["- **이번 회차에 바뀐 것은 정지 확률 π뿐이다.** 타깃(다음 H분 실현변동성 RV)·손실(QLIKE)·두 부분 모형 정의는 26c와 같다. "
+         "26c·27은 π를 학습 구간 전체로 재적합한 분류기로 냈고, 28번은 내부학습 구간 분류기 하나로 보정용·평가용 π를 모두 낸다(random_state 0, 모든 모델·시드 공통).",
+         "- **점검 ① 타깃 분포**: RV = 0(가격 정지)은 관측 실패가 아니라 실제로 가격이 한 칸도 움직이지 않은 구간이다(26c 2.9h 점검). "
+         "QLIKE는 실제값 0에서도 유한하고, 예측값이 0이면 발산하므로 π 상한 0.99와 극단 예측 필터를 그대로 둔다(②).",
+         "", "| 구간 | 실제 정지 비율(종목 평균) | 28번 π 평균 | 27번 π 평균 | 28번 π − 실제 |", "| :--- | ---: | ---: | ---: | ---: |"]
+    for H, r in m.iterrows():
+        L.append(f"| {hlabel(H)} | {r['실제정지']:.4f} | {r['π28']:.4f} | "
+                 + ("해당 없음(27번 파일 없음)" if not np.isfinite(r['π27']) else f"{r['π27']:.4f}") + f" | {r['π28'] - r['실제정지']:+.4f} |")
+    under = d[d["π28"] < d["실제정지"]].groupby("H").size()
+    skip = d[(d["π28"] == 0) & (d["실제정지"] > 0)]
+    L += ["", "- **π 과소예측(26c부터 이어진 한계, 이번 회차 버그 아님)**: 평가 기간 실제 정지 비율보다 π가 낮은 종목 수 = "
+          + ", ".join(f"{hlabel(H)} {int(under.get(H, 0))}/{int((d['H'] == H).sum())}" for H in M.HORIZONS_H)
+          + ". 정지 비율이 학습 기간보다 평가 기간에 크게 늘어난 탓이다(26b EDA: 15분 내부검증 11.3% → 평가 26.7%).",
+          "- **π = 0인데 실제 정지가 있는 칸(내부학습 정지 표본이 부족해 분류기를 생략)**: "
+          + (", ".join(f"{hlabel(r.H)} {r.종목}(실제 {r.실제정지:.3f})" for r in skip.itertuples()) or "없음")
+          + ". 이 칸의 두 부분 모형은 사실상 크기 모형만 쓴다. 모든 로그 타깃 모델이 같은 π를 쓰므로 모델 간 비교에는 공통으로 작용한다."]
+    L += ["", f"![데이터·타깃 점검]({os.path.relpath(path, RES)})", "",
+          "- **그림 읽는 법**: 점 하나가 종목 하나다. 가로 = 평가 기간 실제 정지 비율, 세로 = 평균 π. 대각선 위면 정지를 많게, 아래면 적게 예측한다. "
+          "파랑(28번)과 갈색 빈 점(27번)의 차이가 무재적합으로 바뀐 몫이다. 4·12시간은 정지가 거의 없어 원점에 모인다.",
+          "", "**타깃 RV(%) describe(평가 시점, 20종목 합침)**", "",
+          describe_markdown(pd.DataFrame(rv_desc).T, "구간"), "",
+          "**28번 정지 확률 π describe(평가 시점, 20종목 합침)**", "",
+          describe_markdown(pd.DataFrame(pi_desc).T, "구간")]
+    return "\n".join(L)
+
+
+def fig_calibration(seeds, path: Path) -> None:
+    """시드 0의 모델별 보정 계수 c₊ 분포(종목 × 구간 100칸). CPU 모델은 cpu_meta, GPU 모델은 gpu_meta에서 읽는다."""
+    vals: dict = {}
+    cm = pd.read_csv(_seed_file(0, "cpu_meta.csv"))
+    for col in cm.columns:
+        if col.endswith("_calib_pos") or (col.endswith("_calib") and col.split("_h")[0] in CPU_DET):
+            nm = col.split("_h")[0]
+            vals.setdefault(nm, []).extend(cm[col].dropna().tolist())
+    gm = pd.read_csv(_seed_file(0, "gpu_meta.csv"))
+    for nm, g in gm.groupby("모델"):
+        vals[nm] = g["보정계수"].dropna().tolist()
+    order = [m for m in ALL_MODELS if m in vals and m != "naive"]
+    fig, ax = plt.subplots(figsize=(13, 4.6))
+    bp = ax.boxplot([vals[m] for m in order], patch_artist=True, widths=0.6, showfliers=True)
+    for patch, m in zip(bp["boxes"], order):
+        patch.set_facecolor(GROUP_COLOR[GROUP_OF.get(m, "기준선")]); patch.set_alpha(0.55)
+    ax.axhline(1, color=MUTED, lw=1, ls=":")
+    ax.set_yscale("log")
+    from matplotlib.ticker import FixedLocator, FormatStrFormatter, NullLocator
+    ax.yaxis.set_major_locator(FixedLocator([0.25, 0.5, 1, 2, 4, 8]))
+    ax.yaxis.set_major_formatter(FormatStrFormatter("%g"))
+    ax.yaxis.set_minor_locator(NullLocator())
+    ax.set_xticks(range(1, len(order) + 1), [sname(m) for m in order], rotation=45, ha="right", fontsize=9)
+    ax.set_ylabel("보정 계수 c₊(로그 축, 시드 0)")
+    ax.grid(axis="y", color=GRID)
+    fig.tight_layout(); fig.savefig(path, dpi=300); plt.close(fig)
+
+
+def garch_fix_section(path: Path, seeds) -> str:
+    """GARCH-t 수렴 버그 수정 전후(설계 변경 2): 고치기 전 CPU 작업(parts/s*/cpu_garch_x100)과 고친 뒤의 GARCH-t·GARCH+LightGBM QLIKE."""
+    rows = []
+    for s in seeds:
+        old_dir, new_dir = PARTS / f"s{s}" / "cpu_garch_x100", PARTS / f"s{s}" / "cpu"
+        if not old_dir.exists():
+            continue
+        for f in sorted(new_dir.glob("*.pkl")):
+            o = old_dir / f.name
+            if not o.exists():
+                continue
+            new, old = pickle.loads(f.read_bytes()), pickle.loads(o.read_bytes())
+            gm = {k: v for k, v in new["meta"].items() if k.startswith("garch_")}
+            stuck = any(v is True for k, v in gm.items() if k.endswith("x100_stuck"))
+            gain = max([v for k, v in gm.items() if k.endswith("ll_gain_vs_x100")] or [np.nan])
+            for Rn, Ro in zip(new["results"], old["results"]):
+                qn = {r["모델"]: r["QLIKE"] for r in Rn["rows"]}
+                qo = {r["모델"]: r["QLIKE"] for r in Ro["rows"]}
+                for nm in ("GARCH-t", "GARCH+LightGBM"):
+                    if nm in qn and nm in qo:
+                        rows.append({"시드": s, "종목": new["ticker"], "H": Rn["H"], "모델": nm, "QLIKE_수정전": qo[nm],
+                                     "QLIKE_수정후": qn[nm], "차(후−전)": qn[nm] - qo[nm], "x100_시작값고착": stuck,
+                                     "LL이득": gain})
+    if not rows:
+        return "- 해당 없음(수정 전 저장분이 없다)."
+    d = pd.DataFrame(rows)
+    d.to_csv(RES / f"{STEM}_garchfix_before_after.csv", index=False)
+    d0 = d[d["시드"] == d["시드"].min()]
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.6))
+    for ax, nm in zip(axes, ("GARCH-t", "GARCH+LightGBM")):
+        g = d0[d0["모델"] == nm]
+        big = g["LL이득"] > 1.0
+        lo, hi = float(min(g["QLIKE_수정전"].min(), g["QLIKE_수정후"].min())), float(max(g["QLIKE_수정전"].max(), g["QLIKE_수정후"].max()))
+        ax.plot([lo, hi], [lo, hi], color=MUTED, lw=0.8, ls=":")
+        ax.scatter(g.loc[~big, "QLIKE_수정전"], g.loc[~big, "QLIKE_수정후"], s=18, color="#9aa5b1", label="로그우도 변화 없음(정상 적합 종목)")
+        ax.scatter(g.loc[big, "QLIKE_수정전"], g.loc[big, "QLIKE_수정후"], s=24, color="#c0392b", label="×100 적합이 최대우도가 아니었던 종목")
+        ax.set_title(nm, fontsize=11, loc="left", fontweight="bold")
+        ax.set_xlabel("QLIKE 수정 전(×100 척도 1회 적합)")
+        ax.set_ylabel("QLIKE 수정 후(여러 척도 중 최대우도)")
+        ax.legend(fontsize=8)
+    fig.tight_layout(); fig.savefig(path, dpi=300); plt.close(fig)
+    aff = sorted(d0.loc[d0["LL이득"] > 1.0, "종목"].unique())
+    summ = d0.groupby(["모델", d0["LL이득"] > 1.0])["차(후−전)"].agg(["mean", "min", "max", "count"])
+    L = ["- **무엇이 문제였나**: 26c의 `garch_t_fit`은 수익률 ×100 척도로 arch를 한 번만 적합한다. 일부 종목은 최적화가 arch 시작값(α = 0.1, β = 0.88) "
+         "근처에서 멈춘 채 끝나 최대우도 추정이 아니었다. 28번 내부학습 적합에서 영향받은 종목: " + (", ".join(aff) or "없음") +
+         f"(×100 대비 최대 로그우도 이득 {d0['LL이득'].max():.1f}). 서비스 트랙(S194)이 26c 전체 적합에서 먼저 발견했고(AQT·BTC·MOC·STRAX·XLM·XRP, 26c 저장 모수가 정확히 시작값), 연구 세션이 다시 확인했다.",
+         "- **어떻게 고쳤나**: ×100·×1000·×10 척도로 적합해 수렴 플래그 0이고 시작값이 아닌 해 중 ×100 척도로 환산한 로그우도 최대를 쓴다(`garch_t_fit_robust`). "
+         "합성 GARCH(1,1)-t 복원 시험을 자체 시험에 넣었다. GARCH-t와 그 예측을 특징으로 쓰는 GARCH+LightGBM이 든 CPU 작업(시드 0~4)을 다시 돌렸다. 신경망(GPU)은 GARCH를 쓰지 않아 그대로다.",
+         "- **수정 전후 QLIKE(시드 0, 종목 × 구간)**:", "",
+         "| 모델 | 영향 종목 여부 | 평균 차(후 − 전) | 최소 | 최대 | 칸 수 |", "| :--- | :--- | ---: | ---: | ---: | ---: |"]
+    for (nm, a_), r in summ.iterrows():
+        L.append(f"| {nm} | {'영향 종목' if a_ else '정상 종목'} | {r['mean']:+.4f} | {r['min']:+.4f} | {r['max']:+.4f} | {int(r['count'])} |")
+    L += ["", f"![GARCH 수정 전후]({os.path.relpath(path, RES)})", "",
+          "- **그림 읽는 법**: 점 하나가 (종목, 구간) 하나다. 대각선 아래면 수정 뒤 QLIKE가 작아졌다(좋아졌다). 빨간 점이 ×100 적합이 최대우도가 아니었던 종목이다.",
+          "- **완료 실험에 대한 영향**: 26·26c·27번 GARCH-t(그리고 26c·27번 GARCH+LightGBM)는 같은 함수를 썼으므로 26c 전체 적합 기준 6종목의 수치가 최대우도 결과가 아니다. "
+          "완료 실험은 다시 돌리지 않고 이 절로 영향을 알린다. GARCH 계열이 1위였던 결론(26b·27번 15분)은 28번 수치로 다시 판단한다."]
+    return "\n".join(L)
+
+
+def poster_numbers(tt: pd.DataFrame, sp: pd.DataFrame, S: int) -> str:
+    """포스터 6차 요청문에 들어가는 숫자를 결과 표에서 직접 뽑는다(손으로 옮기다 틀리는 것을 막는다).
+    27번 포스터의 결과 1(가장 요동칠 때 병렬 딥러닝 비교), 결과 2·표 3(묶음 검정 칸 수), 결론 1(칸별 1위)에 대응한다."""
+    L = [f"# 28번 포스터 숫자(시드 {S}개, 시드 항 포함 검정, Holm 0.05)", "",
+         "> `28_seed_expansion_test.py`의 `poster_numbers`가 결과 표에서 자동으로 만든다. 포스터에는 이 파일의 숫자만 쓴다.", ""]
+    q5 = tt[(tt["범위"] == "Q5") & tt["모델"].map(GROUP_OF).eq("병렬(딥러닝)")]
+    worse = q5[~q5["동률"]]
+    L += ["## 결과 1: 가장 요동칠 때(Q5) 병렬 딥러닝 대 1위", "",
+          f"- 비교 수: {len(q5)}번(모델 × 예측 구간). 1위보다 유의하게 나쁨 {len(worse)}번, 1위이거나 구분 안 됨 {len(q5) - len(worse)}번.",
+          "- 구분 안 됨(또는 1위)인 칸: " + (", ".join(f"{hlabel(r.H)} {r.모델}" for r in q5[q5["동률"]].itertuples()) or "없음") + ".",
+          "- 구간별 모델 수: " + ", ".join(f"{hlabel(H)} {int((q5['H'] == H).sum())}종" for H in M.HORIZONS_H) + ".", ""]
+    L += ["## 결과 2·표 3: 처리 방식 묶음 검정(30칸 = 예측 구간 5 × 범위 6)", "",
+          "| 비교(A − B) | A 우세 | B 우세 | 구분 안 됨 | 가장 요동칠 때 A 우세 구간 |", "| :--- | ---: | ---: | ---: | :--- |"]
+    for name, g in sp.groupby("비교", sort=False):
+        a_win = g["판정"].eq("순차 우세")
+        q5w = g[(g["범위"] == "Q5") & a_win]["H"]
+        L.append(f"| {name} | {int(a_win.sum())} | {int(g['판정'].eq('병렬 우세').sum())} | {int(g['판정'].eq('구분 안 됨').sum())} | "
+                 + ("·".join(hlabel(h) for h in q5w) or "없음") + " |")
+    L += ["", "## 결론 1: 칸별 1위(1위와 구분 안 되는 모델 수)", "",
+          "| 구간 | " + " | ".join(SCOPES) + " |", "| :--- |" + " :--- |" * len(SCOPES)]
+    for H in M.HORIZONS_H:
+        cells = []
+        for sc in SCOPES:
+            g = tt[(tt["H"] == H) & (tt["범위"] == sc)]
+            cells.append(f"{g['최선'].iloc[0]}({GROUP_OF.get(g['최선'].iloc[0], '기준선')}, 동률 {int(g['동률'].sum()) - 1})")
+        L.append(f"| {hlabel(H)} | " + " | ".join(cells) + " |")
+    full = tt[tt["범위"] == "전체"]
+    L += ["", "## 후보 수", "",
+          "- 구간별 1위 후보(naive 제외): " + ", ".join(f"{hlabel(H)} {int(((full['H'] == H) & (full['모델'] != 'naive')).sum())}개"
+                                             for H in M.HORIZONS_H) + "."]
+    return "\n".join(L) + "\n"
+
+
 def _design_section() -> str:
     from report_header import render_design_section
     return render_design_section(__file__)
@@ -1380,11 +1906,18 @@ def write_report(tickers: list[str]) -> None:
     R27["seqpar"].to_csv(RES / f"{STEM}_ref27_seqpar_dm.csv", index=False)
     gm = gpu_meta_all(seeds)
     gm.to_csv(RES / f"{STEM}_gpu_meta_all_seeds.csv", index=False)
-    figs = {"r": IMG / f"{STEM}_fig1_seed_error_ratio.png", "proc": IMG / f"{STEM}_fig2_procedure.png",
-            "rank": IMG / f"{STEM}_fig3_ranking.png", "sp": IMG / f"{STEM}_fig4_seqpar.png",
-            "rg": IMG / f"{STEM}_fig5_regime_best.png", "vs": IMG / f"{STEM}_fig6_vs27_rank.png"}
+    # 그림 번호 = 보고서에 나오는 순서(1 데이터·타깃 점검 → 10 27번 대비)
+    figs = {"data": IMG / f"{STEM}_fig1_data_target.png", "r": IMG / f"{STEM}_fig2_seed_error_ratio.png",
+            "proc": IMG / f"{STEM}_fig3_procedure.png", "cal": IMG / f"{STEM}_fig4_calibration.png",
+            "rank": IMG / f"{STEM}_fig5_ranking.png", "top5": IMG / f"{STEM}_fig6_top5_by_horizon.png",
+            "sp": IMG / f"{STEM}_fig7_seqpar.png", "rg": IMG / f"{STEM}_fig8_regime_best.png",
+            "lines": IMG / f"{STEM}_fig9_regime_lines.png", "vs": IMG / f"{STEM}_fig10_vs27_rank.png"}
+    data_md = data_target_check(stores[0], figs["data"])
+    fig_calibration(seeds, figs["cal"])
     fig_procedure(gm, figs["proc"]); fig_ranking(tt, figs["rank"]); fig_seqpar(sp, figs["sp"])
     fig_regime(tt, figs["rg"]); fig_vs27(tt, R27["ties"], figs["vs"])
+    fig_top5(tt, figs["top5"], S); fig_regime_lines(tt, figs["lines"], S)
+    (RES / f"{STEM}_poster_numbers.md").write_text(poster_numbers(tt, sp, S), encoding="utf-8")
     rel = lambda p: os.path.relpath(p, RES)
     rt = pd.read_csv(RES / f"{STEM}_seed_error_ratio.csv")
     L: list[str] = []
@@ -1398,6 +1931,10 @@ def write_report(tickers: list[str]) -> None:
     e("")
     e(_design_section())
     e(standard_header(tickers))
+    e("")
+    e("## 0. 데이터·타깃 점검(이전 회차 EDA와 같은 방식, 이번 회차에 바뀐 것 중심)")
+    e("")
+    e(data_md)
     e("")
     e("## 1. 시드 수 결정(시범 실행 시드 0~4)")
     e("")
@@ -1424,12 +1961,29 @@ def write_report(tickers: list[str]) -> None:
       "6종은 상한 1,000에서 1~48%).")
     if not gm.empty:
         cap = gm[gm["상한도달"].isin([True, False])].groupby("모델")["상한도달"].mean()
-        e("- 상한 도달 비율: " + ", ".join(f"{sname(m)} {v:.1%}" for m, v in cap.items()) +
+        e("")
+    e(f"![보정 계수]({rel(figs['cal'])})")
+    e("")
+    e("- **그림 읽는 법**: 모델마다 (종목, 구간) 100칸의 보정 계수 c₊(시드 0)다. 무재적합이라 보정 계수를 추정한 모델과 평가 예측을 낸 모델이 같다. "
+      "로그 타깃 모델은 역변환 편향(Jensen) 때문에 1보다 큰 값이 정상이고, 1에서 한 자릿수 배 넘게 벗어나거나 칸마다 크게 흩어지면 적합 이상을 의심한다. "
+      "GARCH 계열은 분산을 직접 예측해 1 근처가 정상이다.")
+    e("- 상한 도달 비율: " + ", ".join(f"{sname(m)} {v:.1%}" for m, v in cap.items()) +
           ". ModernTCN·S-Mamba는 저자 학습 루프가 단계 수를 돌려주지 않아 해당 없음(기록 안 함)이다.")
+    e("")
+    e("### 2-1. GARCH-t 수렴 버그와 수정(설계 변경 2)")
+    e("")
+    e(garch_fix_section(IMG / f"{STEM}_garchfix_before_after.png", seeds))
     e("")
     e("## 3. 예측 구간별 순위(전체 기간)")
     e("")
     e(f"![순위]({rel(figs['rank'])})")
+    e("")
+    e("- **그림 읽는 법**: 예측 구간마다 모든 모델의 1위 대비 QLIKE 격차(시드 평균, 막대 = 시드 표준편차, 가로축 대칭 로그)다. 색 = 처리 방식, ○ = 1위와 구분 안 됨, × = 1위보다 유의하게 나쁨.")
+    e("")
+    e(f"![상위 5개]({rel(figs['top5'])})")
+    e("")
+    e("- **그림 읽는 법(포스터 그림 2 자리, 27d 그림 5와 같은 형식)**: 위는 전체 기간, 아래는 가장 요동칠 때(Q5)의 예측 구간별 상위 5개 모델이다. "
+      "가로축은 1위와의 QLIKE 차이, 색은 처리 방식, 채운 점은 1위와 구분 안 됨, 빈 점은 1위보다 유의하게 나쁨이다. 점선 아래는 5위 밖 병렬 딥러닝 중 가장 나은 모델이다.")
     e("")
     e("- **검정**: 비교 집단은 구간 1위 모델 대 나머지 각 모델, 시각마다 20종목 평균 QLIKE의 차이(대응 표본)다. H0: 두 모델의 기대 QLIKE가 "
       "같다. H1: 같지 않다(양측). 표준오차는 SE_전체(HAC + 시드 항), 정규 근사 p에 모델 전체 Holm 보정. H0를 기각하지 못하면 \"1위와 구분 안 됨\"(동률), "
@@ -1471,6 +2025,12 @@ def write_report(tickers: list[str]) -> None:
     e(f"![국면별 1위]({rel(figs['rg'])})")
     e("")
     e("- 칸마다 1위 모델(색 = 묶음)과 1위와 구분되지 않는 모델 수다. 검정은 3절과 같고 범위만 국면으로 바꿨다.")
+
+    e("")
+    e(f"![국면별 처리 방식]({rel(figs['lines'])})")
+    e("")
+    e("- **그림 읽는 법(포스터 그림 3 자리, 27d 그림 1b와 같은 형식)**: 국면(Q1 가장 잔잔 → Q5 가장 요동)마다 처리 방식 묶음별로 가장 나은 모델이 "
+      "1위와 얼마나 차이 나는지다. 0이면 그 묶음의 모델이 1위다.")
     e("")
     e("## 6. 27번과의 차이")
     e("")
@@ -1494,6 +2054,12 @@ def write_report(tickers: list[str]) -> None:
     e("- KernelRidge-RBF·SVR-RBF는 학습 데이터를 최근 14,188행·8,000행만 잘라 써서 공정 비교가 성립하지 않아 이번 회차에서 "
       "적합하지 않았다(설계 변경, 2026-10-15 사용자 결정). 커널 계열은 학습 데이터 전체를 쓰는 Nystroem+Ridge가 대표한다. "
       "27번 대비 순위 비교에서도 두 모델을 뺐다.")
+    e("- **전처리 통계 범위(2026-10-17 적대적 리뷰, 서비스 트랙 S188에서 확인)**: 26c에서 물려받은 주기 스케일(`build_from_close`, "
+      "`tr_bar = grid < 외부 분할`)과 GRU·LSTM 입력 표준화(`make_sequences`)가 외부 분할(2025-11-11) 이전 전체로 통계를 잡는다. "
+      "그래서 내부검증 15%(학습률 선택·보정 계수 추정에 쓰는 구간)가 전처리 통계에 들어간다. 외부 평가 구간은 쓰지 않으므로 평가 누설은 아니다. "
+      "주기 스케일은 모든 모델이 같이 쓰므로 영향은 공통이고, 내부검증 기반 선택(학습률·보정 계수)이 약간 낙관적일 수 있다. "
+      "트리·커널 근사의 특징 표준화와 블록 입력 신경망의 타깃 표준화는 내부학습 구간까지만 쓴다. 포스터 일정상 28번은 이 설계로 완주했고, "
+      "수정(전처리 통계를 내부학습 구간으로 한정)은 29번 재학습 설계에 반영한다.")
     e("- 무재적합이라 평가 예측 모델이 학습 구간 끝 15%를 학습하지 않는다(입력 창으로는 본다). 27번보다 모든 학습 모델이 같은 정도로 불리하다.")
     e("- 학습률은 시드 0에서 골라 고정했다. 시드 0은 자기 검증 구간에서 고른 학습률을 쓰므로 미세하게 유리할 수 있다.")
     e("- 시드는 같은 데이터·설정 안의 학습 난수만 다룬다. 분할 시점, 하이퍼파라미터 선택, 평가 기간 선택의 변동은 다루지 않는다(Bouthillier 외 2021).")
@@ -1528,6 +2094,15 @@ def selftest() -> None:
     # π 교체식: π가 같으면 예측이 그대로
     p27, pi = rng.uniform(.1, 1, 50), rng.uniform(0, .5, 50)
     assert np.allclose(p27 * np.sqrt((1 - pi) / (1 - pi)), p27)
+    # GARCH-t 복원: 15분 수익률 크기(표준편차 약 0.3%)의 합성 GARCH(1,1)-t에서 시작값이 아닌 참값 근처를 찾아야 한다
+    n, om, al, be, nu = 6000, 2e-7, 0.15, 0.80, 5.0
+    e = rng.standard_t(nu, n) * np.sqrt((nu - 2) / nu)
+    r_, h = np.zeros(n), om / (1 - al - be)
+    for i in range(n):
+        r_[i] = np.sqrt(h) * e[i]
+        h = om + al * r_[i] ** 2 + be * h
+    g = garch_t_fit_robust(r_, n - 500)
+    assert abs(g["alpha"] - al) < 0.06 and abs(g["beta"] - be) < 0.08 and np.isfinite(g["cv"]).all(), (g["alpha"], g["beta"])
     print("[자체 시험] 통과", flush=True)
 
 
@@ -1539,7 +2114,7 @@ def main(argv=None) -> None:
     from report_header import study_universe
     ap = argparse.ArgumentParser()
     ap.add_argument("--family", required=True,
-                    choices=["selftest", "pi", "cpu", "gpu", "combine", "rmeasure", "report"])
+                    choices=["selftest", "pi", "cpu", "gpu", "garchbic", "combine", "rmeasure", "report", "interim"])
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--seeds", default="", help="combine·report용 시드 목록(쉼표). 비우면 결정 파일의 S")
     ap.add_argument("--models", default=",".join(GPU_MODELS))
@@ -1568,6 +2143,8 @@ def main(argv=None) -> None:
         hs = [int(h) for h in a.horizons.split(",")]
         tasks = [(tk, H, nm, a.seed, a.quick) for nm in a.models.split(",") for H in hs for tk in tickers]
         left = run_pool(tasks, _gpu_task, a.workers, f"GPU s{a.seed}", a.retries, kind="gpu")
+    elif a.family == "garchbic":
+        left = run_pool([(tk, a.quick) for tk in tickers], _garchbic_task, a.workers, "GARCH-BIC", a.retries, kind="cpu")
     elif a.family == "combine":
         for s in [int(x) for x in a.seeds.split(",")] if a.seeds else [a.seed]:
             save_seed(s, tickers, a.quick)
