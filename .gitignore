@@ -74,3 +74,6 @@ test/results/*/fm_io/
 !/.vscode/extensions.json
 .codex/
 result/
+# 기록 4종 세션 잠금(작업 트리별, .githooks/records_guard.py)
+.records_session.lock
+.records_session.lock.flock

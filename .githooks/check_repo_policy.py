@@ -309,6 +309,14 @@ def main() -> int:
 
     if governance_errors:
         return fail("지침 파일은 stock 브랜치에만 존재해야 합니다", governance_errors)
+    # 2026-10-18: 기록 4종 충돌 방지(AGENTS.md §1). 같은 작업 트리의 두 세션이 기록을 동시에 쓰고
+    # 통째로 커밋하던 문제를 막는다. develop/main에는 기록 파일이 없으므로 그 브랜치에서는 검사할 것이 없다.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import records_guard
+
+    record_errors = records_guard.commit_errors(root, [path.replace("\\", "/") for _, path in staged])
+    if record_errors:
+        return fail("기록 파일 충돌 방지 검사 실패", record_errors)
     if errors:
         return fail("저장소 워크플로우 정책 검사 실패", errors)
     return 0
