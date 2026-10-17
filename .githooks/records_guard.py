@@ -202,8 +202,9 @@ def commit_errors(root: Path, staged: list[str]) -> list[str]:
                           "그 세션의 커밋 전 행까지 함께 커밋하게 되므로 막는다. 한 작업 트리에는 한 세션만 둔다.")
         else:
             # 병합 커밋은 상대 트랙이 이미 커밋한 기록을 정상적으로 가져오므로 다른 트랙 검사에서 뺀다.
+            # 자동 병합 커밋(pre-merge-commit)에는 MERGE_HEAD가 아직 없어 훅이 REPO_POLICY_MERGE=1을 준다.
             git_dir = Path(subprocess.check_output(["git", "rev-parse", "--absolute-git-dir"], cwd=root, text=True).strip())
-            merging = (git_dir / "MERGE_HEAD").exists()
+            merging = (git_dir / "MERGE_HEAD").exists() or os.environ.get("REPO_POLICY_MERGE") == "1"
             other = [] if merging else [p for p in rec if (p.startswith("test/")) != (owner.get("role") == "research")]
             if other:
                 errors.append(f"{owner.get('role')} 세션이 다른 트랙 기록({', '.join(other)})을 커밋하려 한다. "
