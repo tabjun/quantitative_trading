@@ -39,6 +39,11 @@
 # 고치기 전 CPU 작업 결과는 `parts/s{시드}/cpu_garch_x100/`에 보존해 보고서에서 전후를 비교한다. 26·26c·27번 결과는 완료 실험이라
 # 다시 돌리지 않고, 영향 범위를 28번 보고서에 적는다.
 #
+# **설계 변경 3(2026-10-18, 버그 수정, 요청 185).** 26c가 쓰던 `fit_tar_garch`(τ 후보 × 시작점 2개, Nelder-Mead 600회)가
+# 반복 상한에서 멈춘 해를 그대로 쓰고 예외를 조용히 건너뛰었다(ETH·BTC 등에서 이어서 최적화하면 로그우도 +40~+93). τ 후보마다 수렴할
+# 때까지 이어서 최적화한 로그우도로 τ를 고르는 `fit_tar_garch_robust`로 바꾸고 진단을 남긴다. GARCH-t 수정과 함께 CPU 작업을 다시 돌린다.
+# 같은 날 재사용 적합 함수를 모두 점검했다: MS-GARCH(제약판)는 20종목 수렴 표시이나 9종목이 허용 경계에 닿아 있다(26c부터 기록된 한계).
+#
 # **고정 조건(26c·27과 같음).** DB `upbit_data_20261005.db`, 20종목(`study_universe`), 15분봉, 창 2023-10-06 ~
 # 2026-10-05, 분할 2025-11-11(전 종목 공통), 내부학습 85%/내부검증 15%(시간순), 예측 구간 15분·30분·1시간·4시간·
 # 12시간, 정시 비겹침 평가, 손실 QLIKE, 가격 정지 두 부분 모형(정지 확률 π × 크기), 모델별 입력 표현은 27번과 같다
@@ -283,6 +288,60 @@ def garch_t_fit_robust(dc: np.ndarray, split_c: int) -> dict:
 
 
 # %% [markdown]
+# ## TAR-GARCH 적합(2026-10-18 버그 수정)
+#
+# 26c는 `engine.regime_garch.fit_tar_garch`를 τ 후보 4개 × 시작점 2개, Nelder-Mead 최대 600회로 부른다. 이 함수는 최적화가 반복
+# 상한에 닿아 멈춰도 수렴 여부를 보지 않고, 예외도 조용히 건너뛴다. 20종목 진단(2026-10-18)에서 고른 해가 상한 600회에서 멈췄고,
+# 같은 τ에서 최적화를 이어가면 로그우도가 더 올랐다(ETH +92.5, BTC +40.1). 그래서 τ 후보마다 같은 시작점 탐색을 한 뒤 가장 나은 해에서
+# 수렴할 때까지(최대 TAR_POLISH_ITER회, 허용오차 1e-4) 이어서 최적화하고, 이어간 로그우도로 τ를 고른다(프로파일 우도). 예외와 미수렴은
+# 진단에 남긴다. 공용 engine은 24·26번 재현을 위해 고치지 않고 이 함수를 28번에만 쓴다.
+
+# %%
+TAR_POLISH_ITER = 4000
+
+
+def fit_tar_garch_robust(r_pct: np.ndarray, sw: np.ndarray, split_idx: int, taus, n_restarts: int, maxiter: int,
+                         quick: bool = False) -> tuple[float, dict, dict]:
+    from scipy.optimize import minimize
+    from engine import regime_garch as rg
+    eps, swt = r_pct[:split_idx], sw[:split_idx]
+    diag = {"τ후보": [], "예외": 0}
+    best_all = None
+    for tau in taus:
+        best = None
+        for x0 in rg._TAR_INITS[:n_restarts]:
+            try:
+                res = minimize(lambda th: -rg.tar_filter(eps, swt, tau, th)[0], x0, method="Nelder-Mead",
+                               options=dict(maxiter=maxiter, xatol=1e-3, fatol=1e-3))
+            except Exception:
+                diag["예외"] += 1
+                continue
+            if best is None or -res.fun > best[0]:
+                best = (-res.fun, res.x, bool(res.success), int(res.nit))
+        if best is None:
+            diag["τ후보"].append({"tau": float(tau), "상태": "모든 시작점 예외"})
+            continue
+        res2 = minimize(lambda th: -rg.tar_filter(eps, swt, tau, th)[0], best[1], method="Nelder-Mead",
+                        options=dict(maxiter=TAR_POLISH_ITER if not quick else 200, xatol=1e-4, fatol=1e-4))
+        ll2 = -res2.fun if np.isfinite(res2.fun) and -res2.fun >= best[0] else best[0]
+        x2 = res2.x if ll2 > best[0] else best[1]
+        diag["τ후보"].append({"tau": float(tau), "탐색_ll": float(best[0]), "탐색_수렴": best[2], "탐색_반복": best[3],
+                             "이어서_ll": float(ll2), "이어서_수렴": bool(res2.success), "이어서_반복": int(res2.nit),
+                             "ll이득": float(ll2 - best[0])})
+        if best_all is None or ll2 > best_all[0]:
+            best_all = (ll2, x2, float(tau), bool(res2.success))
+    if best_all is None:
+        raise RuntimeError(f"TAR-GARCH: 모든 τ에서 적합 실패 {diag}")
+    ll, theta, tau, conv = best_all
+    _, info = rg.tar_filter(r_pct, sw, tau, theta, loglik_upto=split_idx)
+    if info is None:
+        raise RuntimeError("TAR-GARCH: 최종 필터가 발산(info=None)")
+    diag.update(선택_tau=tau, 선택_ll=float(ll), 선택_수렴=conv,
+                최대_ll이득=float(max(c.get("ll이득", 0.0) for c in diag["τ후보"])))
+    return tau, info, diag
+
+
+# %% [markdown]
 # ## CPU 작업: 결정론 모델(시드 0만)과 트리·커널 근사(모든 시드), 무재적합
 
 # %%
@@ -331,13 +390,12 @@ def run_cpu_job(tk: str, seed: int, quick: bool) -> dict:
             try:
                 sw_ = M.tar_switch(dc)
                 taus_ = np.quantile(sw_[M.TAR_SWITCH_BARS:ic], list(M.TAR_TAU_Q))
-                _, tau_, _, info_ = rg.fit_tar_garch(dc * 100, sw_, ic, taus_,
-                                                     n_restarts=M.TAR_RESTARTS if not quick else 1,
-                                                     maxiter=M.TAR_MAXITER if not quick else 100)
-                if info_ is None:
-                    raise RuntimeError("최종 필터가 발산(info=None)")
+                tau_, info_, tdiag = fit_tar_garch_robust(dc * 100, sw_, ic, taus_,
+                                                          n_restarts=M.TAR_RESTARTS if not quick else 1,
+                                                          maxiter=M.TAR_MAXITER if not quick else 100, quick=quick)
                 f_["TAR-GARCH"] = info_
-                meta["tar_tau"] = float(tau_)
+                meta.update(tar_tau=float(tau_), tar_선택_수렴=tdiag["선택_수렴"], tar_최대_ll이득=tdiag["최대_ll이득"],
+                            tar_예외=tdiag["예외"], tar_진단=json.dumps(tdiag["τ후보"], ensure_ascii=False))
             except Exception as e:
                 fails.append(("TAR-GARCH", "*", type(e).__name__, str(e)[:160]))
             timings["TAR-GARCH"] = timings.get("TAR-GARCH", 0) + time.time() - t
@@ -931,6 +989,16 @@ def combine_seed(seed: int, tickers: list[str], quick: bool = False) -> dict:
         c0 = pickle.loads(part_path("cpu", tk, 0, quick=quick).read_bytes())
         cs = c0 if seed == 0 else pickle.loads(part_path("cpu", tk, seed, quick=quick).read_bytes())
         fails += [dict(종목=tk, 시드=seed, 모델=f[0], H=f[1], 예외=f[2], 메시지=f[3]) for f in cs["fails"]]
+        # 적합 품질 게이트(known_pitfalls P8): 최대우도 적합이 시작값에 멈춘 채 "수렴"으로 끝나면 결과를 쓰지 않는다
+        for mt in (c0["meta"], cs["meta"]):
+            if not any(k.startswith("garch_") and k.endswith("_alpha") for k in mt):
+                raise RuntimeError(f"[적합 품질 게이트] {tk} 시드 {mt.get('시드')}: GARCH-t 진단이 없다(수정 전 CPU 작업 결과)")
+            for k in [k for k in mt if k.startswith("garch_") and k.endswith("_alpha")]:
+                be = mt[k.replace("_alpha", "_beta")]
+                if abs(mt[k] - 0.1) < 1e-6 and abs(be - 0.88) < 1e-6:
+                    raise RuntimeError(f"[적합 품질 게이트] {tk} GARCH-t가 arch 시작값(α=0.1, β=0.88)에 고착")
+        if "tar_선택_수렴" not in c0["meta"]:
+            raise RuntimeError(f"[적합 품질 게이트] {tk}: TAR-GARCH 수렴 진단이 없다(수정 전 CPU 작업 결과)")
         r0 = {R["H"]: R for R in c0["results"]}
         for R in cs["results"]:
             H = R["H"]
