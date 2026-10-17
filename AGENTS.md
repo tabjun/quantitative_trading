@@ -698,7 +698,6 @@ uv run pipelines/ingest_text_context.py
 uv run pipelines/build_historical_flow_mart.py
 uv run pipelines/query_historical_flows.py
 uv run pipelines/rebuild_price_mart.py
-uv run pipelines/simulate_and_send.py
 ```
 
 ---
