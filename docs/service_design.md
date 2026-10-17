@@ -271,3 +271,23 @@ LLM 판단은 같은 라벨·같은 비용에서 아래 규칙보다 나아야 �
 | 그 뒤 결과 | `historical_flow_event_stats`: 미래 수익률 1h·4h·24h·3d, 3일 최대 낙폭·반등. **실현 변동성 없음**, 미래 수익률은 방향 정보라 LLM에 넣지 않음 |
 
 30번에 쓰기 전에 알아 둘 한계(S188 지적, 아직 안 고침): (1) 후보 창에 기준 시각(as_of) 필터가 없어, 과거 시점을 재현하는 검증에서는 그 시점 뒤에 끝난 창이나 그 시점에 아직 관측되지 않은 "그 뒤 결과"가 섞일 수 있다. (2) 그 뒤 결과가 미래 봉 1개만 있어도 3일 낙폭을 낸다. (3) 창이 행 기준이다. 30번은 "예측 시점 이전에 끝나고 그 뒤 결과까지 관측된 창만" 쓰는 조건을 따로 걸어야 한다.
+
+## 13. 서비스 코드 구조와 진입점 (S207, 2026-10-18)
+
+도메인 모듈은 계산만 하고, 흐름 조립은 `pipelines/service_pipeline.py` 한곳에서 한다. `main.py`는 설정을 읽어 파이프라인을 한 번 돌리는 얇은 진입점이다(이전 `main.py`는 키워드·종목을 고정한 시연용 데모였다).
+
+| 층 | 모듈 | 주요 클래스·함수 | 책임 |
+| :--- | :--- | :--- | :--- |
+| 진입점 | `main.py` | `parse_args`, `main` | 명령 인자 → `ServiceConfig` → 실행·요약 출력 |
+| 조립 | `pipelines/service_pipeline.py` | `ServiceConfig`, `Step`(추상), `CandleStep`·`NewsStep`·`IndicatorStep`·`BaselineStep`·`JudgeStep`, `RunLog`, `ServicePipeline` | 단계 순서, 실패 시 뒤 단계 건너뜀과 기록, 2.14 형식 상태·자원 기록(`logs/service/`) |
+| 데이터 | `marts/live_candles.py` | `fetch_all` | 실시간 15분봉 |
+| | `contexts/text_context.py`, `pipelines/ingest_text_context.py` | `TextDataCollector`, `TextFeatureBuilder`, `ingest` | 뉴스 수집·시각 규약·15분 특징 |
+| 지표 | `marts/regime_boundaries.py`, `marts/indicators.py` | `compute_boundaries`, `build_all` | 국면 경계, 지표 묶음(국면·GARCH-t·가격 정지) |
+| 판단 | `agents/baselines.py` | `Rule`(추상)·규칙 6종, `RuleInput`, `Decision`, `BaselineSuite` | 규칙 기준선 B0~B5(전략 패턴) |
+| | `agents/risk_judge.py` | `PromptBuilder`, `RiskJudge`, `DecisionLog`, `JudgeResult` | 전처리(지시문) → LLM 판단·근거 → 기록 |
+| 실행기 | `agents/llm_runtime.py` | `LlmServerConfig`, `llm_server`, `option_probs` | 호출 때만 llama-server 적재, 2.14 여유선 확인 |
+
+- 새 단계는 `Step`을, 새 규칙은 `Rule`을 상속해 `run`/`decide`만 구현한다.
+- `risk_judge`를 클래스로 바꾼 뒤 18종목 지시문이 이전 판과 문자 하나까지 같음을 확인했다(동작 불변).
+- **첫 전체 실행**(2026-10-18 04:11, LLM 판단 제외, CPU만): 47.2초, 평균 0.44코어, 최대 메모리 309MB. 시세 18종목 7,189봉 8.5초, 뉴스 228건 31.3초, 지표 18종목 6.7초(GARCH 의심 0), 기준선 126행 0.3초. 기준선 판단 분포(18종목): B1 1시간 유지 14·관망 3·축소 1, B2 12시간 예측 RV 유지 9·관망 5·축소 4, B3 변동성 목표 유지 10·관망 5·축소 3, B4 뉴스 유지 18(최근 6시간 위험 주제 기사 0건). 정확도는 계산하지 않았다(라벨 미확정).
+- 실패 처리 시험: 가짜 단계로 실패를 넣으면 기록하고 뒤 단계를 건너뛴다. 단계 이름이 겹치면 결과가 덮이므로 시작 때 막는다.
