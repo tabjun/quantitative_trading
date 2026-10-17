@@ -3,7 +3,7 @@
 전처리: 스냅숏 JSON(사전 국면, GARCH-t 예측 RV와 그 값이 학습 구간 직전 RV 분포의 몇 분위 칸인지, 가격 정지 비율)과
 `load_news_as_of`(max(발행, 처음 수집) <= as_of)로 고른 종목·시장 기사 제목을 지시문에 넣는다. 미래 수익률 같은
 방향 정보와 유사 흐름 마트는 넣지 않는다(마트 연결은 연구 검증 전 보류).
-판단: 지시문 v1(docs/service_design.md §10-1)의 보기를 A/B/C 한 글자로 두고, 보기 배치 3가지(순환)의 다음 1토큰
+판단: 지시문 v3(v1 = docs/service_design.md §10-1, v2·v3 = §10-7)의 보기를 A/B/C 한 글자로 두고, 보기 배치 3가지(순환)의 다음 1토큰
 확률 평균으로 정한다(잔잔한 국면의 위치 편향 대응). 설명: 판단을 고정한 채 JSON 스키마로 근거를 받는다.
 후처리: 판단과 위험 수준이 어긋나면(축소인데 위험 1~2, 유지인데 위험 4~5) `mismatch`로 표시하고,
 입력·출력·모델 파일 해시를 `decision_log`에 남긴다(페이퍼 기록, 주문 없음).
@@ -32,14 +32,16 @@ DESC = {
     "reduce": "축소: 포지션 비중을 줄인다",
 }
 PERMS = [("keep", "watch", "reduce"), ("reduce", "keep", "watch"), ("watch", "reduce", "keep")]
-SYSTEM_V1 = (
+SYSTEM_V2 = (
     "너는 암호화폐 포지션의 위험 관리자다. 방향(오를지 내릴지)은 예측하지 않는다. 주어진 국면·변동성 지표·뉴스만 근거로, "
     "아래 기준에 따라 세 가지 중 하나를 고른다. 위험 신호가 없으면 유지가 기본이다.\n"
     "- 유지: 위험 신호가 평소 수준이다. 직전 변동성 국면이 Q1~Q3이고, 변동성 예측이 평소 범위이며, 거래소·보안·규제 같은 직접 악재 뉴스가 없다.\n"
     "- 관망: 위험 신호가 엇갈리거나 한 가지만 나쁘다, 또는 판단할 정보가 부족하다.\n"
     "- 축소: 위험 신호가 둘 이상 함께 나쁘다. 예: 요동 국면(Q4~Q5)과 변동성 예측 상승, 직접 악재 뉴스(해킹·입출금 중단·상장 폐지 등), "
-    "가격이 멈춘 봉 증가(유동성 저하).\n"
-    "국면 Q1~Q5는 그 종목의 과거(학습 구간) 직전 변동성 5분위다. Q1이 가장 잔잔하고 Q5가 가장 요동친다."
+    "거래 없는 봉 증가(유동성 저하).\n"
+    "용어: 국면 Q1~Q5는 그 종목의 과거(학습 구간) 직전 변동성 5분위다. Q1이 가장 잔잔하고 Q5가 가장 요동친다. "
+    "liquidity와 price_flat_note는 이미 해석된 문장이므로 그 판정(정상/낮음, 위험 신호인지 아닌지)을 그대로 따른다. "
+    "뉴스가 '종목 기사 없음'이면 종목 고유 악재가 확인되지 않은 것이지 악재가 없다는 증거는 아니다."
 )
 EXPLAIN_SCHEMA = {
     "type": "object",
@@ -51,7 +53,7 @@ EXPLAIN_SCHEMA = {
     },
     "required": ["risk_level", "evidence", "uncertainty", "rationale"],
 }
-PROMPT_VERSION = "v1_20261018"
+PROMPT_VERSION = "v3_20261018"  # v2: 정지 비율 뜻 구분·종목 기사 없음 명시, v3: 유동성·가격 정지를 규칙으로 먼저 해석한 문장으로
 LOG_TABLE = "decision_log"
 
 
@@ -63,6 +65,23 @@ def _level(value: float | None, row: pd.Series | None) -> str | None:
     return f"Q{sum(value >= e for e in edges) + 1}"
 
 
+NO_TRADE_LOW, NO_TRADE_HIGH = 0.05, 0.20  # 초안 경계(§11과 함께 확정): 거래 없는 15분 봉 비율(직전 1일)
+
+
+def _liquidity_label(no_trade: float) -> str:
+    if no_trade >= NO_TRADE_HIGH:
+        return f"낮음(위험 신호): 직전 하루 15분 봉의 {no_trade:.0%}에서 거래가 없었다"
+    if no_trade >= NO_TRADE_LOW:
+        return f"다소 낮음: 직전 하루 15분 봉의 {no_trade:.0%}에서 거래가 없었다"
+    return f"정상(위험 신호 아님): 거래 없는 봉 {no_trade:.0%}"
+
+
+def _flat_label(flat: float, no_trade: float) -> str:
+    if flat >= 0.3 and no_trade < NO_TRADE_LOW:
+        return f"가격이 직전 봉과 같은 봉이 {flat:.0%}지만 거래는 계속 있었다. 호가 한 칸이 가격 대비 커서 생기는 현상이며 위험 신호가 아니다"
+    return f"가격이 직전 봉과 같은 봉 {flat:.0%}(판단 근거로 쓰지 않는다)"
+
+
 def build_state(snap: dict, bounds: pd.DataFrame) -> dict:
     tb = bounds[bounds["ticker"] == snap["ticker"]].set_index("horizon_min")
     rv = snap["garch_t"]["rv_forecast"]
@@ -72,13 +91,19 @@ def build_state(snap: dict, bounds: pd.DataFrame) -> dict:
         "prior_regime": {k: v["regime"] for k, v in snap["regime"]["values"].items()},
         "garch_t_rv_forecast": {k: round(v, 5) for k, v in rv.items()},
         "garch_t_rv_forecast_level": {k: _level(v, tb.loc[int(k[:-1])] if int(k[:-1]) in tb.index else None) for k, v in rv.items()},
-        "price_stall_1d": snap["price_stall"]["1d"],
+        # v3: 4B 모델이 비율의 방향을 거꾸로 읽어(v2 시험: 무체결 0%를 "유동성 극단 악화"로) 규칙으로 먼저 해석한 말을 준다.
+        "liquidity": _liquidity_label(snap["price_stall"]["1d"]["no_trade_share"]),
+        "price_flat_note": _flat_label(snap["price_stall"]["1d"]["zero_return_share"], snap["price_stall"]["1d"]["no_trade_share"]),
         "minutes_since_last_trade": int((pd.Timestamp(snap["data_end_bar"]) - pd.Timestamp(snap["last_trade_bar"])).total_seconds() // 60),
     }
 
 
 def news_lines(news: pd.DataFrame, ticker: str, k_ticker: int = 8, k_market: int = 5) -> list[str]:
     out = []
+    if news.empty or not (news["ticker_hint"] == ticker).any():
+        out.append("[종목 기사 없음] 최근 24시간 이 종목 이름이 제목에 든 기사가 수집되지 않았다(시장 기사만 아래에 있다).")
+    if news.empty:
+        return out
     for tag, k in ((ticker, k_ticker), ("MARKET", k_market)):
         sub = news[news["ticker_hint"] == tag].head(k)
         for _, row in sub.iterrows():
@@ -92,7 +117,7 @@ def _messages(state: dict, news: list[str], perm: tuple[str, ...]) -> list[dict]
     user = ("상태(JSON):\n" + json.dumps(state, ensure_ascii=False) + "\n최근 24시간 뉴스(판단 시각 이전만):\n"
             + ("\n".join(f"- {n}" for n in news) if news else "- 해당 없음(수집된 기사 없음)")
             + f"\n\n질문: 현재 포지션을 어떻게 할 것인가? 보기 {opts}. 보기 글자 하나로만 답하라.")
-    return [{"role": "system", "content": SYSTEM_V1}, {"role": "user", "content": user}]
+    return [{"role": "system", "content": SYSTEM_V2}, {"role": "user", "content": user}]
 
 
 def judge(cfg: LlmServerConfig, state: dict, news: list[str]) -> dict:
