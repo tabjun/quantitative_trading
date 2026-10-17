@@ -740,8 +740,8 @@ def _gpu_task(tk, H, name, seed, quick):
 LIMITS = RES / "parts" / "_limits.json"
 LIMIT_DEFAULT = {"reserve_gb": 6.0, "floor_gb": 4.5, "gpu_reserve_gb": 4.0, "max_gpu_workers": 3, "max_cpu_workers": 4,
                  "track_ram_gb": 15.0,
-                 "est_gb": {"cpu_s0": 6.0, "cpu": 3.0, "gpu": 2.8, "pi": 2.0}}
-# cpu_s0 6.0GB는 커널 2종을 포함한 실측 5.6GB 기준이다. 제외 뒤 첫 작업의 최대 RSS로 다시 재서 낮춘다.
+                 "est_gb": {"cpu_s0": 3.5, "cpu": 3.0, "gpu": 2.8, "pi": 2.0}}
+# cpu_s0 실측: 커널 2종 포함 5.6GB(종목당 약 20분) → 제외 후 3.15GB(약 10~12분), 2026-10-17 ETH·SOL.
 
 
 def limits() -> dict:
