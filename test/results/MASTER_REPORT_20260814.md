@@ -126,7 +126,7 @@ uv run pipelines/rebuild_price_mart.py --tickers all
 타깃은 차분값이다")이 아니었다. 그래서 1~16번 보고서와 교수님 브리프에 전파되지 않았다.
 
 즉 제동 원인은 **"차분 논의 부재"가 아니라 "진단이 계보로 승격되지 않은 것"**이다.
-`AGENTS.md` 2.9b에 규칙으로 성문화했다.
+`AGENTS.md` 2.9.4에 규칙으로 성문화했다.
 
 ---
 
@@ -462,7 +462,7 @@ python test/scripts/gpu_status.py --watch 10 # 학습 중 감시
 | **훅과 문서 불일치** | `AGENTS.md` 2.9는 `test/scripts/`에 재사용 도구를 허용하는데 훅은 신규 `.py`를 무조건 차단 → `TEST_SCRIPTS_ALLOWED` 명시적 허용목록 추가 |
 | **캐시 파일 손상** | `conversation_l2_cache.md`에 이물 태그 `</content>`(HEAD~1부터 있던 기존 손상) 제거 |
 | **산출물 출처** | 재실행이 7월 날짜 디렉터리를 덮어쓰는 문제 → 7월분 git 복원, 재실행분은 `18b_rerun_verification_20260814/`로 분리 |
-| **신설 규칙** | `AGENTS.md` 2.9b(전처리 계보 명시)·2.9c(다종목 테이블 가드) |
+| **신설 규칙** | `AGENTS.md` 2.9.4(전처리 계보 명시)·2.9.2(다종목 테이블 가드) |
 
 ---
 

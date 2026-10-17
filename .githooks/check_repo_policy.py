@@ -45,7 +45,7 @@ TEST_SCRIPTS_ALLOWED = {
     "mcp_client.py",          # MCP 서버(arxiv/HF) 직접 호출기 — AGENTS.md 5절
     "gpu_status.py",          # NVML 깨진 환경용 GPU 상태 조회(학습 중 감시)
     "run_t8_multiseed.sh",    # t8 다중 시드 실행기(잡음 정량화) — 재현 명령 보존
-    "report_header.py",       # 보고서 표준 헤더 생성기(자기완결성) — AGENTS.md 2.9g
+    "report_header.py",       # 보고서 표준 헤더 생성기(자기완결성) — AGENTS.md 2.9.9
     "quick_look.py",          # DB 적재 데이터 빠른 조회·시각화 확인 도구
 }
 
@@ -82,7 +82,7 @@ ARTIFACT_ALLOWED = {
 }
 
 
-# 2026-10-14: 설계는 드라이버 서두 설계 셀에 먼저 쓰고 보고서 "실험 설계" 절로 옮긴다(AGENTS.md 2.9k).
+# 2026-10-14: 설계는 드라이버 서두 설계 셀에 먼저 쓰고 보고서 "실험 설계" 절로 옮긴다(AGENTS.md 2.9.10).
 # 계획서를 test/experiment_specs/에 따로 두자 보고서에 설계가 실리지 않았고, 18번 이후에는 설계가
 # 드라이버 주석에만 남았다. 같은 희석이 되풀이되지 않도록 커밋 단계에서 막는다. 규칙을 만든
 # 시점 이전 실험(27번까지)은 소급 차단하지 않는다.
@@ -152,17 +152,17 @@ def head_text(root: Path, path: str) -> str:
 
 
 def design_errors(root: Path, status: str, path: str) -> list[str]:
-    """AGENTS.md 2.9k 검사: 신규 실험 드라이버의 설계 셀, 보고서의 실험 설계 절과 describe 표."""
+    """AGENTS.md 2.9.10 검사: 신규 실험 드라이버의 설계 셀, 보고서의 실험 설계 절과 describe 표."""
     out: list[str] = []
     if status.startswith("A") and path.startswith(SPECS_PREFIX):
         out.append(f"{path}: test/experiment_specs/는 2026-10-14에 폐지됐습니다. 설계는 드라이버 맨 앞 "
-                   "`# %% [markdown]` 셀의 `## 실험 설계`에 쓰고 보고서로 옮기세요(AGENTS.md 2.9k).")
+                   "`# %% [markdown]` 셀의 `## 실험 설계`에 쓰고 보고서로 옮기세요(AGENTS.md 2.9.10).")
     if status.startswith("A") and path.startswith(MATERIALS_PREFIX):
         base = path.rsplit("/", 1)[1].lower()
         if any(w in base for w in MATERIALS_BLOCKED_WORDS):
             out.append(f"{path}: research_materials/에는 설계서·계획서·보고서 이름의 파일을 두지 않습니다. 설계는 드라이버 "
                        "설계 셀과 보고서 실험 설계 절로, 결과 보고서는 test/results/로 보내세요. 문헌 정리와 "
-                       "알고리즘·방법론 카탈로그, 데이터 정의는 research_materials/에 둘 수 있습니다(AGENTS.md 2.9k).")
+                       "알고리즘·방법론 카탈로그, 데이터 정의는 research_materials/에 둘 수 있습니다(AGENTS.md 2.9.10).")
     if status.startswith("D"):
         return out
     # 소급 보호(2026-10-14): 이미 설계 절·describe 표·설계 출력 호출을 갖춘 과거 보고서·드라이버는 번호와
@@ -172,13 +172,13 @@ def design_errors(root: Path, status: str, path: str) -> list[str]:
         if old:
             new = staged_text(root, path)
             if design_section_ok(old) and not design_section_ok(new):
-                out.append(f"{path}: 기존에 있던 `## 실험 설계` 절의 내용이 사라졌거나 제목만 남았습니다(AGENTS.md 2.9k).")
+                out.append(f"{path}: 기존에 있던 `## 실험 설계` 절의 내용이 사라졌거나 제목만 남았습니다(AGENTS.md 2.9.10).")
             if describe_ok(old) and not describe_ok(new):
                 out.append(f"{path}: 기존에 있던 describe 표(또는 해당 없음 표기)의 내용이 사라졌습니다. 제목만 남기면 인정하지 "
-                           "않습니다(AGENTS.md 2.9k).")
+                           "않습니다(AGENTS.md 2.9.10).")
     if path.startswith(MODELS_PREFIX) and path.endswith(".py"):
         if calls_design(head_text(root, path)) and not calls_design(staged_text(root, path)):
-            out.append(f"{path}: 기존에 있던 `render_design_section` 호출(보고서에 설계 절을 싣는 코드)이 사라졌습니다(AGENTS.md 2.9k).")
+            out.append(f"{path}: 기존에 있던 `render_design_section` 호출(보고서에 설계 절을 싣는 코드)이 사라졌습니다(AGENTS.md 2.9.10).")
     if path.startswith(MODELS_PREFIX) and path.endswith("_test.py"):
         base = path[len(MODELS_PREFIX):]
         num = experiment_number(base)
@@ -193,20 +193,20 @@ def design_errors(root: Path, status: str, path: str) -> list[str]:
             if not lines or lines[0].strip() != "# %% [markdown]" or not any(
                     l.startswith("# ## 실험 설계") for l in cell):
                 out.append(f"{path}: 드라이버 맨 앞 `# %% [markdown]` 셀에 `## 실험 설계` 절이 없습니다. 실행 전에 "
-                           "왜·연구 질문·비교 대상·고정 조건·테스트 케이스·판정 기준을 쓰세요(AGENTS.md 2.9k).")
+                           "왜·연구 질문·비교 대상·고정 조건·테스트 케이스·판정 기준을 쓰세요(AGENTS.md 2.9.10).")
             if not calls_design(text):
                 out.append(f"{path}: 보고서 작성부가 `report_header.render_design_section(__file__)`를 부르지 않습니다. "
-                           "설계 셀 원문을 보고서 서두에 자동으로 실어야 합니다(AGENTS.md 2.9k).")
+                           "설계 셀 원문을 보고서 서두에 자동으로 실어야 합니다(AGENTS.md 2.9.10).")
     if path.startswith(RESULTS_PREFIX) and path.endswith("_report.md"):
         base = path[len(RESULTS_PREFIX):].rsplit("/", 1)[-1]
         num = experiment_number(base)
         if num is not None and num >= DESIGN_RULE_FROM:
             text = staged_text(root, path)
             if not design_section_ok(text):
-                out.append(f"{path}: 보고서 서두에 `## 실험 설계` 절이 없거나 제목뿐입니다(AGENTS.md 2.9k).")
+                out.append(f"{path}: 보고서 서두에 `## 실험 설계` 절이 없거나 제목뿐입니다(AGENTS.md 2.9.10).")
             if not describe_ok(text):
                 out.append(f"{path}: 표준 헤더 5항의 describe 표가 없습니다. `render_standard_header`로 만드세요"
-                           "(AGENTS.md 2.9k).")
+                           "(AGENTS.md 2.9.10).")
     return out
 
 

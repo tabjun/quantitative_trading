@@ -1,4 +1,4 @@
-"""보고서 표준 헤더 생성기 (재사용 도구, AGENTS.md 2.9g).
+"""보고서 표준 헤더 생성기 (재사용 도구, AGENTS.md 2.9.9).
 
 모든 분석·모델링 보고서가 자기완결적이도록 6항목 헤더를 자동 생성한다.
 데이터 조건을 첫 보고서에만 쓰고 생략하면, 나중 보고서만 봐서는 어떤 데이터를 어떻게
@@ -10,7 +10,7 @@
                                  transforms=[("주기제거", "시간대별 변동성 주기가 지속성을 왜곡")])
     print(md)
 
-보고서 서두 구성(AGENTS.md 2.9k): 실행 환경 → 실험 설계(`render_design_section(__file__)`) →
+보고서 서두 구성(AGENTS.md 2.9.10): 실행 환경 → 실험 설계(`render_design_section(__file__)`) →
 표준 헤더(`render_standard_header`, 5항에 describe 표 포함) → 결과.
 
 CLI 확인:
@@ -62,7 +62,7 @@ def _con():
 
 
 def num(v, d: int = 4) -> str:
-    """과학적표기 없이 포맷(AGENTS.md 2.9b)."""
+    """과학적표기 없이 포맷(AGENTS.md 2.9.4)."""
     try:
         f = float(v)
     except (TypeError, ValueError):
@@ -258,7 +258,7 @@ def driver_design_markdown(driver_path: str | Path) -> str:
 
 
 def render_design_section(driver_path: str | Path, title: str = "실험 설계") -> str:
-    """보고서 서두의 '실험 설계' 절(AGENTS.md 2.9k).
+    """보고서 서두의 '실험 설계' 절(AGENTS.md 2.9.10).
 
     설계·기본 설명은 실행 전에 드라이버 서두 `# %% [markdown]` 셀에 먼저 쓰고(중간 캐시),
     보고서를 만들 때 이 함수로 그대로 옮긴다. 손으로 요약해 옮기면 회차가 쌓일수록 설계가
@@ -290,7 +290,7 @@ def _fmt_describe(v, col: str) -> str:
         return f"{int(round(f)):,}"
     if f == 0:
         return "0"
-    if abs(f) < 1:   # 과학적 표기 금지(AGENTS.md 2.9b)
+    if abs(f) < 1:   # 과학적 표기 금지(AGENTS.md 2.9.4)
         return np.format_float_positional(f, precision=4, unique=False, fractional=False, trim="-")
     return f"{f:,.2f}"
 
@@ -355,7 +355,7 @@ def render_standard_header(
     analyzed_tickers: list[str] | None = None,
     selection_reason: pd.DataFrame | None = None,
 ) -> str:
-    """AGENTS.md 2.9g 표준 헤더 6항목을 마크다운으로 생성.
+    """AGENTS.md 2.9.9 표준 헤더 6항목을 마크다운으로 생성.
 
     tickers             : 연구의 분석 대상 모집단(보통 상위 20종목)
     analyzed_tickers    : **이번 회차에서 실제로 돌린 종목**. tickers와 다르면 경고를 싣는다.
@@ -390,7 +390,7 @@ def render_standard_header(
     L.append("## 분석 조건 (표준 헤더)")
     L.append("")
     L.append("> 이 보고서만 읽어도 데이터 조건을 파악할 수 있도록, 매 회차 동일 항목을 싣는다"
-             "(AGENTS.md 2.9g).")
+             "(AGENTS.md 2.9.9).")
     L.append("")
 
     # 1. 데이터 출처·형식

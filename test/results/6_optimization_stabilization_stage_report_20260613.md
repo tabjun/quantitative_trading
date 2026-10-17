@@ -216,7 +216,7 @@ uv run test/models/6_optimization_stabilization_test.py --run-all --profile serv
 
 ## 기초통계량(describe 표)
 
-> 2026-10-14 소급 추가(AGENTS.md 2.9k).
+> 2026-10-14 소급 추가(AGENTS.md 2.9.10).
 
 - 해당 없음(6번은 5번 엔진을 부르는 실행 계획(stage plan)만 출력했고 가격 데이터를 읽지 않았다. 계획상 데이터 조건은 5번 보고서의 describe 표를 본다).
 
