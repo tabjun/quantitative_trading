@@ -50,8 +50,9 @@
 다른 트랙은 `state.md`의 `[ ]`/`[~]` 행만 훑어 충돌할 작업이 있는지 확인한다. 이때 자기 브랜치에 있는 상대 파일은
 옛 사본이므로 **상대 작업 트리의 절대경로**를 읽는다(연구 `~/quantitative_trading/test/state.md`, 서비스
 `~/quantitative_trading_llm/state.md`).
-복원 전에 **작업 트리 잠금**을 먼저 잡는다: 그 트리 루트에서 `python .githooks/records_guard.py claim`(§1). 실패하면
-다른 세션이 그 트리를 쓰는 중이므로 작업을 시작하지 말고 사용자에게 알린다.
+복원 전에 **세션 역할**(§1 "세션 역할": 서비스·연구·점검)을 정하고, 서비스·연구 세션은 자기 트리 루트에서
+`python .githooks/records_guard.py claim --role service|research`로 **작업 트리 잠금**을 먼저 잡는다. 실패하면 다른 세션이
+그 트리를 쓰는 중이거나 역할과 트리가 맞지 않으므로 작업을 시작하지 말고 사용자에게 알린다. 점검 세션은 잠그지 않는다.
 
 ---
 
@@ -67,6 +68,16 @@
   | :--- | :--- | :--- | :--- |
   | 연구 | `test/process.md`·`test/state.md`·`test/history.md`·`test/chat_history.md` | `stock`, `~/quantitative_trading` | `test/` 번호 실험, 연구 문서·메일·포스터 |
   | 서비스 | 루트 `process.md`·`state.md`·`history.md`·`chat_history.md` | `llm-agent`, `~/quantitative_trading_llm`(worktree) | 루트 프레임워크(`marts/`·`contexts/`·`agents/`·`advisors/`·`pipelines/`·`engine/`)의 서비스 구현 |
+  - **세션 역할(2026-10-18)**: 세션을 열면 첫 메시지에서 역할을 밝힌다. 역할이 없으면 세션이 먼저 묻는다.
+    | 역할 | 작업 트리·브랜치 | 쓰는 것 | 기록 |
+    | :--- | :--- | :--- | :--- |
+    | 서비스 | `~/quantitative_trading_llm`, `llm-agent` | 루트 프레임워크 코드·`docs/` | 루트 기록 4종, `S` 번호 |
+    | 연구 | `~/quantitative_trading`, `stock` | `test/` 번호 실험(실시간 시계열 서빙을 위한 연구 포함) | `test/` 기록 4종, 숫자 번호 |
+    | 점검(supervisor) | 두 트리를 **읽기만** | 없음(답변·판정·인계 프롬프트만) | 쓰지 않음 |
+    점검 세션은 어느 트리의 코드·기록도 고치지 않고 커밋하지 않는다. 변경이 필요하면 해당 트랙 세션에 붙여 넣을 인계
+    프롬프트(요청 원문, 근거, 할 일, 하지 말 것)를 만들고, 그 세션이 받아 자기 트랙 기록에 남긴다. 2026-10-17~18에 점검
+    세션이 서비스 기록(S188~S194b)을 직접 써서 서비스 세션과 번호가 겹쳤기 때문이다. `records_guard.py claim --role supervisor`는
+    거부되고, 역할과 브랜치가 맞지 않는 claim(서비스 역할로 stock 트리 등)도 거부된다. 다른 트랙 기록을 커밋하려 해도 훅이 막는다.
   - 저장소 공통 규칙(`AGENTS.md`·훅) 변경은 요청을 받은 세션이 자기 트랙 기록에 남긴다. 한 세션은 다른
     트랙의 기록 파일을 고치지 않는다(병합 충돌 방지). 2026-10-15 이전 기록은 전부 `test/` 쪽에 있다.
   - **요청 인덱스는 트랙별로 따로 매긴다(2026-10-15 A안 확정)**: 연구 트랙은 숫자만(예: `176`), 서비스 트랙은
@@ -79,7 +90,7 @@
     겹쳐 쓰고, 한쪽이 기록 파일을 통째로 커밋해 다른 세션의 커밋 전 행까지 가져갔다. 그래서 `.githooks/records_guard.py`로
     기계적으로 막는다. 이 도구는 작업 디렉터리(cwd)가 아니라 **명령을 실행한 트리**를 잠그므로, 다른 트리를 절대경로로
     고칠 때도 그 트리 루트에서 실행한다.
-    - 세션 시작: `python .githooks/records_guard.py claim`. 살아 있는 다른 claude/codex 세션이 잡고 있으면 거부된다.
+    - 세션 시작: `python .githooks/records_guard.py claim --role service|research`. 살아 있는 다른 claude/codex 세션이 잡고 있으면 거부된다.
       도구를 바꿀 때는 앞 세션에서 `release` 후 끝낸다. 주인 프로세스가 죽은 잠금은 자동으로 무효다.
     - 요청 번호: `python .githooks/records_guard.py next --track service|research --summary "요약"`로만 받는다. 실제 파일을
       다시 읽어 마지막 번호 + 1을 정하고 `chat_history.md`·`state.md`에 예약 행을 바로 쓴다. 이후 그 행의 원문·상태를 채운다.
