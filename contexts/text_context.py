@@ -18,6 +18,7 @@ are optional; RSS and local CSV inputs work out of the box.
 
 from __future__ import annotations
 
+import logging
 import argparse
 import csv
 import hashlib
@@ -39,6 +40,7 @@ from zoneinfo import ZoneInfo
 
 import duckdb
 import pandas as pd
+from common.db import write_changed
 from common.errors import DataIntegrityError, DataSourceError, each
 from database.paths import resolve_db_path, resolve_service_db_path
 
@@ -47,6 +49,8 @@ KST = ZoneInfo("Asia/Seoul")
 MARKET_TAG = "MARKET"  # 특정 종목이 아닌 시장 전체 뉴스의 ticker_hint
 DEFAULT_LOOKBACK_DAYS = 7
 UPBIT_MARKETS_URL = "https://api.upbit.com/v1/market/all?isDetails=false"
+log = logging.getLogger(__name__)
+
 
 DEFAULT_RSS_QUERIES = [
     "bitcoin OR BTC crypto market",
@@ -248,7 +252,9 @@ class TextDataCollector:
         records.extend(self.collect_ticker_rss(max_items_per_source=max_items_per_source))
         records.extend(self.collect_naver_news(max_items=max_items_per_source))
         records.extend(self.collect_local_csv())
-        return self._recent_only(deduplicate_records(records))
+        recent = self._recent_only(deduplicate_records(records))
+        log.info("뉴스 수집: 원본 %d건 → 중복·오래된 기사 뺀 %d건, 실패 출처 %d", len(records), len(recent), len(self.failed_sources))
+        return recent
 
     def _recent_only(self, records: list[TextRecord]) -> list[TextRecord]:
         cutoff = datetime.now(timezone.utc) - timedelta(days=self.lookback_days)
@@ -404,6 +410,7 @@ def ensure_text_schema(con: duckdb.DuckDBPyConnection) -> None:
     if "available_at" not in _columns(con, "text_events_raw"):
         # 2026-10-15 이전 행: published_at·inserted_at이 UTC(시간대 없음). KST로 옮기고, 처음 수집 시각은 inserted_at.
         # 예전 기본 태그 KRW-BTC는 종목 검색이 아니라 시장 검색어에 붙은 값이라 MARKET으로 바꾼다.
+        log.info("text_events_raw 예전 UTC 스키마를 KST·available_at 스키마로 옮긴다")
         con.execute("ALTER TABLE text_events_raw ADD COLUMN available_at TIMESTAMP")
         con.execute(
             "UPDATE text_events_raw SET published_at = published_at + INTERVAL 9 HOUR, "
@@ -419,29 +426,12 @@ class TextFeatureBuilder:
         self.db_path = resolve_service_db_path(db_path)
 
     def persist_raw_records(self, records: Sequence[TextRecord]) -> int:
+        """처음 보는 기사(record_id)만 넣는다. 이미 있는 기사는 다시 쓰지 않으므로 처음 수집 시각이 그대로 남는다.
+        돌려주는 값은 새로 넣은 기사 수다."""
         with duckdb.connect(self.db_path) as con:
             ensure_text_schema(con)
-            if not records:
-                return 0
-            rows = pd.DataFrame([self._record_to_row(record) for record in records])[RAW_COLUMNS]
-            con.register("rows_df", rows)
-            # 다시 수집한 기사는 처음 수집 시각(available_at)을 유지한다.
-            prev = con.execute(
-                "SELECT r.record_id, r.available_at FROM text_events_raw r JOIN rows_df n USING (record_id)"
-            ).df()
-            if len(prev):
-                first_seen = dict(zip(prev["record_id"], pd.to_datetime(prev["available_at"])))
-                rows["available_at"] = [
-                    min(a, first_seen[i]) if i in first_seen and pd.notna(first_seen[i]) else a
-                    for i, a in zip(rows["record_id"], pd.to_datetime(rows["available_at"]))
-                ]
-                con.unregister("rows_df")
-                con.register("rows_df", rows)
-            con.execute("DELETE FROM text_events_raw WHERE record_id IN (SELECT record_id FROM rows_df)")
-            cols = ", ".join(RAW_COLUMNS)
-            con.execute(f"INSERT INTO text_events_raw ({cols}) SELECT {cols} FROM rows_df")
-            con.unregister("rows_df")
-        return len(records)
+        rows = pd.DataFrame([self._record_to_row(record) for record in records], columns=RAW_COLUMNS)
+        return write_changed(self.db_path, "text_events_raw", rows, keys=["record_id"], compare=[]).inserted
 
     def build_and_persist_15m_features(
         self, price_index: pd.DataFrame | None = None, lookback_days: int = DEFAULT_LOOKBACK_DAYS

@@ -21,6 +21,7 @@ import duckdb
 import numpy as np
 import pandas as pd
 
+from common.db import write_changed
 from database.paths import resolve_db_path, resolve_service_db_path
 
 BAR = pd.Timedelta("15min")
@@ -123,12 +124,7 @@ def assign_regime(prior_rv_value: float, row: pd.Series) -> int:
 
 
 def save(df: pd.DataFrame, service_db: str) -> None:
-    with duckdb.connect(service_db) as con:
-        con.register("b", df)
-        con.execute(f"CREATE TABLE IF NOT EXISTS {TABLE} AS SELECT * FROM b WHERE FALSE")
-        con.execute(f"DELETE FROM {TABLE} WHERE version = ?", [VERSION])
-        con.execute(f"INSERT INTO {TABLE} SELECT * FROM b")
-        con.unregister("b")
+    write_changed(service_db, TABLE, df, keys=["version", "ticker", "horizon_min"], compare=["q20", "q40", "q60", "q80", "n_train"])
 
 
 def main() -> None:

@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import logging
 import json
 import math
 import os
@@ -31,6 +32,8 @@ DEFAULT_LLAMA_CPP_DIR = HOME / ".local/opt/llama.cpp-b11630"
 DEFAULT_MODEL_PATH = HOME / ".local/share/llm_models/Qwen3.5-4B-GGUF/Qwen3.5-4B-Q4_K_M.gguf"
 
 GPU_RESERVE_MIB = 4096  # AGENTS.md 2.14: GPU 여유 4GB
+log = logging.getLogger(__name__)
+
 RAM_FLOOR_MIB = 4608  # AGENTS.md 2.14: 사용 가능 RAM 하한 4.5GB
 
 
@@ -84,7 +87,9 @@ def check_headroom(cfg: LlmServerConfig) -> dict[str, int]:
 def llm_server(cfg: LlmServerConfig | None = None, log_path: Path | None = None) -> Iterator[LlmServerConfig]:
     """`with llm_server() as cfg:` 안에서만 서버가 떠 있다."""
     cfg = cfg or LlmServerConfig()
-    check_headroom(cfg)
+    room = check_headroom(cfg)
+    log.info("llama-server 시작: 모델 %s, 문맥 %d×%d, 여유 %s", cfg.model_path.name, cfg.ctx_per_slot, cfg.parallel, room)
+    t0 = time.time()
     env = dict(os.environ, LD_LIBRARY_PATH=str(cfg.llama_cpp_dir), OMP_NUM_THREADS="4")
     cmd = [
         str(cfg.llama_cpp_dir / "llama-server"), "-m", str(cfg.model_path),
@@ -107,6 +112,7 @@ def llm_server(cfg: LlmServerConfig | None = None, log_path: Path | None = None)
             try:
                 with urllib.request.urlopen(cfg.url + "/health", timeout=2) as r:
                     if json.loads(r.read()).get("status") == "ok":
+                        log.info("llama-server 준비 PID %d, %.1f초", proc.pid, time.time() - t0)
                         break
             except (urllib.error.URLError, OSError, ValueError):
                 pass  # 아직 뜨는 중: 시간 초과까지 다시 묻는다
@@ -116,6 +122,7 @@ def llm_server(cfg: LlmServerConfig | None = None, log_path: Path | None = None)
         yield cfg
     finally:
         if proc.poll() is None:
+            log.info("llama-server 종료 PID %d", proc.pid)
             proc.send_signal(signal.SIGTERM)
             try:
                 proc.wait(timeout=30)

@@ -63,7 +63,7 @@ def write_feature_report(
 ## Summary
 - Built at (KST): {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 - DuckDB path: `{db_path}`
-- Raw text records inserted/refreshed: {inserted_count}
+- 이번 수집 기사(최근 기간·중복 제거 뒤): {sum(per_ticker.values())}, 그중 새로 저장: {inserted_count}(이미 있던 기사는 다시 쓰지 않음)
 - 15-minute feature rows generated: {feature_count}
 - 상장 목록에 없어 뺀 종목: {", ".join(dropped) or "해당 없음(전부 상장 중)"}
 - 수집 실패 출처: {"; ".join(f"{k}: {v}" for k, v in failed_sources.items()) or "해당 없음(모든 출처 성공)"}
@@ -87,7 +87,7 @@ def main() -> None:
     args = ap.parse_args()
 
     r = ingest(resolve_service_db_path(), args.lookback_days, args.max_items, args.no_tickers)
-    print(f"[SUCCESS] Inserted/refreshed {r['inserted']} text records ({r['ticker_queries']} ticker queries, dropped {r['dropped']}).")
+    print(f"[SUCCESS] 수집 {r['collected']}건, 새로 저장 {r['inserted']}건 ({r['ticker_queries']} ticker queries, dropped {r['dropped']}).")
     print(f"[SUCCESS] Generated {r['feature_rows']} 15-minute text feature rows.")
     print(f"[SUCCESS] Report saved to {r['report']}")
 
@@ -108,7 +108,7 @@ def ingest(service_db_path: str, lookback_days: int = DEFAULT_LOOKBACK_DAYS, max
         inserted_count, len(features), service_db_path, per_ticker, dropped, collector.dropped_off_topic,
         collector.failed_sources,
     )
-    return {"inserted": inserted_count, "ticker_queries": len(names), "dropped": dropped,
+    return {"collected": len(records), "inserted": inserted_count, "ticker_queries": len(names), "dropped": dropped,
             "feature_rows": len(features), "report": str(report_path), "per_ticker": per_ticker,
             "failed": collector.failed_sources}
 

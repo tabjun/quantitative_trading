@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -25,10 +26,13 @@ import duckdb
 import pandas as pd
 
 from agents.baselines import level_of
+from common.db import add_columns, content_hash, write_changed
 from common.errors import BatchResult, DataIntegrityError, LlmError, each
 from agents.llm_runtime import LlmServerConfig, llm_server, option_probs, post_json
 from contexts.text_context import TextFeatureBuilder
 from database.paths import resolve_service_db_path
+
+log = logging.getLogger(__name__)
 
 OPTIONS = ("keep", "watch", "reduce")
 NAMES = {"keep": "유지", "watch": "관망", "reduce": "축소"}
@@ -141,10 +145,14 @@ class PromptBuilder:
 
 
 class DecisionLog:
-    """판단 결과를 서비스 DB `decision_log`에 쌓는다(페이퍼 기록)."""
+    """판단 결과를 서비스 DB `decision_log`에 쌓는다(페이퍼 기록). 같은 입력(input_hash)의 판단은 한 번만 남기고 다시 쓴다."""
 
     def __init__(self, service_db: str):
         self.service_db = service_db
+
+    @staticmethod
+    def input_hash(state: dict, news: list[str], model_sha256: str) -> str:
+        return content_hash({"state": state, "news": news, "prompt_version": PROMPT_VERSION, "model_sha256": model_sha256})
 
     @staticmethod
     def row(r: JudgeResult, model_file: str, model_sha256: str) -> dict:
@@ -158,17 +166,29 @@ class DecisionLog:
                                        "position_spread": r.position_spread, "option_mass_min": r.option_mass_min,
                                        "explain": r.explain, "mismatch": r.mismatch}, ensure_ascii=False),
             "prompt_version": PROMPT_VERSION, "model_file": model_file, "model_sha256": model_sha256, "calibrated": False,
+            "input_hash": DecisionLog.input_hash(r.state, r.news, model_sha256),
         }
 
+    def lookup(self, hashes: list[str]) -> dict[str, JudgeResult]:
+        """이미 판단한 입력이면 저장된 결과를 돌려준다."""
+        if not hashes:
+            return {}
+        add_columns(self.service_db, LOG_TABLE, {"input_hash": "VARCHAR"})
+        with duckdb.connect(self.service_db, read_only=True) as con:
+            if not con.execute("SELECT COUNT(*) FROM information_schema.tables WHERE table_name = ?", [LOG_TABLE]).fetchone()[0]:
+                return {}
+            rows = con.execute(f"SELECT input_hash, ticker, as_of, input_json, output_json FROM {LOG_TABLE} "
+                               "WHERE input_hash IN (SELECT UNNEST(?))", [hashes]).fetchall()
+        out = {}
+        for h, tk, as_of, inp, outp in rows:
+            i, o = json.loads(inp), json.loads(outp)
+            out[h] = JudgeResult(tk, pd.Timestamp(as_of), o["decision"], o["probs"], o["probs_by_perm"], o["position_spread"],
+                                 o["option_mass_min"], o["explain"], o["mismatch"], i["state"], i["news"])
+        return out
+
     def save(self, rows: list[dict]) -> None:
-        if not rows:
-            return
-        df = pd.DataFrame(rows)
-        with duckdb.connect(self.service_db) as con:
-            con.register("d", df)
-            con.execute(f"CREATE TABLE IF NOT EXISTS {LOG_TABLE} AS SELECT * FROM d WHERE FALSE")
-            con.execute(f"INSERT INTO {LOG_TABLE} SELECT * FROM d")
-            con.unregister("d")
+        add_columns(self.service_db, LOG_TABLE, {"input_hash": "VARCHAR"})
+        write_changed(self.service_db, LOG_TABLE, pd.DataFrame(rows), keys=["input_hash"], compare=[])
 
 
 class RiskJudge:
@@ -217,23 +237,33 @@ class RiskJudge:
             raise DataIntegrityError("지표 묶음이 없다. 지표 단계를 먼저 돌린다")
         return {tk: json.loads(p) for tk, p in snaps}, bounds
 
-    def _judge_one(self, live: LlmServerConfig, snaps: dict[str, dict], bounds: pd.DataFrame, tk: str) -> JudgeResult:
+    def _prepare(self, snaps: dict[str, dict], bounds: pd.DataFrame, tk: str) -> tuple[pd.Timestamp, dict, list[str]]:
         try:
             snap = snaps[tk]
         except KeyError as exc:
             raise DataIntegrityError(f"{tk}의 최신 지표 묶음이 없다") from exc
         as_of = pd.Timestamp(snap["as_of"])
         news = self.news.load_news_as_of(as_of.to_pydatetime(), ticker=tk, lookback_hours=self.news_lookback_hours)
-        return self.decide(live, tk, as_of, self.prompt.state(snap, bounds), self.prompt.news_lines(news, tk))
+        return as_of, self.prompt.state(snap, bounds), self.prompt.news_lines(news, tk)
 
     def run(self, tickers: list[str] | None = None, log_path: Path | None = None) -> BatchResult[str, JudgeResult]:
-        """종목 하나의 실패(응답 이상·지표 없음)는 그 종목만 실패로 남기고 계속한다. 서버를 못 띄우면 예외로 끝난다."""
+        """같은 입력으로 이미 판단한 종목은 저장된 결과를 다시 쓰고, 나머지만 LLM에 묻는다. 다시 물을 종목이 없으면
+        서버를 띄우지 않는다. 종목 하나의 실패는 그 종목만 실패로 남기고 계속한다."""
         snaps, bounds = self._latest()
         model_hash = file_sha256(self.cfg.model_path)
-        with llm_server(self.cfg, log_path=log_path) as live:
-            got = each(tickers or sorted(snaps), lambda tk: self._judge_one(live, snaps, bounds, tk))
-        self.log.save([DecisionLog.row(r, self.cfg.model_path.name, model_hash) for r in got.ok.values()])
-        return got
+        prepared = each(tickers or sorted(snaps), lambda tk: self._prepare(snaps, bounds, tk))
+        hashes = {tk: DecisionLog.input_hash(state, news, model_hash) for tk, (_, state, news) in prepared.ok.items()}
+        stored = self.log.lookup(list(hashes.values()))
+        reused = {tk: stored[h] for tk, h in hashes.items() if h in stored}
+        pending = [tk for tk in prepared.ok if tk not in reused]
+        self.reused = sorted(reused)
+        log.info("판단 재사용 %d종목, 새로 판단 %d종목", len(reused), len(pending))
+        fresh: BatchResult[str, JudgeResult] = BatchResult()
+        if pending:
+            with llm_server(self.cfg, log_path=log_path) as live:
+                fresh = each(pending, lambda tk: self.decide(live, tk, *prepared.ok[tk]))
+            self.log.save([DecisionLog.row(r, self.cfg.model_path.name, model_hash) for r in fresh.ok.values()])
+        return BatchResult({**reused, **fresh.ok}, {**prepared.failed, **fresh.failed})
 
 
 def file_sha256(path: Path, chunk: int = 1 << 24) -> str:

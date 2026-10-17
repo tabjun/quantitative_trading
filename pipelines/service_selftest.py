@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 import tempfile
 from pathlib import Path
@@ -51,17 +52,63 @@ def check_pipeline() -> str:
         def run(self, ctx):
             raise DataSourceError("시험용")
 
+    import duckdb
+
     with tempfile.TemporaryDirectory() as tmp:
-        cfg = ServiceConfig(log_dir=Path(tmp))
+        cfg = ServiceConfig(log_dir=Path(tmp), service_db=str(Path(tmp) / "selftest_service.db"))
         soft = ServicePipeline(cfg, [Ok("a"), Fail("b", required=False), Ok("c")]).run().results
         hard = ServicePipeline(cfg, [Ok("a"), Fail("b", required=True), Ok("c")]).run().results
+        with duckdb.connect(cfg.service_db, read_only=True) as con:
+            runs = dict(con.execute("SELECT status, COUNT(*) FROM ops_runs GROUP BY 1").fetchall())
+            steps = con.execute("SELECT COUNT(*) FROM ops_step_runs").fetchone()[0]
+            fails = con.execute("SELECT COUNT(*) FROM ops_item_failures").fetchone()[0]
+            psets = con.execute("SELECT COUNT(*) FROM ops_param_sets").fetchone()[0]
+        try:
+            ServicePipeline(cfg, [Ok("x"), Ok("x")])
+            raise AssertionError("단계 이름 중복을 막지 않았다")
+        except ValueError:
+            pass
     assert soft["c"].get("done") and "error" in soft["b"], soft
     assert "skipped" in hard["c"], hard
-    try:
-        ServicePipeline(ServiceConfig(log_dir=Path(tempfile.gettempdir())), [Ok("x"), Ok("x")])
-    except ValueError:
-        return "필수 아닌 단계 실패는 계속, 필수 단계 실패는 뒤 단계 건너뜀, 이름 중복 차단"
-    raise AssertionError("단계 이름 중복을 막지 않았다")
+    assert runs == {"partial": 1, "failed": 1} and steps == 6 and fails == 0, (runs, steps, fails)
+    assert psets == 3, psets  # 단계 a·b·c의 빈 설정 묶음은 이름별로 한 번씩만(두 실행이 같은 설정)
+    return "필수 아닌 실패는 계속·필수 실패는 건너뜀·이름 중복 차단, 실행 2회가 partial·failed로, 같은 설정은 한 번만 저장"
+
+
+def check_write_changed() -> str:
+    import duckdb
+
+    from common.db import write_changed
+
+    with tempfile.TemporaryDirectory() as tmp:
+        db = str(Path(tmp) / "w.db")
+        a = pd.DataFrame({"k": [1, 2], "v": [1.0, 2.0], "at": ["x", "y"]})
+        first = write_changed(db, "t", a, ["k"], ["v"])
+        again = write_changed(db, "t", a.assign(at="z"), ["k"], ["v"])  # 비교 밖 열만 바뀜 → 같은 행
+        moved = write_changed(db, "t", pd.DataFrame({"k": [2, 3], "v": [9.0, 3.0], "at": ["q", "q"]}), ["k"], ["v"])
+        with duckdb.connect(db, read_only=True) as con:
+            n = con.execute("SELECT COUNT(*) FROM t").fetchone()[0]
+    assert (first.inserted, again.unchanged, moved.inserted, moved.updated, n) == (2, 2, 1, 1, 3), (first, again, moved, n)
+    return "새 행만 넣고, 바뀐 행만 고치고, 같은 행은 건너뜀"
+
+
+def check_decision_reuse() -> str:
+    from agents.risk_judge import DecisionLog, JudgeResult
+
+    with tempfile.TemporaryDirectory() as tmp:
+        dl = DecisionLog(str(Path(tmp) / "d.db"))
+        r = JudgeResult("KRW-TEST", pd.Timestamp("2026-10-18 04:00"), "keep", {"keep": 0.6, "watch": 0.3, "reduce": 0.1},
+                        [], 0.1, 0.99, {"risk_level": 2, "uncertainty": "낮음", "rationale": "시험", "evidence": ["x"]}, False,
+                        {"ticker": "KRW-TEST"}, ["뉴스"])
+        dl.save([DecisionLog.row(r, "m.gguf", "abc")])
+        dl.save([DecisionLog.row(r, "m.gguf", "abc")])  # 같은 입력을 다시 저장해도 행이 늘지 않는다
+        h = DecisionLog.input_hash(r.state, r.news, "abc")
+        got = dl.lookup([h, DecisionLog.input_hash(r.state, ["다른 뉴스"], "abc")])
+        import duckdb
+        with duckdb.connect(dl.service_db, read_only=True) as con:
+            n = con.execute("SELECT COUNT(*) FROM decision_log").fetchone()[0]
+    assert n == 1 and list(got) == [h] and got[h].decision == "keep", (n, list(got))
+    return "같은 입력의 판단은 한 번만 저장되고 다시 쓰이며, 뉴스가 바뀌면 새로 판단"
 
 
 def _bounds() -> pd.DataFrame:
@@ -139,11 +186,14 @@ def check_headroom() -> str:
 CHECKS: dict[str, Callable[[], str]] = {
     "each 도우미": check_each, "파이프라인 실패 처리": check_pipeline, "규칙 기준선": check_baselines,
     "지시문 전처리": check_prompt_labels, "GARCH-t 적합": check_garch, "뉴스 시각": check_time_alignment,
-    "LLM 여유선": check_headroom,
+    "LLM 여유선": check_headroom, "변경분만 쓰기": check_write_changed, "판단 재사용": check_decision_reuse,
 }
 
 
 def main() -> int:
+    from common.logging_setup import configure_logging
+
+    configure_logging(Path(tempfile.gettempdir()) / "service_selftest_logs", console_level=logging.CRITICAL)  # 서비스 로그와 섞지 않고, 일부러 넣은 실패 로그는 화면에 내지 않는다
     got = each(CHECKS, lambda k: CHECKS[k](), expected=(AssertionError, ServiceError))
     for name in CHECKS:
         print(f"[{'통과' if name in got.ok else '실패'}] {name}: {got.ok.get(name) or got.failed.get(name)}")

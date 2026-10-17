@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from common.logging_setup import configure_logging
 from pipelines.service_pipeline import ServiceConfig, ServicePipeline
 
 
@@ -28,7 +29,9 @@ def parse_args(argv: list[str] | None = None) -> ServiceConfig:
 
 
 def main(argv: list[str] | None = None) -> int:
-    pipeline = ServicePipeline(parse_args(argv))
+    config = parse_args(argv)
+    configure_logging(config.log_dir)
+    pipeline = ServicePipeline(config)
     ctx = pipeline.run()
     print(ServicePipeline.summary(ctx))
     return 1 if any("error" in r for r in ctx.results.values()) else 0

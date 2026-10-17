@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import logging
 import argparse
 import time
 from datetime import datetime
@@ -16,11 +17,14 @@ from datetime import datetime
 import duckdb
 import pandas as pd
 
+from common.db import WriteCount, write_changed
 from common.errors import DataSourceError, each
 from database.paths import resolve_service_db_path
 
 TABLE = "candles_live_15m"
 BAR = pd.Timedelta("15min")
+log = logging.getLogger(__name__)
+
 
 
 def fetch_ticker(ticker: str, count: int) -> pd.DataFrame:
@@ -40,15 +44,10 @@ def fetch_ticker(ticker: str, count: int) -> pd.DataFrame:
     return df[["ticker", "timestamp", "open", "high", "low", "close", "volume", "value", "fetched_at"]]
 
 
-def save(frames: list[pd.DataFrame], service_db: str) -> int:
-    new = pd.concat(frames, ignore_index=True)
-    with duckdb.connect(service_db) as con:
-        con.register("n", new)
-        con.execute(f"CREATE TABLE IF NOT EXISTS {TABLE} AS SELECT * FROM n WHERE FALSE")
-        con.execute(f"DELETE FROM {TABLE} t USING n WHERE t.ticker = n.ticker AND t.timestamp = n.timestamp")
-        con.execute(f"INSERT INTO {TABLE} SELECT * FROM n")
-        con.unregister("n")
-    return len(new)
+def save(frames: list[pd.DataFrame], service_db: str) -> WriteCount:
+    """이미 있는 봉은 값이 같으면 건너뛰고, 거래소가 정정한 봉만 바꾸고, 새 봉만 넣는다."""
+    return write_changed(service_db, TABLE, pd.concat(frames, ignore_index=True), keys=["ticker", "timestamp"],
+                         compare=["open", "high", "low", "close", "volume", "value"])
 
 
 def load_live(service_db: str, ticker: str, start: pd.Timestamp | None = None) -> pd.DataFrame:
@@ -70,11 +69,14 @@ def fetch_all(service_db: str, count: int = 800) -> dict:
         time.sleep(0.2)  # 순차 요청 간격(공개 API)
         return fetch_ticker(tk, count)
 
+    log.info("시세 수집 시작: %d종목 × 최근 %d봉", len(names), count)
     got = each(names, fetch)
     if not got.ok:
         raise DataSourceError(f"모든 종목 시세 수집 실패: {got.failed}")
     span = pd.concat(got.ok.values())
-    return {"tickers": len(got.ok), "dropped": dropped, "failed": got.failed, "bars": save(list(got.ok.values()), service_db),
+    w = save(list(got.ok.values()), service_db)
+    return {"tickers": len(got.ok), "dropped": dropped, "failed": got.failed, "bars": len(span),
+            "inserted": w.inserted, "updated": w.updated, "unchanged": w.unchanged,
             "first": str(span["timestamp"].min()), "last": str(span["timestamp"].max())}
 
 
@@ -84,7 +86,7 @@ def main() -> None:
     ap.add_argument("--service-db", default=None)
     args = ap.parse_args()
     r = fetch_all(resolve_service_db_path(args.service_db), args.count)
-    print(f"{r['tickers']}종목(제외 {r['dropped']}) {r['bars']}봉 저장, 범위 {r['first']} ~ {r['last']}")
+    print(f"{r['tickers']}종목(제외 {r['dropped']}) {r['bars']}봉: 새로 {r['inserted']}, 바뀜 {r['updated']}, 같음 {r['unchanged']}, 범위 {r['first']} ~ {r['last']}")
 
 
 if __name__ == "__main__":

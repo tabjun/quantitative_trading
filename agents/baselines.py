@@ -19,6 +19,7 @@ from datetime import datetime
 import duckdb
 import pandas as pd
 
+from common.db import write_changed
 from common.errors import DataIntegrityError, ServiceError, each
 from contexts.text_context import TextFeatureBuilder
 
@@ -196,10 +197,4 @@ class BaselineSuite:
         return df
 
     def _save(self, df: pd.DataFrame) -> None:
-        with duckdb.connect(self.service_db) as con:
-            con.register("b", df)
-            con.execute(f"CREATE TABLE IF NOT EXISTS {TABLE} AS SELECT * FROM b WHERE FALSE")
-            con.execute(f"DELETE FROM {TABLE} t USING b WHERE t.as_of = b.as_of AND t.ticker = b.ticker "
-                        "AND t.rule = b.rule AND t.rule_version = b.rule_version")
-            con.execute(f"INSERT INTO {TABLE} SELECT * FROM b")
-            con.unregister("b")
+        write_changed(self.service_db, TABLE, df, keys=["as_of", "ticker", "rule", "rule_version"], compare=["decision", "why"])

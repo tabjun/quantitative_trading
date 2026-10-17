@@ -20,6 +20,7 @@ GARCH-t는 연구 26c(`garch_t_fit`·`garch_multistep`·`var_to_rv`)와 같은 �
 
 from __future__ import annotations
 
+import logging
 import argparse
 import json
 from datetime import datetime
@@ -28,6 +29,7 @@ import duckdb
 import numpy as np
 import pandas as pd
 
+from common.db import WriteCount, add_columns, content_hash, write_changed
 from common.errors import BatchResult, DataIntegrityError, ModelFitError, each
 from database.paths import resolve_db_path, resolve_service_db_path
 from marts import live_candles
@@ -39,6 +41,8 @@ FORECAST_MIN = (60, 240, 720)  # 보조 지표 구간 1h·4h·12h
 REGIME_MIN = (60, 240, 720)
 GARCH_SCALES = (100, 1000, 10)  # 연구 28번 garch_t_fit_robust와 같은 순서. 위 모듈 설명의 (2) 참조
 START_ALPHA, START_BETA = 0.1, 0.88  # arch GARCH(1,1) 시작값
+log = logging.getLogger(__name__)
+
 
 
 def load_close(ticker: str, snapshot_db: str, service_db: str) -> pd.Series:
@@ -166,6 +170,8 @@ def build_snapshot(
     grid, r = rb.log_returns(close, halts, end=end_bar)
     as_of = grid[-1] + rb.BAR  # 마지막 닫힌 봉의 종가 시각
     g = garch_t_forecast(grid, r, rb.SPLIT)
+    (log.warning if g["fit_suspect"] else log.info)("%s 지표: 기준 %s, GARCH 척도 ×%d%s", ticker, as_of, g["scale"],
+                                                      ", 적합 의심" if g["fit_suspect"] else "")
     return {
         "ticker": ticker,
         "as_of": str(as_of),
@@ -185,16 +191,14 @@ def build_snapshot(
     }
 
 
-def save(snaps: list[dict], service_db: str) -> None:
+def save(snaps: list[dict], service_db: str) -> WriteCount:
+    """같은 (종목, 기준 시각)에 내용이 같은 지표 묶음이 있으면 다시 쓰지 않는다(생성 시각은 비교에서 뺀다)."""
     df = pd.DataFrame({"as_of": [pd.Timestamp(s["as_of"]) for s in snaps], "ticker": [s["ticker"] for s in snaps],
                        "payload": [json.dumps(s, ensure_ascii=False) for s in snaps],
-                       "created_at": [pd.Timestamp(s["created_at"]) for s in snaps]})
-    with duckdb.connect(service_db) as con:
-        con.register("s", df)
-        con.execute(f"CREATE TABLE IF NOT EXISTS {TABLE} AS SELECT * FROM s WHERE FALSE")
-        con.execute(f"DELETE FROM {TABLE} t USING s WHERE t.ticker = s.ticker AND t.as_of = s.as_of")
-        con.execute(f"INSERT INTO {TABLE} SELECT * FROM s")
-        con.unregister("s")
+                       "created_at": [pd.Timestamp(s["created_at"]) for s in snaps],
+                       "payload_hash": [content_hash({k: v for k, v in s.items() if k != "created_at"}) for s in snaps]})
+    add_columns(service_db, TABLE, {"payload_hash": "VARCHAR"})
+    return write_changed(service_db, TABLE, df, keys=["ticker", "as_of"], compare=["payload_hash"])
 
 
 def build_all(service_db: str, snapshot_db: str, tickers: list[str] | None = None, verbose: bool = False) -> BatchResult[str, dict]:

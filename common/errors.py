@@ -8,9 +8,11 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Callable, Generic, Iterable, TypeVar
 
+log = logging.getLogger(__name__)
 K = TypeVar("K")
 T = TypeVar("T")
 
@@ -53,4 +55,5 @@ def each(keys: Iterable[K], fn: Callable[[K], T], expected: tuple[type[BaseExcep
             out.ok[k] = fn(k)
         except expected as exc:
             out.failed[k] = f"{type(exc).__name__}: {exc}"
+            log.warning("항목 실패 %s: %s", k, out.failed[k])
     return out
