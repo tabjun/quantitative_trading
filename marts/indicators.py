@@ -8,10 +8,11 @@ GARCH-t는 연구 26c(`garch_t_fit`·`garch_multistep`·`var_to_rv`)와 같은 �
 학습 구간으로 추정)로 나눈 15분 수익률 × 100에 GARCH(1,1)-t(평균 0)를 학습 구간(분할 2025-11-11 전)으로 한 번
 적합하고, 그 뒤는 모수를 고정해 필터만 한다. 다단계 분산을 주기 스케일로 되돌려 창 RV로 바꾼다.
 **연구와 다른 점** (1) 내부 검증 보정 계수 c와 가격 정지 두 부분 모형(π)을 쓰지 않는다. 그래서 수준이 연구 최종
-예측과 다를 수 있고, 출력에 `calibration: "없음"`으로 표시한다. (2) 수익률 척도를 ×100이 아니라 ×1000으로 적합한다.
-×100에서는 입력 표준편차가 약 0.25라 arch 최적화가 초깃값(α=0.1, β=0.88) 근처에서 5회 만에 멈추는 종목이 있다
-(2026-10-18 진단: 연구 26c 20종목 중 AQT·BTC·MOC·STRAX·XLM·XRP 6종목, 같은 척도 로그우도가 BTC 132.6·MOC 625.3 낮음).
-척도만 바꾼 것이라 모형은 같다(ω만 척도² 배). 적합 뒤 모수가 초깃값과 같으면 `fit_suspect`로 표시한다.
+예측과 다를 수 있고, 출력에 `calibration: "없음"`으로 표시한다. (2) 척도 하나로 적합하지 않고 연구 28번의
+`garch_t_fit_robust`와 같은 규칙을 쓴다(2026-10-18 S201): ×100·×1000·×10 척도로 각각 적합하고, 수렴 플래그 0이며 arch 시작값
+(α=0.1, β=0.88)에 고착되지 않은 해 가운데 ×100 척도로 환산한 로그우도가 가장 큰 해를 쓴다. ×100 하나로 적합하던 26c는
+20종목 중 6종목이 시작값에 고착돼 최대우도가 아니었다(BTC 로그우도 132.6·MOC 625.3 낮음). 척도마다 결과를 `tried`에 남기고,
+조건을 만족하는 해가 없으면 `fit_suspect`로 표시한다. 사양(FIGARCH 등) 변경은 28번 결과를 본 뒤 정한다.
 이 값의 정확도는 계산하지 않는다(누설 규칙).
 
     python -m marts.indicators            # 상장 중인 연구 종목 전부, 순차
@@ -35,7 +36,8 @@ SNAPSHOT_DB = "data/upbit_data_20261012.db"
 TABLE = "indicator_snapshots"
 FORECAST_MIN = (60, 240, 720)  # 보조 지표 구간 1h·4h·12h
 REGIME_MIN = (60, 240, 720)
-GARCH_SCALE = 1000.0  # 연구 26c는 100. 위 모듈 설명의 (2) 참조
+GARCH_SCALES = (100, 1000, 10)  # 연구 28번 garch_t_fit_robust와 같은 순서. 위 모듈 설명의 (2) 참조
+START_ALPHA, START_BETA = 0.1, 0.88  # arch GARCH(1,1) 시작값
 
 
 def load_close(ticker: str, snapshot_db: str, service_db: str) -> pd.Series:
@@ -78,11 +80,28 @@ def garch_t_forecast(grid: pd.DatetimeIndex, r: np.ndarray, split: pd.Timestamp)
     ok = np.isfinite(d)
     gc, dc = grid[ok], d[ok]
     split_c = int(np.searchsorted(gc, split))
-    x = dc * GARCH_SCALE
-    res = arch_model(x[:split_c], mean="Zero", vol="GARCH", p=1, q=1, dist="t").fit(disp="off", show_warning=False)
+    tried, best = [], None
+    for scale in GARCH_SCALES:
+        res = arch_model(dc[:split_c] * scale, mean="Zero", vol="GARCH", p=1, q=1, dist="t").fit(disp="off", show_warning=False)
+        p = res.params
+        al, be = float(p["alpha[1]"]), float(p["beta[1]"])
+        stuck = abs(al - START_ALPHA) < 1e-6 and abs(be - START_BETA) < 1e-6
+        ll100 = float(res.loglikelihood + split_c * np.log(scale / 100.0))  # 밀도 척도 변환: LL(×100) = LL(×k) + n·log(k/100)
+        ok = int(res.convergence_flag) == 0 and not stuck and np.isfinite(ll100)
+        tried.append({"scale": scale, "convergence_flag": int(res.convergence_flag), "stuck_at_start": bool(stuck),
+                      "loglik_x100": ll100, "iterations": int(res.optimization_result.nit), "ok": bool(ok)})
+        if ok and (best is None or ll100 > best[0]):
+            best = (ll100, scale, res)
+    suspect = best is None
+    if best is None:  # 조건을 만족하는 해가 없으면 로그우도 최대 해를 쓰고 의심 표시
+        i = int(np.argmax([t_["loglik_x100"] for t_ in tried]))
+        scale = tried[i]["scale"]
+        res = arch_model(dc[:split_c] * scale, mean="Zero", vol="GARCH", p=1, q=1, dist="t").fit(disp="off", show_warning=False)
+    else:
+        _, scale, res = best
+    x = dc * scale
     p = res.params
     om, al, be = float(p["omega"]), float(p["alpha[1]"]), float(p["beta[1]"])
-    suspect = res.convergence_flag != 0 or (abs(al - 0.1) < 1e-6 and abs(be - 0.88) < 1e-6)
     cv = np.asarray(res.conditional_volatility) ** 2
     h = cv[split_c - 1]
     for xi in x[split_c - 1:]:  # 학습 끝 이후는 모수 고정 필터. 마지막 반복이 다음 봉(as_of 이후 첫 봉)의 분산
@@ -97,10 +116,10 @@ def garch_t_forecast(grid: pd.DatetimeIndex, r: np.ndarray, split: pd.Timestamp)
         hp = om * geo + phi ** k * h  # 봉별 주기 제거 분산(척도² 단위)
         fut = pd.date_range(last + rb.BAR, periods=m, freq=rb.BAR)
         c2 = periodic_scale(grid, r, split, slots=pd.Index(fut.dayofweek * 24 + fut.hour)) ** 2
-        out[f"{H}m"] = float(np.sqrt(np.sum(hp * c2)) / GARCH_SCALE)
+        out[f"{H}m"] = float(np.sqrt(np.sum(hp * c2)) / scale)
     return {"rv_forecast": out, "params": {"omega": om, "alpha": al, "beta": be, "nu": float(p.get("nu", np.nan))},
-            "n_fit": split_c, "fit_suspect": bool(suspect), "iterations": int(res.optimization_result.nit),
-            "loglik": float(res.loglikelihood)}
+            "n_fit": split_c, "fit_suspect": bool(suspect), "scale": scale, "tried": tried,
+            "iterations": int(res.optimization_result.nit)}
 
 
 def regime_now(grid: pd.DatetimeIndex, r: np.ndarray, bounds: pd.DataFrame) -> dict:
@@ -149,11 +168,11 @@ def build_snapshot(
         "last_trade_bar": str(close.index.max()),
         "regime": {"version": rb.VERSION, "values": regime_now(grid, r, bounds[bounds["ticker"] == ticker])},
         "garch_t": {
-            "source": "GARCH(1,1)-t, 주기 스케일 보정, 연구 26c 절차(척도 ×1000)",
+            "source": "GARCH(1,1)-t, 주기 스케일 보정, 연구 26c 절차 + 28번 다중 척도 선택",
             "fit_end": str(rb.SPLIT), "fit_start": str(grid[0]), "n_fit": g["n_fit"],
             "calibration": "없음(연구의 보정 계수 c·두 부분 모형 π 미적용)",
             "params": g["params"], "rv_forecast": g["rv_forecast"], "forecast_from": str(as_of),
-            "fit_suspect": g["fit_suspect"], "iterations": g["iterations"],
+            "fit_suspect": g["fit_suspect"], "scale": g["scale"], "tried": g["tried"], "iterations": g["iterations"],
         },
         "price_stall": stall_ratio(close, grid, r),
         "timesfm": {"status": "보류", "note": "이번 세션 GPU는 llm_runtime 경유 단발 호출만 허용"},
