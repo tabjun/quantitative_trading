@@ -208,8 +208,8 @@ test/images/ {번호}_{실험약칭}_{YYYYMMDD}/{번호}_{실험약칭}_{부분}
 
 ### 2.4 메일은 UTF-8 기준으로 다룬다
 
-- 한국어 메일 본문은 UTF-8/MIME-safe로 보낸다(PowerShell inline here-string 조합 방식 피함).
-  재사용 가능한 메일 도구만 `test/scripts/`에 둔다.
+- 한국어 메일 본문은 UTF-8로 보낸다. 메일은 claude.ai Gmail 커넥터로만 보낸다(§5). 메일 본문을 코드에
+  하드코딩한 발송 스크립트는 만들지 않는다(2026-10-18 `send_email.py`의 1회용 프리셋 24개를 삭제한 이유).
 - 결과 해석을 좌우하는 용어(persistence, collapse, variance_ratio, direction accuracy, MASE,
   trend_corr 등)는 독자가 이전 문서를 안 읽었다고 가정하고 매 문서·메일에서 `쉬운 정의 → 예시 →
   이번 실험에서의 작용 → 좋은/나쁜 신호와 예외` 순으로 다시 푼다.
@@ -657,9 +657,11 @@ n8n/Cron/CI/Docker/Kubernetes 설계, 학교 서버 커널 실행 절차·파라
 | `hf-cli` (스킬) | `hf-cli@huggingface-skills` 플러그인 + `hf` CLI(`uv tool install huggingface_hub`) | 모델·데이터셋·Space 검색(`hf models ls --search`), HF 논문 검색(`hf papers search`) | 익명 가능, `HF_TOKEN` 있으면 rate limit 완화 |
 | Gmail (claude.ai 커넥터) | Claude 계정 연동(저장소 설정 아님) | 메일 읽기·검색·라벨·답장·발송 | 계정 연동만 하면 되고 별도 인증 절차가 없다 |
 
-**메일 발송은 `test/scripts/send_email.py`(SMTP, `MAIL_PROVIDER=naver|gmail`)를 계속 쓴다.**
-프리셋 체계가 이 스크립트에 모여 있기 때문이다. 메일을 읽거나 검색하거나 답장해야 할 때만
-claude.ai Gmail 커넥터를 쓴다.
+**메일은 claude.ai Gmail 커넥터로 보낸다(2026-10-18 전환).** 절차: 커넥터로 초안을 만든다(그림은 인라인 첨부, 첨부 합계
+25MB 이하, 보고서는 GitHub 렌더링 링크) → 사용자가 Gmail에서 초안을 확인한다 → 사용자 승인 뒤 그 초안을 보낸다. 초안이
+"발송 전 드라이런"을 대신한다. 예전 SMTP 스크립트 `test/scripts/send_email.py`는 본문을 하드코딩한 1회용 프리셋 24개였고 서버에
+계정 정보도 없어 삭제했다(git 이력에서 복원 가능). **도구 차이(§1 도구 동일 수행의 예외)**: 커넥터는 Claude 세션에만 있다.
+Codex 세션은 메일 본문·첨부 목록을 써서 넘기고, 발송은 Claude 세션이 한다.
 
 과거에 `@gongrzhe/server-gmail-autoauth-mcp`(자체 Google OAuth 앱 기반)를 등록해서 썼으나,
 공식 커넥터가 같은 기능을 모두 제공하므로 2026-10-12에 제거했다. 자체 OAuth 앱을 다시
