@@ -25,6 +25,7 @@ import duckdb
 import pandas as pd
 
 from agents.baselines import level_of
+from common.errors import BatchResult, DataIntegrityError, LlmError, each
 from agents.llm_runtime import LlmServerConfig, llm_server, option_probs, post_json
 from contexts.text_context import TextFeatureBuilder
 from database.paths import resolve_service_db_path
@@ -199,8 +200,11 @@ class RiskJudge:
         ]
         d = post_json(live, "/v1/chat/completions", {"messages": msgs, "max_tokens": 400, "temperature": 0,
                       "response_format": {"type": "json_schema", "json_schema": {"name": "explain", "schema": EXPLAIN_SCHEMA}}})
-        explain = json.loads(d["choices"][0]["message"]["content"])
-        risk = explain["risk_level"]
+        try:
+            explain = json.loads(d["choices"][0]["message"]["content"])
+            risk = explain["risk_level"]
+        except (KeyError, IndexError, TypeError, ValueError) as exc:  # 스키마를 강제해도 잘린 응답 등은 가능하다
+            raise LlmError(f"근거 응답을 읽을 수 없다: {exc}") from exc
         mismatch = (decision == "reduce" and risk <= 2) or (decision == "keep" and risk >= 4)
         return JudgeResult(ticker, as_of, decision, probs, per_perm, spread, min(masses), explain, bool(mismatch), state, news)
 
@@ -209,21 +213,27 @@ class RiskJudge:
             snaps = con.execute("SELECT ticker, payload FROM indicator_snapshots "
                                 "WHERE as_of = (SELECT MAX(as_of) FROM indicator_snapshots)").fetchall()
             bounds = con.execute("SELECT * FROM regime_boundaries").df()
+        if not snaps:
+            raise DataIntegrityError("지표 묶음이 없다. 지표 단계를 먼저 돌린다")
         return {tk: json.loads(p) for tk, p in snaps}, bounds
 
-    def run(self, tickers: list[str] | None = None, log_path: Path | None = None) -> list[JudgeResult]:
+    def _judge_one(self, live: LlmServerConfig, snaps: dict[str, dict], bounds: pd.DataFrame, tk: str) -> JudgeResult:
+        try:
+            snap = snaps[tk]
+        except KeyError as exc:
+            raise DataIntegrityError(f"{tk}의 최신 지표 묶음이 없다") from exc
+        as_of = pd.Timestamp(snap["as_of"])
+        news = self.news.load_news_as_of(as_of.to_pydatetime(), ticker=tk, lookback_hours=self.news_lookback_hours)
+        return self.decide(live, tk, as_of, self.prompt.state(snap, bounds), self.prompt.news_lines(news, tk))
+
+    def run(self, tickers: list[str] | None = None, log_path: Path | None = None) -> BatchResult[str, JudgeResult]:
+        """종목 하나의 실패(응답 이상·지표 없음)는 그 종목만 실패로 남기고 계속한다. 서버를 못 띄우면 예외로 끝난다."""
         snaps, bounds = self._latest()
-        tickers = tickers or sorted(snaps)
         model_hash = file_sha256(self.cfg.model_path)
-        results = []
         with llm_server(self.cfg, log_path=log_path) as live:
-            for tk in tickers:
-                snap = snaps[tk]
-                as_of = pd.Timestamp(snap["as_of"])
-                news = self.news.load_news_as_of(as_of.to_pydatetime(), ticker=tk, lookback_hours=self.news_lookback_hours)
-                results.append(self.decide(live, tk, as_of, self.prompt.state(snap, bounds), self.prompt.news_lines(news, tk)))
-        self.log.save([DecisionLog.row(r, self.cfg.model_path.name, model_hash) for r in results])
-        return results
+            got = each(tickers or sorted(snaps), lambda tk: self._judge_one(live, snaps, bounds, tk))
+        self.log.save([DecisionLog.row(r, self.cfg.model_path.name, model_hash) for r in got.ok.values()])
+        return got
 
 
 def file_sha256(path: Path, chunk: int = 1 << 24) -> str:

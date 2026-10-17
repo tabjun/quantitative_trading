@@ -16,6 +16,7 @@ from datetime import datetime
 import duckdb
 import pandas as pd
 
+from common.errors import DataSourceError, each
 from database.paths import resolve_service_db_path
 
 TABLE = "candles_live_15m"
@@ -26,9 +27,12 @@ def fetch_ticker(ticker: str, count: int) -> pd.DataFrame:
     import pyupbit
 
     fetched_at = datetime.now()  # 서버 시간대 = KST
-    df = pyupbit.get_ohlcv(ticker, interval="minute15", count=count)
-    if df is None or df.empty:
-        return pd.DataFrame()
+    try:
+        df = pyupbit.get_ohlcv(ticker, interval="minute15", count=count)
+    except (OSError, ValueError) as exc:
+        raise DataSourceError(f"{ticker} 시세 요청 실패: {exc}") from exc
+    if df is None or df.empty:  # pyupbit는 요청 실패를 None으로 돌려준다
+        raise DataSourceError(f"{ticker} 시세 응답이 비었다")
     df = df.reset_index().rename(columns={"index": "timestamp"})
     df = df[pd.to_datetime(df["timestamp"]) + BAR <= fetched_at]  # 닫힌 봉만
     df.insert(0, "ticker", ticker)
@@ -37,9 +41,7 @@ def fetch_ticker(ticker: str, count: int) -> pd.DataFrame:
 
 
 def save(frames: list[pd.DataFrame], service_db: str) -> int:
-    new = pd.concat([f for f in frames if len(f)], ignore_index=True)
-    if new.empty:
-        return 0
+    new = pd.concat(frames, ignore_index=True)
     with duckdb.connect(service_db) as con:
         con.register("n", new)
         con.execute(f"CREATE TABLE IF NOT EXISTS {TABLE} AS SELECT * FROM n WHERE FALSE")
@@ -63,13 +65,16 @@ def fetch_all(service_db: str, count: int = 800) -> dict:
     from pipelines.ingest_text_context import listed_names, study_universe
 
     names, dropped = listed_names(study_universe(service_db))
-    frames = []
-    for tk in names:
-        frames.append(fetch_ticker(tk, count))
-        time.sleep(0.2)
-    n = save(frames, service_db)
-    span = pd.concat([f for f in frames if len(f)])
-    return {"tickers": len(names), "dropped": dropped, "bars": n,
+
+    def fetch(tk: str) -> pd.DataFrame:
+        time.sleep(0.2)  # 순차 요청 간격(공개 API)
+        return fetch_ticker(tk, count)
+
+    got = each(names, fetch)
+    if not got.ok:
+        raise DataSourceError(f"모든 종목 시세 수집 실패: {got.failed}")
+    span = pd.concat(got.ok.values())
+    return {"tickers": len(got.ok), "dropped": dropped, "failed": got.failed, "bars": save(list(got.ok.values()), service_db),
             "first": str(span["timestamp"].min()), "last": str(span["timestamp"].max())}
 
 

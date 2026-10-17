@@ -17,11 +17,14 @@ import os
 import signal
 import subprocess
 import time
+import urllib.error
 import urllib.request
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator
+
+from common.errors import LlmError, ResourceUnavailable
 
 HOME = Path.home()
 DEFAULT_LLAMA_CPP_DIR = HOME / ".local/opt/llama.cpp-b11630"
@@ -50,11 +53,14 @@ class LlmServerConfig:
 
 
 def gpu_free_mib() -> int:
-    out = subprocess.run(
-        ["nvidia-smi", "--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits"],
-        capture_output=True, text=True, check=True,
-    ).stdout.strip().splitlines()[0]
-    used, total = (int(x) for x in out.split(","))
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, check=True, timeout=10,
+        ).stdout.strip().splitlines()[0]
+        used, total = (int(x) for x in out.split(","))
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError) as exc:
+        raise ResourceUnavailable(f"GPU 상태를 읽을 수 없다: {exc}") from exc
     return total - used
 
 
@@ -62,15 +68,15 @@ def ram_available_mib() -> int:
     for line in Path("/proc/meminfo").read_text().splitlines():
         if line.startswith("MemAvailable:"):
             return int(line.split()[1]) // 1024
-    raise RuntimeError("/proc/meminfo에 MemAvailable이 없다")
+    raise ResourceUnavailable("/proc/meminfo에 MemAvailable이 없다")
 
 
 def check_headroom(cfg: LlmServerConfig) -> dict[str, int]:
-    """띄워도 2.14 여유선이 지켜지는지 확인한다. 부족하면 RuntimeError."""
+    """띄워도 2.14 여유선이 지켜지는지 확인한다. 부족하면 ResourceUnavailable."""
     gpu, ram = gpu_free_mib(), ram_available_mib()
     need_gpu, need_ram = cfg.gpu_budget_mib + GPU_RESERVE_MIB, cfg.ram_budget_mib + RAM_FLOOR_MIB
     if gpu < need_gpu or ram < need_ram:
-        raise RuntimeError(f"자원 부족: GPU 여유 {gpu}MiB(필요 {need_gpu}), RAM 여유 {ram}MiB(필요 {need_ram})")
+        raise ResourceUnavailable(f"GPU 여유 {gpu}MiB(필요 {need_gpu}), RAM 여유 {ram}MiB(필요 {need_ram})")
     return {"gpu_free_mib": gpu, "ram_available_mib": ram}
 
 
@@ -87,20 +93,25 @@ def llm_server(cfg: LlmServerConfig | None = None, log_path: Path | None = None)
         "--jinja", "--chat-template-kwargs", '{"enable_thinking":false}', *cfg.extra_args,
     ]
     log = open(log_path, "ab") if log_path else subprocess.DEVNULL
-    proc = subprocess.Popen(cmd, env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+    try:
+        proc = subprocess.Popen(cmd, env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+    except OSError as exc:
+        if log_path:
+            log.close()
+        raise LlmError(f"llama-server를 실행할 수 없다: {exc}") from exc
     try:
         deadline = time.time() + cfg.startup_timeout_s
         while True:
             if proc.poll() is not None:
-                raise RuntimeError(f"llama-server가 시작 중 종료됐다(코드 {proc.returncode})")
+                raise LlmError(f"llama-server가 시작 중 종료됐다(코드 {proc.returncode})")
             try:
                 with urllib.request.urlopen(cfg.url + "/health", timeout=2) as r:
                     if json.loads(r.read()).get("status") == "ok":
                         break
-            except Exception:
-                pass
+            except (urllib.error.URLError, OSError, ValueError):
+                pass  # 아직 뜨는 중: 시간 초과까지 다시 묻는다
             if time.time() > deadline:
-                raise RuntimeError("llama-server 시작 시간 초과")
+                raise LlmError(f"llama-server 시작 시간 초과({cfg.startup_timeout_s}초)")
             time.sleep(1)
         yield cfg
     finally:
@@ -117,8 +128,11 @@ def llm_server(cfg: LlmServerConfig | None = None, log_path: Path | None = None)
 
 def post_json(cfg: LlmServerConfig, path: str, body: dict, timeout: int = 300) -> dict:
     req = urllib.request.Request(cfg.url + path, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read())
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read())
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        raise LlmError(f"LLM 요청 실패({path}): {exc}") from exc
 
 
 def option_probs(cfg: LlmServerConfig, messages: list[dict], letters: tuple[str, ...]) -> tuple[dict[str, float], float]:
@@ -127,12 +141,16 @@ def option_probs(cfg: LlmServerConfig, messages: list[dict], letters: tuple[str,
         "messages": messages, "max_tokens": 1, "temperature": 0,
         "logprobs": True, "top_logprobs": 20, "cache_prompt": False,
     })
+    try:
+        top = d["choices"][0]["logprobs"]["content"][0]["top_logprobs"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise LlmError(f"응답에 다음 토큰 확률이 없다: {exc}") from exc
     raw: dict[str, float] = {}
-    for t in d["choices"][0]["logprobs"]["content"][0]["top_logprobs"]:
+    for t in top:
         k = t["token"].strip()
         if k in letters:
             raw[k] = raw.get(k, 0.0) + math.exp(t["logprob"])
     mass = sum(raw.values())
     if mass == 0:
-        raise RuntimeError("상위 확률에 보기 글자가 없다")
+        raise LlmError("상위 확률에 보기 글자가 없다")
     return {k: raw.get(k, 0.0) / mass for k in letters}, mass

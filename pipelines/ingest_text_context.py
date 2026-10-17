@@ -52,7 +52,7 @@ def listed_names(universe: list[str]) -> tuple[dict[str, str], list[str]]:
 
 def write_feature_report(
     inserted_count: int, feature_count: int, db_path: str, per_ticker: dict[str, int], dropped: list[str],
-    off_topic: dict[str, int], output_dir: str = "logs/text_context",
+    off_topic: dict[str, int], failed_sources: dict[str, str], output_dir: str = "logs/text_context",
 ) -> Path:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -66,6 +66,7 @@ def write_feature_report(
 - Raw text records inserted/refreshed: {inserted_count}
 - 15-minute feature rows generated: {feature_count}
 - 상장 목록에 없어 뺀 종목: {", ".join(dropped) or "해당 없음(전부 상장 중)"}
+- 수집 실패 출처: {"; ".join(f"{k}: {v}" for k, v in failed_sources.items()) or "해당 없음(모든 출처 성공)"}
 
 ## 이번 수집 기사 수(태그별)
 {lines or "- 해당 없음(수집 0건)"}
@@ -104,10 +105,12 @@ def ingest(service_db_path: str, lookback_days: int = DEFAULT_LOOKBACK_DAYS, max
     inserted_count = builder.persist_raw_records(records)
     features = builder.build_and_persist_15m_features(lookback_days=lookback_days)
     report_path = write_feature_report(
-        inserted_count, len(features), service_db_path, per_ticker, dropped, collector.dropped_off_topic
+        inserted_count, len(features), service_db_path, per_ticker, dropped, collector.dropped_off_topic,
+        collector.failed_sources,
     )
     return {"inserted": inserted_count, "ticker_queries": len(names), "dropped": dropped,
-            "feature_rows": len(features), "report": str(report_path), "per_ticker": per_ticker}
+            "feature_rows": len(features), "report": str(report_path), "per_ticker": per_ticker,
+            "failed": collector.failed_sources}
 
 
 if __name__ == "__main__":

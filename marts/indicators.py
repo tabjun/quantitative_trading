@@ -28,6 +28,7 @@ import duckdb
 import numpy as np
 import pandas as pd
 
+from common.errors import BatchResult, DataIntegrityError, ModelFitError, each
 from database.paths import resolve_db_path, resolve_service_db_path
 from marts import live_candles
 from marts import regime_boundaries as rb
@@ -42,8 +43,11 @@ START_ALPHA, START_BETA = 0.1, 0.88  # arch GARCH(1,1) 시작값
 
 def load_close(ticker: str, snapshot_db: str, service_db: str) -> pd.Series:
     """스냅숏(연구 창 시작부터) 뒤에 실시간 봉을 이어 붙인다. 겹치는 시각은 스냅숏 값을 쓴다."""
-    with duckdb.connect(snapshot_db, read_only=True) as con:
-        snap = rb.load_close(con, ticker, rb.DATA_START, pd.Timestamp("2100-01-01"))
+    try:
+        with duckdb.connect(snapshot_db, read_only=True) as con:
+            snap = rb.load_close(con, ticker, rb.DATA_START, pd.Timestamp("2100-01-01"))
+    except LookupError as exc:
+        raise DataIntegrityError(str(exc)) from exc
     live = live_candles.load_live(service_db, ticker, start=snap.index.max() + rb.BAR)
     if len(live):
         snap = pd.concat([snap, pd.Series(live["close"].astype(float).clip(lower=1e-9).to_numpy(),
@@ -80,25 +84,26 @@ def garch_t_forecast(grid: pd.DatetimeIndex, r: np.ndarray, split: pd.Timestamp)
     ok = np.isfinite(d)
     gc, dc = grid[ok], d[ok]
     split_c = int(np.searchsorted(gc, split))
-    tried, best = [], None
+    fits, tried = {}, []
     for scale in GARCH_SCALES:
-        res = arch_model(dc[:split_c] * scale, mean="Zero", vol="GARCH", p=1, q=1, dist="t").fit(disp="off", show_warning=False)
+        try:
+            res = arch_model(dc[:split_c] * scale, mean="Zero", vol="GARCH", p=1, q=1, dist="t").fit(disp="off", show_warning=False)
+        except (ValueError, np.linalg.LinAlgError) as exc:  # 한 척도의 실패는 그 척도만 버린다
+            tried.append({"scale": scale, "error": f"{type(exc).__name__}: {exc}", "ok": False})
+            continue
         p = res.params
-        al, be = float(p["alpha[1]"]), float(p["beta[1]"])
-        stuck = abs(al - START_ALPHA) < 1e-6 and abs(be - START_BETA) < 1e-6
+        stuck = abs(float(p["alpha[1]"]) - START_ALPHA) < 1e-6 and abs(float(p["beta[1]"]) - START_BETA) < 1e-6
         ll100 = float(res.loglikelihood + split_c * np.log(scale / 100.0))  # 밀도 척도 변환: LL(×100) = LL(×k) + n·log(k/100)
         ok = int(res.convergence_flag) == 0 and not stuck and np.isfinite(ll100)
         tried.append({"scale": scale, "convergence_flag": int(res.convergence_flag), "stuck_at_start": bool(stuck),
                       "loglik_x100": ll100, "iterations": int(res.optimization_result.nit), "ok": bool(ok)})
-        if ok and (best is None or ll100 > best[0]):
-            best = (ll100, scale, res)
-    suspect = best is None
-    if best is None:  # 조건을 만족하는 해가 없으면 로그우도 최대 해를 쓰고 의심 표시
-        i = int(np.argmax([t_["loglik_x100"] for t_ in tried]))
-        scale = tried[i]["scale"]
-        res = arch_model(dc[:split_c] * scale, mean="Zero", vol="GARCH", p=1, q=1, dist="t").fit(disp="off", show_warning=False)
-    else:
-        _, scale, res = best
+        fits[scale] = (ll100, ok, res)
+    if not fits:
+        raise ModelFitError(f"모든 척도에서 GARCH-t 적합 실패: {tried}")
+    good = {k: v for k, v in fits.items() if v[1]}
+    pool = good or fits  # 조건을 만족하는 해가 없으면 로그우도 최대 해를 쓰고 의심으로 표시한다
+    scale = max(pool, key=lambda k: pool[k][0])
+    res, suspect = pool[scale][2], not good
     x = dc * scale
     p = res.params
     om, al, be = float(p["omega"]), float(p["alpha[1]"]), float(p["beta[1]"])
@@ -192,8 +197,8 @@ def save(snaps: list[dict], service_db: str) -> None:
         con.unregister("s")
 
 
-def build_all(service_db: str, snapshot_db: str, tickers: list[str] | None = None, verbose: bool = False) -> list[dict]:
-    """상장 중인 연구 종목(또는 지정 종목)의 지표 묶음을 순차로 만들어 저장하고 돌려준다."""
+def build_all(service_db: str, snapshot_db: str, tickers: list[str] | None = None, verbose: bool = False) -> BatchResult[str, dict]:
+    """상장 중인 연구 종목(또는 지정 종목)의 지표 묶음을 순차로 만들어 저장한다. 실패한 종목은 failed에 남고 나머지는 계속한다."""
     from pipelines.ingest_text_context import listed_names, study_universe
 
     tickers = tickers or list(listed_names(study_universe(service_db))[0])
@@ -201,16 +206,16 @@ def build_all(service_db: str, snapshot_db: str, tickers: list[str] | None = Non
         bounds = con.execute("SELECT * FROM regime_boundaries WHERE version = ?", [rb.VERSION]).df()
     halts = halt_labels(snapshot_db, service_db)
     end_bar = load_close("KRW-BTC", snapshot_db, service_db).index.max()
-    snaps = []
-    for tk in tickers:
-        s = build_snapshot(tk, snapshot_db, service_db, halts, bounds, end_bar)
-        snaps.append(s)
-        if verbose:
+    got = each(tickers, lambda tk: build_snapshot(tk, snapshot_db, service_db, halts, bounds, end_bar))
+    if not got.ok:
+        raise ModelFitError(f"모든 종목 지표 계산 실패: {got.failed}")
+    save(list(got.ok.values()), service_db)
+    if verbose:
+        for tk, s in got.ok.items():
             rg = {k: v["regime"] for k, v in s["regime"]["values"].items()}
             print(tk, s["as_of"], "마지막 체결", s["last_trade_bar"][11:16], rg, {k: round(v, 4) for k, v in s["garch_t"]["rv_forecast"].items()},
                   "정지1d", round(s["price_stall"]["1d"]["zero_return_share"], 2), "의심" if s["garch_t"]["fit_suspect"] else "", flush=True)
-    save(snaps, service_db)
-    return snaps
+    return got
 
 
 def main() -> None:
@@ -219,9 +224,9 @@ def main() -> None:
     ap.add_argument("--service-db", default=None)
     ap.add_argument("--tickers", default=None, help="쉼표 구분. 없으면 상장 중인 연구 종목 전부")
     args = ap.parse_args()
-    snaps = build_all(resolve_service_db_path(args.service_db), resolve_db_path(args.snapshot_db),
-                      args.tickers.split(",") if args.tickers else None, verbose=True)
-    print(f"{len(snaps)}종목 스냅숏 저장")
+    got = build_all(resolve_service_db_path(args.service_db), resolve_db_path(args.snapshot_db),
+                    args.tickers.split(",") if args.tickers else None, verbose=True)
+    print(f"{len(got.ok)}종목 스냅숏 저장, 실패 {got.failed or '없음'}")
 
 
 if __name__ == "__main__":

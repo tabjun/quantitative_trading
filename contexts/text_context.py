@@ -39,6 +39,7 @@ from zoneinfo import ZoneInfo
 
 import duckdb
 import pandas as pd
+from common.errors import DataIntegrityError, DataSourceError, each
 from database.paths import resolve_db_path, resolve_service_db_path
 
 
@@ -182,8 +183,11 @@ def default_rss_urls(lookback_days: int = DEFAULT_LOOKBACK_DAYS) -> list[str]:
 
 def fetch_upbit_korean_names(timeout: int = 10) -> dict[str, str]:
     """현재 상장된 KRW 마켓의 {마켓: 한국어 이름}. 목록에 없는 종목은 상장 폐지로 본다."""
-    with urllib.request.urlopen(UPBIT_MARKETS_URL, timeout=timeout) as response:
-        rows = json.loads(response.read())
+    try:
+        with urllib.request.urlopen(UPBIT_MARKETS_URL, timeout=timeout) as response:
+            rows = json.loads(response.read())
+    except (OSError, ValueError) as exc:  # URLError는 OSError의 하위 클래스
+        raise DataSourceError(f"업비트 마켓 목록 요청 실패: {exc}") from exc
     return {row["market"]: row["korean_name"] for row in rows if row["market"].startswith("KRW-")}
 
 
@@ -235,6 +239,7 @@ class TextDataCollector:
         self.local_csv_paths = list(local_csv_paths or env_list("TEXT_LOCAL_CSVS"))
         self.ticker_names = dict(ticker_names or {})
         self.dropped_off_topic: dict[str, int] = {}
+        self.failed_sources: dict[str, str] = {}  # 출처(검색어·파일)별 실패 사유. 나머지 출처는 계속 수집한다
         self.request_pause_s = request_pause_s
 
     def collect_all(self, max_items_per_source: int = 30) -> list[TextRecord]:
@@ -249,74 +254,69 @@ class TextDataCollector:
         cutoff = datetime.now(timezone.utc) - timedelta(days=self.lookback_days)
         return [record for record in records if record.published_at >= cutoff]
 
-    def _fetch_rss(self, url: str, ticker_hint: str, max_items: int) -> list[TextRecord]:
-        try:
-            with urllib.request.urlopen(url, timeout=12) as response:
-                payload = response.read()
-            fetched_at = datetime.now(timezone.utc)
-            root = ET.fromstring(payload)
-        except Exception as exc:
-            print(f"[WARN] RSS fetch failed: {url} ({exc})")
-            return []
-        channel = root.find("channel")
-        source_name = clean_text(channel.findtext("title") if channel is not None else url)
-        records = []
-        for item in root.findall(".//item")[:max_items]:
-            records.append(
-                TextRecord(
-                    source_type="news_rss",
-                    source_name=source_name or "rss",
-                    published_at=parse_datetime(item.findtext("pubDate")),
-                    title=clean_text(item.findtext("title")),
-                    body=clean_text(item.findtext("description")),
-                    url=clean_text(item.findtext("link")),
-                    ticker_hint=ticker_hint,
-                    available_at=fetched_at,
-                )
-            )
-        return records
+    def _gather(self, keys: Iterable[str], fetch) -> list[TextRecord]:
+        """출처마다 fetch를 부르고(요청 간격 유지), 실패한 출처는 failed_sources에 남긴 채 나머지를 모은다."""
+        def paced(key: str) -> list[TextRecord]:
+            try:
+                return fetch(key)
+            finally:
+                time.sleep(self.request_pause_s)
 
-    def collect_rss(self, max_items_per_source: int = 30) -> list[TextRecord]:
-        records: list[TextRecord] = []
-        for url in self.rss_urls:
-            records.extend(self._fetch_rss(url, MARKET_TAG, max_items_per_source))
-            time.sleep(self.request_pause_s)
-        return records
+        got = each(keys, paced)
+        self.failed_sources.update(got.failed)
+        return [r for rs in got.ok.values() for r in rs]
 
-    def collect_ticker_rss(self, max_items_per_source: int = 30) -> list[TextRecord]:
-        records: list[TextRecord] = []
-        for ticker, name in self.ticker_names.items():
-            url = google_news_rss_url(ticker_news_query(ticker, name), self.lookback_days)
-            fetched = self._fetch_rss(url, ticker, max_items_per_source)
-            kept = [r for r in fetched if title_mentions(r.title, ticker, name)]
-            self.dropped_off_topic[ticker] = len(fetched) - len(kept)
-            records.extend(kept)
-            time.sleep(self.request_pause_s)
-        return records
-
-    def collect_naver_news(self, query: str = "비트코인 업비트 증시", max_items: int = 30) -> list[TextRecord]:
-        client_id = os.getenv("NAVER_CLIENT_ID")
-        client_secret = os.getenv("NAVER_CLIENT_SECRET")
-        if not client_id or not client_secret:
-            return []
-
-        params = urllib.parse.urlencode({"query": query, "display": min(max_items, 100), "sort": "date"})
-        request = urllib.request.Request(f"https://openapi.naver.com/v1/search/news.xml?{params}")
-        request.add_header("X-Naver-Client-Id", client_id)
-        request.add_header("X-Naver-Client-Secret", client_secret)
-
+    @staticmethod
+    def _fetch_xml(request: str | urllib.request.Request) -> tuple[ET.Element, datetime]:
         try:
             with urllib.request.urlopen(request, timeout=12) as response:
                 payload = response.read()
-            fetched_at = datetime.now(timezone.utc)
-            root = ET.fromstring(payload)
-        except Exception as exc:
-            print(f"[WARN] Naver news fetch failed: {exc}")
+            return ET.fromstring(payload), datetime.now(timezone.utc)
+        except (OSError, ET.ParseError) as exc:  # URLError·시간 초과는 OSError의 하위 클래스
+            raise DataSourceError(str(exc)) from exc
+
+    def _fetch_rss(self, url: str, ticker_hint: str, max_items: int) -> list[TextRecord]:
+        root, fetched_at = self._fetch_xml(url)
+        channel = root.find("channel")
+        source_name = clean_text(channel.findtext("title") if channel is not None else url)
+        return [
+            TextRecord(
+                source_type="news_rss",
+                source_name=source_name or "rss",
+                published_at=parse_datetime(item.findtext("pubDate")),
+                title=clean_text(item.findtext("title")),
+                body=clean_text(item.findtext("description")),
+                url=clean_text(item.findtext("link")),
+                ticker_hint=ticker_hint,
+                available_at=fetched_at,
+            )
+            for item in root.findall(".//item")[:max_items]
+        ]
+
+    def collect_rss(self, max_items_per_source: int = 30) -> list[TextRecord]:
+        return self._gather(self.rss_urls, lambda url: self._fetch_rss(url, MARKET_TAG, max_items_per_source))
+
+    def collect_ticker_rss(self, max_items_per_source: int = 30) -> list[TextRecord]:
+        def fetch(ticker: str) -> list[TextRecord]:
+            name = self.ticker_names[ticker]
+            fetched = self._fetch_rss(google_news_rss_url(ticker_news_query(ticker, name), self.lookback_days), ticker, max_items_per_source)
+            kept = [r for r in fetched if title_mentions(r.title, ticker, name)]
+            self.dropped_off_topic[ticker] = len(fetched) - len(kept)
+            return kept
+
+        return self._gather(self.ticker_names, fetch)
+
+    def collect_naver_news(self, query: str = "비트코인 업비트 증시", max_items: int = 30) -> list[TextRecord]:
+        client_id, client_secret = os.getenv("NAVER_CLIENT_ID"), os.getenv("NAVER_CLIENT_SECRET")
+        if not (client_id and client_secret):  # 키가 없으면 이 출처를 쓰지 않는다(실패 아님)
             return []
 
-        records = []
-        for item in root.findall(".//item")[:max_items]:
-            records.append(
+        def fetch(q: str) -> list[TextRecord]:
+            params = urllib.parse.urlencode({"query": q, "display": min(max_items, 100), "sort": "date"})
+            request = urllib.request.Request(f"https://openapi.naver.com/v1/search/news.xml?{params}",
+                                             headers={"X-Naver-Client-Id": client_id, "X-Naver-Client-Secret": client_secret})
+            root, fetched_at = self._fetch_xml(request)
+            return [
                 TextRecord(
                     source_type="news_api",
                     source_name="Naver News Search",
@@ -326,33 +326,38 @@ class TextDataCollector:
                     url=clean_text(item.findtext("originallink") or item.findtext("link")),
                     available_at=fetched_at,
                 )
+                for item in root.findall(".//item")[:max_items]
+            ]
+
+        return self._gather([query], fetch)
+
+    @staticmethod
+    def _read_csv(raw_path: str) -> list[TextRecord]:
+        path = Path(raw_path)
+        loaded_at = datetime.now(timezone.utc)
+        try:
+            with path.open("r", encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+        except OSError as exc:
+            raise DataSourceError(f"로컬 CSV를 읽을 수 없다: {exc}") from exc
+        return [
+            TextRecord(
+                source_type=row.get("source_type") or "local_text",
+                source_name=row.get("source_name") or path.stem,
+                published_at=parse_datetime(row.get("published_at") or row.get("timestamp")),
+                title=clean_text(row.get("title")),
+                body=clean_text(row.get("body") or row.get("text")),
+                url=clean_text(row.get("url")) or f"local://{path.name}",
+                ticker_hint=row.get("ticker_hint") or MARKET_TAG,
+                available_at=parse_datetime(row["available_at"]) if row.get("available_at") else loaded_at,
             )
-        return records
+            for row in rows
+        ]
 
     def collect_local_csv(self) -> list[TextRecord]:
-        records: list[TextRecord] = []
-        for raw_path in self.local_csv_paths:
-            path = Path(raw_path)
-            if not path.exists():
-                print(f"[WARN] Local text CSV not found: {path}")
-                continue
-            loaded_at = datetime.now(timezone.utc)
-            with path.open("r", encoding="utf-8-sig", newline="") as handle:
-                reader = csv.DictReader(handle)
-                for row in reader:
-                    records.append(
-                        TextRecord(
-                            source_type=row.get("source_type") or "local_text",
-                            source_name=row.get("source_name") or path.stem,
-                            published_at=parse_datetime(row.get("published_at") or row.get("timestamp")),
-                            title=clean_text(row.get("title")),
-                            body=clean_text(row.get("body") or row.get("text")),
-                            url=clean_text(row.get("url")) or f"local://{path.name}",
-                            ticker_hint=row.get("ticker_hint") or MARKET_TAG,
-                            available_at=parse_datetime(row["available_at"]) if row.get("available_at") else loaded_at,
-                        )
-                    )
-        return records
+        got = each(self.local_csv_paths, self._read_csv)  # 로컬 파일이라 요청 간격이 필요 없다
+        self.failed_sources.update(got.failed)
+        return [r for rs in got.ok.values() for r in rs]
 
 
 def deduplicate_records(records: Iterable[TextRecord]) -> list[TextRecord]:
@@ -461,7 +466,7 @@ class TextFeatureBuilder:
             if not cols:
                 return pd.DataFrame()
             if "available_at" not in cols:
-                raise RuntimeError("text_events_raw가 예전 UTC 스키마다. persist_raw_records를 한 번 실행해 옮긴 뒤 읽는다.")
+                raise DataIntegrityError("text_events_raw가 예전 UTC 스키마다. persist_raw_records를 한 번 실행해 옮긴 뒤 읽는다.")
             return con.execute("SELECT * FROM text_events_raw").df()
 
     def load_news_as_of(

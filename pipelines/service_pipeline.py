@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from common.errors import ServiceError
 from database.paths import resolve_db_path, resolve_service_db_path
 
 
@@ -69,7 +70,7 @@ class RunLog:
         try:
             gpu = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader"],
                                  capture_output=True, text=True, timeout=10).stdout.strip().replace(" ", "")
-        except Exception:
+        except (OSError, subprocess.SubprocessError):  # 자원 기록은 보조 정보라 실패해도 단계는 계속한다
             gpu = "unknown"
         line = f"{avail / 1048576:.1f}GB load {load} gpu {gpu}"
         with open(self.mem, "a") as fh:
@@ -79,6 +80,7 @@ class RunLog:
 
 class Step(ABC):
     name: str
+    required: bool = True  # 실패하면 뒤 단계를 멈출지. 뒤 단계가 이 결과 없이도 돌 수 있으면 False
 
     @abstractmethod
     def run(self, ctx: RunContext) -> dict: ...
@@ -95,6 +97,7 @@ class CandleStep(Step):
 
 class NewsStep(Step):
     name = "news"
+    required = False  # 뉴스가 없어도 지표·기준선은 계산할 수 있다
 
     def run(self, ctx: RunContext) -> dict:
         if not ctx.config.collect_news:
@@ -112,8 +115,9 @@ class IndicatorStep(Step):
     def run(self, ctx: RunContext) -> dict:
         from marts.indicators import build_all
 
-        snaps = build_all(ctx.config.service_db, ctx.config.snapshot_db)
-        return {"tickers": len(snaps), "as_of": snaps[0]["as_of"] if snaps else None,
+        got = build_all(ctx.config.service_db, ctx.config.snapshot_db)
+        snaps = list(got.ok.values())
+        return {"tickers": len(snaps), "as_of": snaps[0]["as_of"], "failed": got.failed,
                 "garch_suspect": sum(s["garch_t"]["fit_suspect"] for s in snaps)}
 
 
@@ -123,11 +127,10 @@ class BaselineStep(Step):
     def run(self, ctx: RunContext) -> dict:
         from agents.baselines import BaselineSuite
 
-        df = BaselineSuite(ctx.config.service_db).run()
-        if df.empty:
-            return {"rows": 0}
-        counts = df.groupby(["rule", "decision"]).size().unstack(fill_value=0).to_dict(orient="index")
-        return {"rows": len(df), "as_of": str(df["as_of"].iloc[0]), "by_rule": counts}
+        suite = BaselineSuite(ctx.config.service_db)
+        df = suite.run()
+        counts = df.groupby(["rule", "decision"]).size().unstack(fill_value=0).to_dict(orient="index") if len(df) else {}
+        return {"rows": len(df), "failed": suite.failed, "by_rule": counts}
 
 
 class JudgeStep(Step):
@@ -138,9 +141,9 @@ class JudgeStep(Step):
             return {"skipped": "run_judge=False(연구 GPU 우선 기간)"}
         from agents.risk_judge import RiskJudge
 
-        results = RiskJudge(ctx.config.service_db).run(ctx.config.judge_tickers, log_path=ctx.config.log_dir / "llm_server.log")
-        return {"judged": len(results),
-                "decisions": {r.ticker: f"{r.decision} ({r.probs[r.decision]:.2f})" for r in results}}
+        got = RiskJudge(ctx.config.service_db).run(ctx.config.judge_tickers, log_path=ctx.config.log_dir / "llm_server.log")
+        return {"judged": len(got.ok), "failed": got.failed,
+                "decisions": {tk: f"{r.decision} ({r.probs[r.decision]:.2f})" for tk, r in got.ok.items()}}
 
 
 class ServicePipeline:
@@ -165,15 +168,19 @@ class ServicePipeline:
             self.log.event(f"시작 {step.name}")
             try:
                 out = step.run(ctx)
-                out["seconds"] = round(time.time() - t0, 1)
-                out["resources"] = self.log.resources()
+            except ServiceError as exc:  # 예상한 실패: 사유만 남긴다
+                ctx.results[step.name] = {"error": f"{type(exc).__name__}: {exc}"}
+            except Exception as exc:  # 예상 밖(코드 결함 등): 추적 정보까지 남긴다
+                ctx.results[step.name] = {"error": f"{type(exc).__name__}: {exc}", "trace": traceback.format_exc(limit=5)}
+            else:
+                out.update(seconds=round(time.time() - t0, 1), resources=self.log.resources())
                 ctx.results[step.name] = out
-                self.log.event(f"완료 {step.name} {out['seconds']}초")
-            except Exception as exc:  # 조용히 삼키지 않는다: 기록하고 뒤 단계를 멈춘다
-                failed = step.name
-                ctx.results[step.name] = {"error": f"{type(exc).__name__}: {exc}", "trace": traceback.format_exc(limit=3)}
-                self.log.event(f"실패 {step.name} {type(exc).__name__}: {str(exc)[:200]}")
-        self.log.event("파이프라인 끝" + (f"(실패 {failed})" if failed else ""))
+                self.log.event(f"완료 {step.name} {out['seconds']}초" + (f", 일부 실패 {list(out['failed'])}" if out.get("failed") else ""))
+                continue
+            self.log.event(f"실패 {step.name} {ctx.results[step.name]['error'][:200]}")
+            failed = step.name if step.required else failed
+        errors = [k for k, v in ctx.results.items() if "error" in v]
+        self.log.event("파이프라인 끝" + (f"(중단: {failed} 실패)" if failed else f"(필수 아닌 단계 실패: {errors})" if errors else ""))
         return ctx
 
     @staticmethod

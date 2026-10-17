@@ -19,6 +19,7 @@ from datetime import datetime
 import duckdb
 import pandas as pd
 
+from common.errors import DataIntegrityError, ServiceError, each
 from contexts.text_context import TextFeatureBuilder
 
 RULE_VERSION = "draft_20261018"
@@ -163,12 +164,15 @@ class BaselineSuite:
         self.service_db = service_db
         self.rules = rules or default_rules()
         self.news = TextFeatureBuilder(db_path=service_db)
+        self.failed: dict[str, str] = {}  # 마지막 run에서 판단하지 못한 종목과 사유
 
     def inputs(self, as_of: pd.Timestamp | None = None) -> list[RuleInput]:
         with duckdb.connect(self.service_db, read_only=True) as con:
             when = as_of or con.execute("SELECT MAX(as_of) FROM indicator_snapshots").fetchone()[0]
             snaps = con.execute("SELECT ticker, payload FROM indicator_snapshots WHERE as_of = ?", [when]).fetchall()
             bounds = con.execute("SELECT * FROM regime_boundaries").df()
+        if not snaps:
+            raise DataIntegrityError(f"{when} 지표 묶음이 없다")
         out = []
         for tk, payload in snaps:
             snap = json.loads(payload)
@@ -177,14 +181,16 @@ class BaselineSuite:
                                  self.news.load_news_as_of(t.to_pydatetime(), ticker=tk, lookback_hours=self.news_lookback_hours)))
         return out
 
+    def _decide(self, x: RuleInput) -> list[dict]:
+        return [{"as_of": x.as_of, "ticker": x.ticker, "rule": rule.name, "decision": d.decision, "why": d.why,
+                 "rule_version": RULE_VERSION, "logged_at": datetime.now()} for rule in self.rules for d in [rule.decide(x)]]
+
     def run(self, as_of: pd.Timestamp | None = None) -> pd.DataFrame:
-        rows = []
-        for x in self.inputs(as_of):
-            for rule in self.rules:
-                d = rule.decide(x)
-                rows.append({"as_of": x.as_of, "ticker": x.ticker, "rule": rule.name, "decision": d.decision,
-                             "why": d.why, "rule_version": RULE_VERSION, "logged_at": datetime.now()})
-        df = pd.DataFrame(rows)
+        inputs = {x.ticker: x for x in self.inputs(as_of)}
+        # 지표 묶음에 기대한 값이 없으면(KeyError) 그 종목만 건너뛴다. 규칙 코드 결함 등 다른 예외는 그대로 올린다.
+        got = each(inputs, lambda tk: self._decide(inputs[tk]), expected=(ServiceError, KeyError))
+        self.failed = got.failed
+        df = pd.DataFrame([row for rows in got.ok.values() for row in rows])
         if not df.empty:
             self._save(df)
         return df
