@@ -1,54 +1,38 @@
+"""서비스 진입점: 한 번 실행하면 시세 → 뉴스 → 지표 묶음 → 규칙 기준선 → (선택) LLM 판단을 순서대로 돈다.
+
+    python main.py                 # LLM 판단 없이 수집·지표·기준선(기본, 연구 GPU 우선 기간)
+    python main.py --judge         # LLM 판단까지(단발, 사람이 켤 때만)
+    python main.py --no-news       # 뉴스 수집 생략(빠른 확인용)
+
+단계 구성과 각 단계의 책임은 `pipelines/service_pipeline.py`에 있다. 진행 상태와 자원 기록은 `logs/service/`.
+(2026-10-18 교체: 이전 main.py는 키워드·종목을 고정한 시연용 데모였다.)
 """
-Supervisor Module (Main Orchestrator)
 
-이 스크립트는 전체 다중 에이전트(Multi-Agent) 아키텍처를 조율하는 Supervisor 역할을 합니다.
-사용자의 요청(하락장에 대한 불안)이 발생하면, 하위 에이전트들을 순차적으로 호출하여
-상황 분석 -> 과거 사례 매칭 -> 딥다이브 리포트 생성 파이프라인을 실행합니다.
-"""
+from __future__ import annotations
 
-import time
-from database.case_db import CaseDatabase
-from agents.situation_analyzer import SituationAnalyzer
-from agents.similarity_matcher import SimilarityMatcher
-from agents.report_generator import ReportGenerator
+import argparse
+import sys
 
-def run_supervisor_pipeline(ticker: str, user_query: str):
-    print(f"\n[Supervisor] '{ticker}' 종목 관련 사용자 문의 접수: \"{user_query}\"")
-    print("-" * 60)
-    time.sleep(1)
+from pipelines.service_pipeline import ServiceConfig, ServicePipeline
 
-    # 1. DB 및 하위 에이전트 초기화
-    case_db = CaseDatabase()
-    analyzer_agent = SituationAnalyzer()
-    matcher_agent = SimilarityMatcher(case_db)
-    reporter_agent = ReportGenerator(name="AI투자메이트")
 
-    # 2. 파이프라인 실행
-    
-    # Step 1: 상황 분석 (가상의 최근 뉴스 키워드 주입)
-    # 실제로는 user_query나 뉴스 크롤러에서 추출된 키워드가 들어감
-    current_keywords = ["전쟁", "중동", "유가", "지정학적 리스크", "폭격"]
-    current_situation = analyzer_agent.analyze_current_situation(ticker, current_keywords)
-    time.sleep(1)
+def parse_args(argv: list[str] | None = None) -> ServiceConfig:
+    ap = argparse.ArgumentParser(description="LLM 위험 판단 서비스 파이프라인을 한 번 실행한다.")
+    ap.add_argument("--judge", action="store_true", help="LLM 판단 단계까지 실행(GPU 단발)")
+    ap.add_argument("--tickers", default=None, help="LLM 판단 종목(쉼표 구분). 없으면 전부")
+    ap.add_argument("--no-news", action="store_true", help="뉴스 수집 생략")
+    ap.add_argument("--candles", type=int, default=400, help="종목당 받을 최근 15분봉 수")
+    a = ap.parse_args(argv)
+    return ServiceConfig(run_judge=a.judge, judge_tickers=a.tickers.split(",") if a.tickers else None,
+                         collect_news=not a.no_news, candle_count=a.candles)
 
-    # Step 2: DTW & NLP 기반 과거 사례 매칭
-    best_historical_match = matcher_agent.find_best_match(current_situation)
-    time.sleep(1)
 
-    # Step 3: 최종 심층 리포트 생성
-    print("[Supervisor] 결과 취합 및 최종 리포트 생성 중...\n")
-    time.sleep(1)
-    final_report = reporter_agent.generate_historical_insight_report(current_situation, best_historical_match)
-    
-    print(final_report)
+def main(argv: list[str] | None = None) -> int:
+    pipeline = ServicePipeline(parse_args(argv))
+    ctx = pipeline.run()
+    print(ServicePipeline.summary(ctx))
+    return 1 if any("error" in r for r in ctx.results.values()) else 0
 
-def main():
-    print("🚀 AI 웰스테크 Multi-Agent 시스템 시작 (DTW & NLP 매칭 모드)")
-    
-    ticker = "TIGER 미국테크TOP10 INDXX"
-    user_query = "아니 시발 내 주식 왜 떨어지는거야? 이스라엘 이란 뭐시기 터졌다는데 이거 계속 들고가도 돼?"
-    
-    run_supervisor_pipeline(ticker, user_query)
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

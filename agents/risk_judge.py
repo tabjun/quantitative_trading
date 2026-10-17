@@ -8,19 +8,24 @@
 후처리: 판단과 위험 수준이 어긋나면(축소인데 위험 1~2, 유지인데 위험 4~5) `mismatch`로 표시하고,
 입력·출력·모델 파일 해시를 `decision_log`에 남긴다(페이퍼 기록, 주문 없음).
 확률은 아직 보정하지 않았다(라벨 정의 §11 확정 전).
+
+구조: `PromptBuilder`(전처리: 지표 묶음·뉴스 → 지시문), `RiskJudge`(판단·근거·불일치 표시, 서버는 `run` 안에서만
+떠 있다), `DecisionLog`(저장). `JudgeResult`가 한 종목의 결과다.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 import duckdb
 import pandas as pd
 
-from agents.llm_runtime import LlmServerConfig, option_probs, post_json
+from agents.baselines import level_of
+from agents.llm_runtime import LlmServerConfig, llm_server, option_probs, post_json
 from contexts.text_context import TextFeatureBuilder
 from database.paths import resolve_service_db_path
 
@@ -32,7 +37,7 @@ DESC = {
     "reduce": "축소: 포지션 비중을 줄인다",
 }
 PERMS = [("keep", "watch", "reduce"), ("reduce", "keep", "watch"), ("watch", "reduce", "keep")]
-SYSTEM_V2 = (
+SYSTEM_PROMPT = (
     "너는 암호화폐 포지션의 위험 관리자다. 방향(오를지 내릴지)은 예측하지 않는다. 주어진 국면·변동성 지표·뉴스만 근거로, "
     "아래 기준에 따라 세 가지 중 하나를 고른다. 위험 신호가 없으면 유지가 기본이다.\n"
     "- 유지: 위험 신호가 평소 수준이다. 직전 변동성 국면이 Q1~Q3이고, 변동성 예측이 평소 범위이며, 거래소·보안·규제 같은 직접 악재 뉴스가 없다.\n"
@@ -57,91 +62,168 @@ PROMPT_VERSION = "v3_20261018"  # v2: 정지 비율 뜻 구분·종목 기사 �
 LOG_TABLE = "decision_log"
 
 
-def _level(value: float | None, row: pd.Series | None) -> str | None:
-    """예측 RV를 같은 구간의 학습 구간 직전 RV 5분위 칸(Q1~Q5)으로 읽는다."""
-    if value is None or row is None:
-        return None
-    edges = [row["q20"], row["q40"], row["q60"], row["q80"]]
-    return f"Q{sum(value >= e for e in edges) + 1}"
-
-
 NO_TRADE_LOW, NO_TRADE_HIGH = 0.05, 0.20  # 초안 경계(§11과 함께 확정): 거래 없는 15분 봉 비율(직전 1일)
 
 
-def _liquidity_label(no_trade: float) -> str:
-    if no_trade >= NO_TRADE_HIGH:
-        return f"낮음(위험 신호): 직전 하루 15분 봉의 {no_trade:.0%}에서 거래가 없었다"
-    if no_trade >= NO_TRADE_LOW:
-        return f"다소 낮음: 직전 하루 15분 봉의 {no_trade:.0%}에서 거래가 없었다"
-    return f"정상(위험 신호 아님): 거래 없는 봉 {no_trade:.0%}"
+@dataclass(frozen=True)
+class JudgeResult:
+    ticker: str
+    as_of: pd.Timestamp
+    decision: str
+    probs: dict[str, float]
+    probs_by_perm: list[dict[str, float]]
+    position_spread: float
+    option_mass_min: float
+    explain: dict
+    mismatch: bool
+    state: dict
+    news: list[str]
 
 
-def _flat_label(flat: float, no_trade: float) -> str:
-    if flat >= 0.3 and no_trade < NO_TRADE_LOW:
-        return f"가격이 직전 봉과 같은 봉이 {flat:.0%}지만 거래는 계속 있었다. 호가 한 칸이 가격 대비 커서 생기는 현상이며 위험 신호가 아니다"
-    return f"가격이 직전 봉과 같은 봉 {flat:.0%}(판단 근거로 쓰지 않는다)"
+class PromptBuilder:
+    """전처리: 지표 묶음과 판단 시각 이전 뉴스를 지시문으로 바꾼다. 숫자의 방향은 규칙으로 먼저 해석해 문장으로 준다(v3)."""
 
+    version = PROMPT_VERSION
+    system = SYSTEM_PROMPT
 
-def build_state(snap: dict, bounds: pd.DataFrame) -> dict:
-    tb = bounds[bounds["ticker"] == snap["ticker"]].set_index("horizon_min")
-    rv = snap["garch_t"]["rv_forecast"]
-    return {
-        "ticker": snap["ticker"],
-        "as_of_kst": snap["as_of"],
-        "prior_regime": {k: v["regime"] for k, v in snap["regime"]["values"].items()},
-        "garch_t_rv_forecast": {k: round(v, 5) for k, v in rv.items()},
-        "garch_t_rv_forecast_level": {k: _level(v, tb.loc[int(k[:-1])] if int(k[:-1]) in tb.index else None) for k, v in rv.items()},
-        # v3: 4B 모델이 비율의 방향을 거꾸로 읽어(v2 시험: 무체결 0%를 "유동성 극단 악화"로) 규칙으로 먼저 해석한 말을 준다.
-        "liquidity": _liquidity_label(snap["price_stall"]["1d"]["no_trade_share"]),
-        "price_flat_note": _flat_label(snap["price_stall"]["1d"]["zero_return_share"], snap["price_stall"]["1d"]["no_trade_share"]),
-        "minutes_since_last_trade": int((pd.Timestamp(snap["data_end_bar"]) - pd.Timestamp(snap["last_trade_bar"])).total_seconds() // 60),
-    }
+    @staticmethod
+    def liquidity_label(no_trade: float) -> str:
+        if no_trade >= NO_TRADE_HIGH:
+            return f"낮음(위험 신호): 직전 하루 15분 봉의 {no_trade:.0%}에서 거래가 없었다"
+        if no_trade >= NO_TRADE_LOW:
+            return f"다소 낮음: 직전 하루 15분 봉의 {no_trade:.0%}에서 거래가 없었다"
+        return f"정상(위험 신호 아님): 거래 없는 봉 {no_trade:.0%}"
 
+    @staticmethod
+    def flat_label(flat: float, no_trade: float) -> str:
+        if flat >= 0.3 and no_trade < NO_TRADE_LOW:
+            return f"가격이 직전 봉과 같은 봉이 {flat:.0%}지만 거래는 계속 있었다. 호가 한 칸이 가격 대비 커서 생기는 현상이며 위험 신호가 아니다"
+        return f"가격이 직전 봉과 같은 봉 {flat:.0%}(판단 근거로 쓰지 않는다)"
 
-def news_lines(news: pd.DataFrame, ticker: str, k_ticker: int = 8, k_market: int = 5) -> list[str]:
-    out = []
-    if news.empty or not (news["ticker_hint"] == ticker).any():
-        out.append("[종목 기사 없음] 최근 24시간 이 종목 이름이 제목에 든 기사가 수집되지 않았다(시장 기사만 아래에 있다).")
-    if news.empty:
+    def state(self, snap: dict, bounds: pd.DataFrame) -> dict:
+        tb = bounds[bounds["ticker"] == snap["ticker"]].set_index("horizon_min")
+        rv = snap["garch_t"]["rv_forecast"]
+        stall = snap["price_stall"]["1d"]
+        return {
+            "ticker": snap["ticker"],
+            "as_of_kst": snap["as_of"],
+            "prior_regime": {k: v["regime"] for k, v in snap["regime"]["values"].items()},
+            "garch_t_rv_forecast": {k: round(v, 5) for k, v in rv.items()},
+            "garch_t_rv_forecast_level": {k: level_of(v, tb.loc[int(k[:-1])]) if int(k[:-1]) in tb.index else None
+                                          for k, v in rv.items()},
+            # v3: 4B 모델이 비율의 방향을 거꾸로 읽어(v2 시험: 무체결 0%를 "유동성 극단 악화"로) 규칙으로 먼저 해석한 말을 준다.
+            "liquidity": self.liquidity_label(stall["no_trade_share"]),
+            "price_flat_note": self.flat_label(stall["zero_return_share"], stall["no_trade_share"]),
+            "minutes_since_last_trade": int((pd.Timestamp(snap["data_end_bar"]) - pd.Timestamp(snap["last_trade_bar"])).total_seconds() // 60),
+        }
+
+    @staticmethod
+    def news_lines(news: pd.DataFrame, ticker: str, k_ticker: int = 8, k_market: int = 5) -> list[str]:
+        out = []
+        if news.empty or not (news["ticker_hint"] == ticker).any():
+            out.append("[종목 기사 없음] 최근 24시간 이 종목 이름이 제목에 든 기사가 수집되지 않았다(시장 기사만 아래에 있다).")
+        if news.empty:
+            return out
+        for tag, k in ((ticker, k_ticker), ("MARKET", k_market)):
+            sub = news[news["ticker_hint"] == tag].head(k)
+            for _, row in sub.iterrows():
+                label = "종목" if tag == ticker else "시장"
+                out.append(f"[{label} {pd.Timestamp(row['effective_at']):%m-%d %H:%M}] {row['title']}")
         return out
-    for tag, k in ((ticker, k_ticker), ("MARKET", k_market)):
-        sub = news[news["ticker_hint"] == tag].head(k)
-        for _, row in sub.iterrows():
-            label = "종목" if tag == ticker else "시장"
-            out.append(f"[{label} {pd.Timestamp(row['effective_at']):%m-%d %H:%M}] {row['title']}")
-    return out
+
+    def messages(self, state: dict, news: list[str], perm: tuple[str, ...]) -> list[dict]:
+        opts = ", ".join(f"{L}={DESC[o]}" for L, o in zip("ABC", perm))
+        user = ("상태(JSON):\n" + json.dumps(state, ensure_ascii=False) + "\n최근 24시간 뉴스(판단 시각 이전만):\n"
+                + ("\n".join(f"- {n}" for n in news) if news else "- 해당 없음(수집된 기사 없음)")
+                + f"\n\n질문: 현재 포지션을 어떻게 할 것인가? 보기 {opts}. 보기 글자 하나로만 답하라.")
+        return [{"role": "system", "content": self.system}, {"role": "user", "content": user}]
 
 
-def _messages(state: dict, news: list[str], perm: tuple[str, ...]) -> list[dict]:
-    opts = ", ".join(f"{L}={DESC[o]}" for L, o in zip("ABC", perm))
-    user = ("상태(JSON):\n" + json.dumps(state, ensure_ascii=False) + "\n최근 24시간 뉴스(판단 시각 이전만):\n"
-            + ("\n".join(f"- {n}" for n in news) if news else "- 해당 없음(수집된 기사 없음)")
-            + f"\n\n질문: 현재 포지션을 어떻게 할 것인가? 보기 {opts}. 보기 글자 하나로만 답하라.")
-    return [{"role": "system", "content": SYSTEM_V2}, {"role": "user", "content": user}]
+class DecisionLog:
+    """판단 결과를 서비스 DB `decision_log`에 쌓는다(페이퍼 기록)."""
+
+    def __init__(self, service_db: str):
+        self.service_db = service_db
+
+    @staticmethod
+    def row(r: JudgeResult, model_file: str, model_sha256: str) -> dict:
+        return {
+            "logged_at": datetime.now(), "as_of": r.as_of, "ticker": r.ticker,
+            "decision": r.decision, "p_keep": r.probs["keep"], "p_watch": r.probs["watch"], "p_reduce": r.probs["reduce"],
+            "position_spread": r.position_spread, "risk_level": r.explain["risk_level"],
+            "uncertainty": r.explain["uncertainty"], "mismatch": r.mismatch, "rationale": r.explain["rationale"],
+            "input_json": json.dumps({"state": r.state, "news": r.news}, ensure_ascii=False),
+            "output_json": json.dumps({"decision": r.decision, "probs": r.probs, "probs_by_perm": r.probs_by_perm,
+                                       "position_spread": r.position_spread, "option_mass_min": r.option_mass_min,
+                                       "explain": r.explain, "mismatch": r.mismatch}, ensure_ascii=False),
+            "prompt_version": PROMPT_VERSION, "model_file": model_file, "model_sha256": model_sha256, "calibrated": False,
+        }
+
+    def save(self, rows: list[dict]) -> None:
+        if not rows:
+            return
+        df = pd.DataFrame(rows)
+        with duckdb.connect(self.service_db) as con:
+            con.register("d", df)
+            con.execute(f"CREATE TABLE IF NOT EXISTS {LOG_TABLE} AS SELECT * FROM d WHERE FALSE")
+            con.execute(f"INSERT INTO {LOG_TABLE} SELECT * FROM d")
+            con.unregister("d")
 
 
-def judge(cfg: LlmServerConfig, state: dict, news: list[str]) -> dict:
-    per_perm, masses = [], []
-    for perm in PERMS:
-        p, mass = option_probs(cfg, _messages(state, news, perm), ("A", "B", "C"))
-        per_perm.append({o: p[L] for L, o in zip("ABC", perm)})
-        masses.append(mass)
-    probs = {o: sum(d[o] for d in per_perm) / len(per_perm) for o in OPTIONS}
-    decision = max(probs, key=probs.get)
-    spread = max(max(d[o] for d in per_perm) - min(d[o] for d in per_perm) for o in OPTIONS)
-    letter = "ABC"[PERMS[0].index(decision)]
-    msgs = _messages(state, news, PERMS[0]) + [
-        {"role": "assistant", "content": letter},
-        {"role": "user", "content": f"판단 {letter}({NAMES[decision]})는 고정이다. 근거를 스키마에 맞춰 한국어로 써라. "
-                                    "위험 수준은 1=매우 낮음, 2=낮음, 3=보통, 4=높음, 5=매우 높음이다. 판단을 바꾸지 마라."},
-    ]
-    d = post_json(cfg, "/v1/chat/completions", {"messages": msgs, "max_tokens": 400, "temperature": 0,
-                  "response_format": {"type": "json_schema", "json_schema": {"name": "explain", "schema": EXPLAIN_SCHEMA}}})
-    explain = json.loads(d["choices"][0]["message"]["content"])
-    risk = explain["risk_level"]
-    mismatch = (decision == "reduce" and risk <= 2) or (decision == "keep" and risk >= 4)
-    return {"decision": decision, "probs": probs, "probs_by_perm": per_perm, "position_spread": spread,
-            "option_mass_min": min(masses), "explain": explain, "mismatch": bool(mismatch)}
+class RiskJudge:
+    """최신 지표 묶음의 종목들을 판단한다. 로컬 LLM 서버는 `run` 안에서만 떠 있다(호출 때만 적재)."""
+
+    news_lookback_hours = 24
+
+    def __init__(self, service_db: str | None = None, cfg: LlmServerConfig | None = None, prompt: PromptBuilder | None = None):
+        self.service_db = resolve_service_db_path(service_db)
+        self.cfg = cfg or LlmServerConfig()
+        self.prompt = prompt or PromptBuilder()
+        self.news = TextFeatureBuilder(db_path=self.service_db)
+        self.log = DecisionLog(self.service_db)
+
+    def decide(self, live: LlmServerConfig, ticker: str, as_of: pd.Timestamp, state: dict, news: list[str]) -> JudgeResult:
+        per_perm, masses = [], []
+        for perm in PERMS:
+            p, mass = option_probs(live, self.prompt.messages(state, news, perm), ("A", "B", "C"))
+            per_perm.append({o: p[L] for L, o in zip("ABC", perm)})
+            masses.append(mass)
+        probs = {o: sum(d[o] for d in per_perm) / len(per_perm) for o in OPTIONS}
+        decision = max(probs, key=probs.get)
+        spread = max(max(d[o] for d in per_perm) - min(d[o] for d in per_perm) for o in OPTIONS)
+        letter = "ABC"[PERMS[0].index(decision)]
+        msgs = self.prompt.messages(state, news, PERMS[0]) + [
+            {"role": "assistant", "content": letter},
+            {"role": "user", "content": f"판단 {letter}({NAMES[decision]})는 고정이다. 근거를 스키마에 맞춰 한국어로 써라. "
+                                        "위험 수준은 1=매우 낮음, 2=낮음, 3=보통, 4=높음, 5=매우 높음이다. 판단을 바꾸지 마라."},
+        ]
+        d = post_json(live, "/v1/chat/completions", {"messages": msgs, "max_tokens": 400, "temperature": 0,
+                      "response_format": {"type": "json_schema", "json_schema": {"name": "explain", "schema": EXPLAIN_SCHEMA}}})
+        explain = json.loads(d["choices"][0]["message"]["content"])
+        risk = explain["risk_level"]
+        mismatch = (decision == "reduce" and risk <= 2) or (decision == "keep" and risk >= 4)
+        return JudgeResult(ticker, as_of, decision, probs, per_perm, spread, min(masses), explain, bool(mismatch), state, news)
+
+    def _latest(self) -> tuple[dict[str, dict], pd.DataFrame]:
+        with duckdb.connect(self.service_db, read_only=True) as con:
+            snaps = con.execute("SELECT ticker, payload FROM indicator_snapshots "
+                                "WHERE as_of = (SELECT MAX(as_of) FROM indicator_snapshots)").fetchall()
+            bounds = con.execute("SELECT * FROM regime_boundaries").df()
+        return {tk: json.loads(p) for tk, p in snaps}, bounds
+
+    def run(self, tickers: list[str] | None = None, log_path: Path | None = None) -> list[JudgeResult]:
+        snaps, bounds = self._latest()
+        tickers = tickers or sorted(snaps)
+        model_hash = file_sha256(self.cfg.model_path)
+        results = []
+        with llm_server(self.cfg, log_path=log_path) as live:
+            for tk in tickers:
+                snap = snaps[tk]
+                as_of = pd.Timestamp(snap["as_of"])
+                news = self.news.load_news_as_of(as_of.to_pydatetime(), ticker=tk, lookback_hours=self.news_lookback_hours)
+                results.append(self.decide(live, tk, as_of, self.prompt.state(snap, bounds), self.prompt.news_lines(news, tk)))
+        self.log.save([DecisionLog.row(r, self.cfg.model_path.name, model_hash) for r in results])
+        return results
 
 
 def file_sha256(path: Path, chunk: int = 1 << 24) -> str:
@@ -150,48 +232,3 @@ def file_sha256(path: Path, chunk: int = 1 << 24) -> str:
         while b := f.read(chunk):
             h.update(b)
     return h.hexdigest()
-
-
-def log_decisions(rows: list[dict], service_db: str) -> None:
-    df = pd.DataFrame(rows)
-    with duckdb.connect(service_db) as con:
-        con.register("d", df)
-        con.execute(f"CREATE TABLE IF NOT EXISTS {LOG_TABLE} AS SELECT * FROM d WHERE FALSE")
-        con.execute(f"INSERT INTO {LOG_TABLE} SELECT * FROM d")
-        con.unregister("d")
-
-
-def run(tickers: list[str] | None = None, service_db: str | None = None, log_path: Path | None = None) -> list[dict]:
-    """최신 스냅숏의 종목들을 판단한다. 서버는 이 함수 안에서만 떠 있다(호출 때만 적재)."""
-    from agents.llm_runtime import llm_server
-
-    service_db = resolve_service_db_path(service_db)
-    with duckdb.connect(service_db, read_only=True) as con:
-        snaps = con.execute("SELECT ticker, payload FROM indicator_snapshots WHERE as_of = (SELECT MAX(as_of) FROM indicator_snapshots)").fetchall()
-        bounds = con.execute("SELECT * FROM regime_boundaries").df()
-    snaps = {tk: json.loads(p) for tk, p in snaps}
-    tickers = tickers or sorted(snaps)
-    builder = TextFeatureBuilder(db_path=service_db)
-    cfg = LlmServerConfig()
-    model_hash = file_sha256(cfg.model_path)
-    rows = []
-    with llm_server(cfg, log_path=log_path) as live:
-        for tk in tickers:
-            snap = snaps[tk]
-            state = build_state(snap, bounds)
-            news = builder.load_news_as_of(pd.Timestamp(snap["as_of"]).to_pydatetime(), ticker=tk, lookback_hours=24)
-            lines = news_lines(news, tk)
-            out = judge(live, state, lines)
-            rows.append({
-                "logged_at": datetime.now(), "as_of": pd.Timestamp(snap["as_of"]), "ticker": tk,
-                "decision": out["decision"], "p_keep": out["probs"]["keep"], "p_watch": out["probs"]["watch"],
-                "p_reduce": out["probs"]["reduce"], "position_spread": out["position_spread"],
-                "risk_level": out["explain"]["risk_level"], "uncertainty": out["explain"]["uncertainty"],
-                "mismatch": out["mismatch"], "rationale": out["explain"]["rationale"],
-                "input_json": json.dumps({"state": state, "news": lines}, ensure_ascii=False),
-                "output_json": json.dumps(out, ensure_ascii=False),
-                "prompt_version": PROMPT_VERSION, "model_file": cfg.model_path.name, "model_sha256": model_hash,
-                "calibrated": False,
-            })
-    log_decisions(rows, service_db)
-    return rows

@@ -192,17 +192,11 @@ def save(snaps: list[dict], service_db: str) -> None:
         con.unregister("s")
 
 
-def main() -> None:
+def build_all(service_db: str, snapshot_db: str, tickers: list[str] | None = None, verbose: bool = False) -> list[dict]:
+    """상장 중인 연구 종목(또는 지정 종목)의 지표 묶음을 순차로 만들어 저장하고 돌려준다."""
     from pipelines.ingest_text_context import listed_names, study_universe
 
-    ap = argparse.ArgumentParser(description="종목별 보조 지표 스냅숏을 만들어 서비스 DB에 저장한다(CPU, 순차).")
-    ap.add_argument("--snapshot-db", default=SNAPSHOT_DB)
-    ap.add_argument("--service-db", default=None)
-    ap.add_argument("--tickers", default=None, help="쉼표 구분. 없으면 상장 중인 연구 종목 전부")
-    args = ap.parse_args()
-    service_db = resolve_service_db_path(args.service_db)
-    snapshot_db = resolve_db_path(args.snapshot_db)
-    tickers = args.tickers.split(",") if args.tickers else list(listed_names(study_universe(service_db))[0])
+    tickers = tickers or list(listed_names(study_universe(service_db))[0])
     with duckdb.connect(service_db, read_only=True) as con:
         bounds = con.execute("SELECT * FROM regime_boundaries WHERE version = ?", [rb.VERSION]).df()
     halts = halt_labels(snapshot_db, service_db)
@@ -211,10 +205,22 @@ def main() -> None:
     for tk in tickers:
         s = build_snapshot(tk, snapshot_db, service_db, halts, bounds, end_bar)
         snaps.append(s)
-        rg = {k: v["regime"] for k, v in s["regime"]["values"].items()}
-        print(tk, s["as_of"], "마지막 체결", s["last_trade_bar"][11:16], rg, {k: round(v, 4) for k, v in s["garch_t"]["rv_forecast"].items()},
-              "정지1d", round(s["price_stall"]["1d"]["zero_return_share"], 2), "의심" if s["garch_t"]["fit_suspect"] else "", flush=True)
+        if verbose:
+            rg = {k: v["regime"] for k, v in s["regime"]["values"].items()}
+            print(tk, s["as_of"], "마지막 체결", s["last_trade_bar"][11:16], rg, {k: round(v, 4) for k, v in s["garch_t"]["rv_forecast"].items()},
+                  "정지1d", round(s["price_stall"]["1d"]["zero_return_share"], 2), "의심" if s["garch_t"]["fit_suspect"] else "", flush=True)
     save(snaps, service_db)
+    return snaps
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="종목별 보조 지표 스냅숏을 만들어 서비스 DB에 저장한다(CPU, 순차).")
+    ap.add_argument("--snapshot-db", default=SNAPSHOT_DB)
+    ap.add_argument("--service-db", default=None)
+    ap.add_argument("--tickers", default=None, help="쉼표 구분. 없으면 상장 중인 연구 종목 전부")
+    args = ap.parse_args()
+    snaps = build_all(resolve_service_db_path(args.service_db), resolve_db_path(args.snapshot_db),
+                      args.tickers.split(",") if args.tickers else None, verbose=True)
     print(f"{len(snaps)}종목 스냅숏 저장")
 
 

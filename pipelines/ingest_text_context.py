@@ -85,23 +85,29 @@ def main() -> None:
     ap.add_argument("--no-tickers", action="store_true", help="종목별 검색 없이 시장 검색어만")
     args = ap.parse_args()
 
-    service_db_path = resolve_service_db_path()
-    names, dropped = ({}, []) if args.no_tickers else listed_names(study_universe(service_db_path))
-    collector = TextDataCollector(ticker_names=names, lookback_days=args.lookback_days)
-    records = collector.collect_all(max_items_per_source=args.max_items)
+    r = ingest(resolve_service_db_path(), args.lookback_days, args.max_items, args.no_tickers)
+    print(f"[SUCCESS] Inserted/refreshed {r['inserted']} text records ({r['ticker_queries']} ticker queries, dropped {r['dropped']}).")
+    print(f"[SUCCESS] Generated {r['feature_rows']} 15-minute text feature rows.")
+    print(f"[SUCCESS] Report saved to {r['report']}")
+
+
+def ingest(service_db_path: str, lookback_days: int = DEFAULT_LOOKBACK_DAYS, max_items: int = 30, no_tickers: bool = False) -> dict:
+    """종목별·시장 뉴스 수집 → 저장 → 15분 특징. 건수와 보고서 경로를 돌려준다."""
+    names, dropped = ({}, []) if no_tickers else listed_names(study_universe(service_db_path))
+    collector = TextDataCollector(ticker_names=names, lookback_days=lookback_days)
+    records = collector.collect_all(max_items_per_source=max_items)
     per_ticker: dict[str, int] = {tk: 0 for tk in [*names, "MARKET"]}  # 0건 종목도 보고서에 남긴다
     for record in records:
         per_ticker[record.ticker_hint] = per_ticker.get(record.ticker_hint, 0) + 1
 
     builder = TextFeatureBuilder(db_path=service_db_path)
     inserted_count = builder.persist_raw_records(records)
-    features = builder.build_and_persist_15m_features(lookback_days=args.lookback_days)
+    features = builder.build_and_persist_15m_features(lookback_days=lookback_days)
     report_path = write_feature_report(
         inserted_count, len(features), service_db_path, per_ticker, dropped, collector.dropped_off_topic
     )
-    print(f"[SUCCESS] Inserted/refreshed {inserted_count} text records ({len(names)} ticker queries, dropped {dropped}).")
-    print(f"[SUCCESS] Generated {len(features)} 15-minute text feature rows.")
-    print(f"[SUCCESS] Report saved to {report_path}")
+    return {"inserted": inserted_count, "ticker_queries": len(names), "dropped": dropped,
+            "feature_rows": len(features), "report": str(report_path), "per_ticker": per_ticker}
 
 
 if __name__ == "__main__":

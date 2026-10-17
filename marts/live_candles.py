@@ -58,22 +58,28 @@ def load_live(service_db: str, ticker: str, start: pd.Timestamp | None = None) -
         return con.execute(q + " ORDER BY timestamp", args).df()
 
 
-def main() -> None:
+def fetch_all(service_db: str, count: int = 800) -> dict:
+    """연구 종목군 중 상장 종목의 최근 count봉을 순차로 받아 저장한다."""
     from pipelines.ingest_text_context import listed_names, study_universe
 
+    names, dropped = listed_names(study_universe(service_db))
+    frames = []
+    for tk in names:
+        frames.append(fetch_ticker(tk, count))
+        time.sleep(0.2)
+    n = save(frames, service_db)
+    span = pd.concat([f for f in frames if len(f)])
+    return {"tickers": len(names), "dropped": dropped, "bars": n,
+            "first": str(span["timestamp"].min()), "last": str(span["timestamp"].max())}
+
+
+def main() -> None:
     ap = argparse.ArgumentParser(description="연구 종목군의 최근 15분봉을 서비스 DB에 쌓는다.")
     ap.add_argument("--count", type=int, default=800)
     ap.add_argument("--service-db", default=None)
     args = ap.parse_args()
-    service_db = resolve_service_db_path(args.service_db)
-    names, dropped = listed_names(study_universe(service_db))
-    frames = []
-    for tk in names:
-        frames.append(fetch_ticker(tk, args.count))
-        time.sleep(0.2)
-    n = save(frames, service_db)
-    span = pd.concat([f for f in frames if len(f)])
-    print(f"{len(names)}종목(제외 {dropped}) {n}봉 저장, 범위 {span['timestamp'].min()} ~ {span['timestamp'].max()}")
+    r = fetch_all(resolve_service_db_path(args.service_db), args.count)
+    print(f"{r['tickers']}종목(제외 {r['dropped']}) {r['bars']}봉 저장, 범위 {r['first']} ~ {r['last']}")
 
 
 if __name__ == "__main__":
