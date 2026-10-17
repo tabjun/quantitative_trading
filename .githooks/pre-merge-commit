@@ -3,4 +3,6 @@
 # 정책으로 검사해 develop/main에 지침 파일이 들어오는 것을 막는다(AGENTS.md 2.7절).
 set -eu
 
-python .githooks/check_repo_policy.py
+# 2026-10-18: 이 훅이 도는 시점에는 MERGE_HEAD가 아직 없어 기록 충돌 검사가 병합을 일반 커밋으로 보고
+# 상대 트랙 기록을 막았다(서비스 S205 실측). 병합임을 환경변수로 알린다.
+REPO_POLICY_MERGE=1 python .githooks/check_repo_policy.py
