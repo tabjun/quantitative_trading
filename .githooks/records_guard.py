@@ -185,21 +185,23 @@ def git_text(root: Path, spec: str) -> str:
 
 
 def commit_errors(root: Path, staged: list[str]) -> list[str]:
-    """pre-commit에서 부른다. (1) 에이전트가 기록 파일을 커밋하면 이 세션이 잠금 주인이어야 한다.
-    (2) 스테이징된 chat_history·state에서 번호가 새로 겹치면 안 된다(예전부터 있던 중복은 통과)."""
+    """pre-commit에서 부른다. (0) 살아 있는 다른 세션이 이 트리를 잠갔으면 에이전트의 커밋은 파일 종류와 관계없이
+    막는다(2026-10-18: 점검 세션이 서비스 잠금 중인 트리에서 코드만 커밋해 기록 검사를 비켜 갔다). (1) 에이전트가
+    기록 파일을 커밋하면 이 세션이 잠금 주인이어야 한다. (2) 스테이징된 chat_history·state에서 번호가 새로 겹치면
+    안 된다(예전부터 있던 중복은 통과)."""
     errors: list[str] = []
+    me = agent_pid()
+    owner = lock_owner(root) if me is not None else None
+    if owner and int(owner["pid"]) != me:
+        return [f"다른 세션({owner.get('role', '?')} {owner['comm']} PID {owner['pid']})이 이 작업 트리를 잠갔다. "
+                "한 작업 트리에는 한 세션만 커밋한다(AGENTS.md §1). 변경이 필요하면 그 세션에 인계 글로 넘긴다."]
     rec = [p for p in staged if p in RECORD_FILES]
     if not rec:
         return errors
-    me = agent_pid()
     if me is not None:
-        owner = lock_owner(root)
         if not owner:
             errors.append(f"기록 파일({', '.join(rec)})을 커밋하려면 이 세션이 작업 트리 잠금을 가져야 한다: "
                           "`python .githooks/records_guard.py claim`")
-        elif int(owner["pid"]) != me:
-            errors.append(f"다른 세션({owner.get('role', '?')} {owner['comm']} PID {owner['pid']})이 이 작업 트리 잠금을 갖고 있다. "
-                          "그 세션의 커밋 전 행까지 함께 커밋하게 되므로 막는다. 한 작업 트리에는 한 세션만 둔다.")
         else:
             # 병합 커밋은 상대 트랙이 이미 커밋한 기록을 정상적으로 가져오므로 다른 트랙 검사에서 뺀다.
             # 자동 병합 커밋(pre-merge-commit)에는 MERGE_HEAD가 아직 없어 훅이 REPO_POLICY_MERGE=1을 준다.
