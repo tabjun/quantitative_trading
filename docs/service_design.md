@@ -101,7 +101,9 @@ JEPA 계열은 내려받아 쓸 대화형 모델이 없고, MoE(Qwen3.5-35B-A3B 
 | `candles_live_15m` | 스냅숏 이후 판단 시점까지의 실시간 15분봉(업비트 공개 API, 닫힌 봉만, KST) | 2 |
 | `routing_rules` | 국면·H → 모델(비활성), 규칙 버전·출처 실험 | 2 |
 | `indicator_snapshots` | (as_of, ticker)별 보조 지표 JSON: 사전 국면, GARCH-t 예측 RV, 가격 정지 비율, 값마다 출처·적합 구간·예측 시각 | 2 |
-| `decision_log` | 판단 입력·출력·세 보기 확률·배치 간 편차·위험 수준·불일치 표시·지시문 버전·모델 파일·sha256·보정 여부·시각 | 4·5 |
+| `decision_log` | 판단 입력·출력·세 보기 확률·배치 간 편차·위험 수준·불일치 표시·지시문 버전·모델 파일·sha256·보정 여부·시각, 입력 해시(`input_hash`, 같은 입력은 한 번만) | 4·5 |
+| `baseline_decisions` | (as_of, 종목, 규칙, 규칙 버전)별 기준선 판단과 이유 | 4 |
+| `ops_runs`·`ops_step_runs`·`ops_item_failures`·`ops_param_sets` | 운영 기록: 실행·단계·항목 실패·설정 묶음(§13-3) | 5 |
 
 ## 9. 0단계에서 확인할 것
 
@@ -318,3 +320,33 @@ LLM 판단은 같은 라벨·같은 비용에서 아래 규칙보다 나아야 �
 | LLM 여유선 | 여유선 부족이면 서버를 띄우기 전에 `ResourceUnavailable` |
 
 2026-10-18 실행: 7/7 통과.
+
+### 13-3. 운영 로깅·실행 기록·변경분만 쓰기 (S212, 2026-10-18)
+
+**로그 파일**(`common/logging_setup.py`): 모든 모듈이 `logging.getLogger(__name__)`를 쓰고, 진입점이 한 번 설정한다. `logs/service/service.log`(INFO 이상, 5MB × 5개 교체), 화면은 WARNING 이상. 줄 형식 `시각 수준 모듈 [실행 번호] 메시지`. 남기는 것: 실행 시작·끝, 단계 완료·실패(예상 밖 오류는 추적 정보), 항목 실패(`each`가 한곳에서), 표 쓰기 건수(새로·바뀜·같음), 시세 수집 범위, 뉴스 원본·정리 뒤 건수와 실패 출처, 종목별 지표 기준 시각·GARCH 척도·적합 의심, LLM 서버 시작·준비 시간·종료, 판단 재사용 수. 2.14용 `status.txt`·`mem.log`는 그대로 둔다(연구 세션이 읽는다).
+
+**실행 기록 표**(`common/ops_store.py`, 서비스 DB):
+
+| 표 | 열쇠 | 내용 |
+| :--- | :--- | :--- |
+| `ops_runs` | run_id | 시작·끝, 상태(running/ok/partial/failed), 실행 방법, 설정 JSON, 코드 버전(git, 커밋 안 된 변경이 있으면 `-dirty`), 호스트 |
+| `ops_step_runs` | (run_id, step) | 상태(ok/failed/skipped), 설정 묶음 해시, 걸린 시간, 성공·실패 항목 수, 오류, 자원, 요약 JSON |
+| `ops_item_failures` | (run_id, step, item) | 단계 안 실패 항목(종목·뉴스 출처)과 사유 |
+| `ops_param_sets` | param_hash | 단계별 설정·초매개변수 묶음(내용 해시가 열쇠라 같은 설정은 한 번만) |
+
+실행·단계 기록은 "언제 돌렸고 어떻게 끝났나"라는 사건 기록이라 실행마다 남긴다(행이 작다). 설정은 바뀔 때만 새 행이 생긴다.
+
+**변경분만 쓰기**(`common/db.write_changed`, 사용자 원칙: 같은 시험이면 이전 기록을 쓰고, 새 값·바뀐 값만 넣는다):
+
+| 표 | 열쇠 | 비교 열 | 같은 값이면 |
+| :--- | :--- | :--- | :--- |
+| `candles_live_15m` | (ticker, timestamp) | OHLCV·거래대금 | 건너뜀(거래소 정정만 고침) |
+| `text_events_raw` | record_id | 없음 | 건너뜀(처음 수집 시각 보존) |
+| `indicator_snapshots` | (ticker, as_of) | payload_hash(생성 시각 제외) | 건너뜀 |
+| `baseline_decisions` | (as_of, ticker, rule, rule_version) | decision, why | 건너뜀 |
+| `regime_boundaries` | (version, ticker, horizon_min) | 분위 경계·표본 수 | 건너뜀 |
+| `decision_log` | input_hash(지표 상태·뉴스·지시문 버전·모델 sha256) | 없음 | **LLM을 다시 부르지 않고 저장된 판단을 쓴다**. 다시 물을 종목이 없으면 서버도 띄우지 않는다 |
+
+`text_features_15m`은 원문에서 매번 다시 만드는 파생 표라 통째로 다시 쓴다(행 수가 늘지 않는다).
+
+**확인**: 자체 시험 9/9(변경분만 쓰기, 판단 재사용, 실행 기록 상태 포함, 열 이름이 SQL 예약어여도 되게 고친 결함 포함). 실데이터 2회 연속 실행(뉴스 제외): 2회차에 시세 7,187·지표 18·기준선 126행 모두 "같음(건너뜀)", 설정 묶음 5개 그대로, 실행 기록 2건·단계 기록 10건.
