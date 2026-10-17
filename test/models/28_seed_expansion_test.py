@@ -1453,6 +1453,39 @@ def fig_top5(tt: pd.DataFrame, path: Path, S: int) -> None:
     plt.close(fig)
 
 
+def poster_numbers(tt: pd.DataFrame, sp: pd.DataFrame, S: int) -> str:
+    """포스터 6차 요청문에 들어가는 숫자를 결과 표에서 직접 뽑는다(손으로 옮기다 틀리는 것을 막는다).
+    27번 포스터의 결과 1(가장 요동칠 때 병렬 딥러닝 비교), 결과 2·표 3(묶음 검정 칸 수), 결론 1(칸별 1위)에 대응한다."""
+    L = [f"# 28번 포스터 숫자(시드 {S}개, 시드 항 포함 검정, Holm 0.05)", "",
+         "> `28_seed_expansion_test.py`의 `poster_numbers`가 결과 표에서 자동으로 만든다. 포스터에는 이 파일의 숫자만 쓴다.", ""]
+    q5 = tt[(tt["범위"] == "Q5") & tt["모델"].map(GROUP_OF).eq("병렬(딥러닝)")]
+    worse = q5[~q5["동률"]]
+    L += ["## 결과 1: 가장 요동칠 때(Q5) 병렬 딥러닝 대 1위", "",
+          f"- 비교 수: {len(q5)}번(모델 × 예측 구간). 1위보다 유의하게 나쁨 {len(worse)}번, 1위이거나 구분 안 됨 {len(q5) - len(worse)}번.",
+          "- 구분 안 됨(또는 1위)인 칸: " + (", ".join(f"{hlabel(r.H)} {r.모델}" for r in q5[q5["동률"]].itertuples()) or "없음") + ".",
+          "- 구간별 모델 수: " + ", ".join(f"{hlabel(H)} {int((q5['H'] == H).sum())}종" for H in M.HORIZONS_H) + ".", ""]
+    L += ["## 결과 2·표 3: 처리 방식 묶음 검정(30칸 = 예측 구간 5 × 범위 6)", "",
+          "| 비교(A − B) | A 우세 | B 우세 | 구분 안 됨 | 가장 요동칠 때 A 우세 구간 |", "| :--- | ---: | ---: | ---: | :--- |"]
+    for name, g in sp.groupby("비교", sort=False):
+        a_win = g["판정"].eq("순차 우세")
+        q5w = g[(g["범위"] == "Q5") & a_win]["H"]
+        L.append(f"| {name} | {int(a_win.sum())} | {int(g['판정'].eq('병렬 우세').sum())} | {int(g['판정'].eq('구분 안 됨').sum())} | "
+                 + ("·".join(hlabel(h) for h in q5w) or "없음") + " |")
+    L += ["", "## 결론 1: 칸별 1위(1위와 구분 안 되는 모델 수)", "",
+          "| 구간 | " + " | ".join(SCOPES) + " |", "| :--- |" + " :--- |" * len(SCOPES)]
+    for H in M.HORIZONS_H:
+        cells = []
+        for sc in SCOPES:
+            g = tt[(tt["H"] == H) & (tt["범위"] == sc)]
+            cells.append(f"{g['최선'].iloc[0]}({GROUP_OF.get(g['최선'].iloc[0], '기준선')}, 동률 {int(g['동률'].sum()) - 1})")
+        L.append(f"| {hlabel(H)} | " + " | ".join(cells) + " |")
+    full = tt[tt["범위"] == "전체"]
+    L += ["", "## 후보 수", "",
+          "- 구간별 1위 후보(naive 제외): " + ", ".join(f"{hlabel(H)} {int(((full['H'] == H) & (full['모델'] != 'naive')).sum())}개"
+                                             for H in M.HORIZONS_H) + "."]
+    return "\n".join(L) + "\n"
+
+
 def _design_section() -> str:
     from report_header import render_design_section
     return render_design_section(__file__)
@@ -1496,6 +1529,7 @@ def write_report(tickers: list[str]) -> None:
     fig_procedure(gm, figs["proc"]); fig_ranking(tt, figs["rank"]); fig_seqpar(sp, figs["sp"])
     fig_regime(tt, figs["rg"]); fig_vs27(tt, R27["ties"], figs["vs"])
     fig_top5(tt, figs["top5"], S); fig_regime_lines(tt, figs["lines"], S)
+    (RES / f"{STEM}_poster_numbers.md").write_text(poster_numbers(tt, sp, S), encoding="utf-8")
     rel = lambda p: os.path.relpath(p, RES)
     rt = pd.read_csv(RES / f"{STEM}_seed_error_ratio.csv")
     L: list[str] = []
