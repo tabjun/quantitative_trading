@@ -32,6 +32,13 @@
 # 계속 대표하므로, 2026-09-07 "선형 → 비선형·커널 계열로 대체" 결정의 취지는 유지된다. 이미 끝난 3종목의 두 모델 값은
 # 작업 캐시에 기록으로만 남고 결과 파일·검정에 들어가지 않는다.
 #
+# **설계 변경 2(2026-10-18, 버그 수정, 요청 185).** 26c에서 물려받은 GARCH-t 적합(`garch_t_fit`, 수익률 ×100 척도 1회)이
+# 일부 종목에서 arch 시작값(α = 0.1, β = 0.88)에 고착된 채 끝나 최대우도 추정이 아니었다(28번 내부학습 적합 5종목, 26c 전체 적합
+# 6종목). 여러 척도로 적합해 수렴했고 시작값이 아닌 해 중 로그우도 최대를 쓰는 `garch_t_fit_robust`로 바꾸고, GARCH-t와 그 예측을
+# 특징으로 쓰는 GARCH+LightGBM이 들어 있는 CPU 작업(시드 0~4)을 다시 돌린다. GPU 작업(신경망)은 GARCH를 쓰지 않아 그대로 둔다.
+# 고치기 전 CPU 작업 결과는 `parts/s{시드}/cpu_garch_x100/`에 보존해 보고서에서 전후를 비교한다. 26·26c·27번 결과는 완료 실험이라
+# 다시 돌리지 않고, 영향 범위를 28번 보고서에 적는다.
+#
 # **고정 조건(26c·27과 같음).** DB `upbit_data_20261005.db`, 20종목(`study_universe`), 15분봉, 창 2023-10-06 ~
 # 2026-10-05, 분할 2025-11-11(전 종목 공통), 내부학습 85%/내부검증 15%(시간순), 예측 구간 15분·30분·1시간·4시간·
 # 12시간, 정시 비겹침 평가, 손실 QLIKE, 가격 정지 두 부분 모형(정지 확률 π × 크기), 모델별 입력 표현은 27번과 같다
@@ -228,6 +235,54 @@ def pi_job(tk: str, quick: bool) -> str:
 
 
 # %% [markdown]
+# ## GARCH-t 적합(2026-10-18 버그 수정)
+#
+# 26c의 `garch_t_fit`은 수익률 ×100 척도로 `arch`를 한 번 적합한다. 이 척도에서 일부 종목은 최적화가 arch의 시작값
+# (α = 0.1, β = 0.88)에서 움직이지 않은 채 "수렴"으로 끝난다. 26c 전체 적합은 6종목(AQT·BTC·MOC·STRAX·XLM·XRP), 28번 내부학습
+# 적합은 5종목(BTC·DOGE·SHIB·XLM·TOKAMAK)이 그랬고, ×1000 척도로 다시 적합하면 로그우도가 68~639 높았다(서비스 트랙 S194 발견,
+# 연구 세션 재확인). 최대우도 추정이 아니므로 고친다. 여러 척도(×100·×1000·×10)로 적합해, 수렴 플래그가 0이고 시작값에 고착되지
+# 않은 해 중 ×100 척도로 환산한 로그우도가 가장 큰 해를 쓴다. 반환 형식(×100 척도의 ω와 조건부 분산)은 26c와 같다.
+
+# %%
+GARCH_SCALES = (100, 1000, 10)
+
+
+def garch_t_fit_robust(dc: np.ndarray, split_c: int) -> dict:
+    from arch import arch_model
+    from scipy.signal import lfilter
+    tried, best = [], None
+    for k in GARCH_SCALES:
+        try:
+            res = arch_model(dc[:split_c] * k, mean="Zero", vol="GARCH", p=1, q=1, dist="t").fit(disp="off", show_warning=False)
+        except Exception as e:
+            tried.append({"척도": k, "오류": type(e).__name__})
+            continue
+        p = res.params
+        al, be, nu = float(p["alpha[1]"]), float(p["beta[1]"]), float(p["nu"])
+        stuck = abs(al - 0.1) < 1e-6 and abs(be - 0.88) < 1e-6
+        ll100 = float(res.loglikelihood) + split_c * np.log(k / 100)       # ×k 척도 로그우도를 ×100 척도로 환산
+        ok = int(res.convergence_flag) == 0 and not stuck and np.isfinite(ll100)
+        r = {"척도": k, "수렴플래그": int(res.convergence_flag), "시작값고착": stuck, "LL100": ll100, "ok": ok,
+             "omega": float(p["omega"]) * (100 / k) ** 2, "alpha": al, "beta": be, "nu": nu,
+             "cv_in": np.asarray(res.conditional_volatility) ** 2 * (100 / k) ** 2}
+        tried.append({kk: v for kk, v in r.items() if kk != "cv_in"})
+        if best is None or (r["ok"], r["LL100"]) > (best["ok"], best["LL100"]):
+            best = r
+    if best is None or not best["ok"]:
+        raise RuntimeError(f"GARCH-t: 모든 척도에서 정상 수렴 실패 {tried}")
+    x = dc * 100.0
+    n = len(x)
+    cv = np.full(n, np.nan)
+    cv[:split_c] = best["cv_in"]
+    drive = best["omega"] + best["alpha"] * x[split_c - 1:n - 1] ** 2
+    cv[split_c:], _ = lfilter([1.0], [1.0, -best["beta"]], drive, zi=np.array([best["beta"] * cv[split_c - 1]]))
+    ll100 = {t_["척도"]: t_.get("LL100", np.nan) for t_ in tried}
+    return dict(cv=cv, omega=best["omega"], alpha=best["alpha"], beta=best["beta"], nu=best["nu"], scale=best["척도"],
+                ll_gain_vs_x100=float(best["LL100"] - ll100.get(100, np.nan)),
+                x100_stuck=any(t_.get("척도") == 100 and t_.get("시작값고착") for t_ in tried), tried=tried)
+
+
+# %% [markdown]
 # ## CPU 작업: 결정론 모델(시드 0만)과 트리·커널 근사(모든 시드), 무재적합
 
 # %%
@@ -256,7 +311,10 @@ def run_cpu_job(tk: str, seed: int, quick: bool) -> dict:
         f_ = {}
         t = time.time()
         try:
-            f_["GARCH-t"] = M.garch_t_fit(dc, ic)
+            f_["GARCH-t"] = garch_t_fit_robust(dc, ic)
+            g_ = f_["GARCH-t"]
+            meta.update({f"garch_{pd.Timestamp(inner).strftime('%Y%m%d')}_{k}": g_[k]
+                         for k in ("scale", "alpha", "beta", "nu", "ll_gain_vs_x100", "x100_stuck")})
         except Exception as e:
             fails.append(("GARCH-t", "*", type(e).__name__, str(e)[:160]))
         timings["GARCH-t"] = timings.get("GARCH-t", 0) + time.time() - t
@@ -1541,6 +1599,65 @@ def fig_calibration(seeds, path: Path) -> None:
     fig.tight_layout(); fig.savefig(path, dpi=300); plt.close(fig)
 
 
+def garch_fix_section(path: Path, seeds) -> str:
+    """GARCH-t 수렴 버그 수정 전후(설계 변경 2): 고치기 전 CPU 작업(parts/s*/cpu_garch_x100)과 고친 뒤의 GARCH-t·GARCH+LightGBM QLIKE."""
+    rows = []
+    for s in seeds:
+        old_dir, new_dir = PARTS / f"s{s}" / "cpu_garch_x100", PARTS / f"s{s}" / "cpu"
+        if not old_dir.exists():
+            continue
+        for f in sorted(new_dir.glob("*.pkl")):
+            o = old_dir / f.name
+            if not o.exists():
+                continue
+            new, old = pickle.loads(f.read_bytes()), pickle.loads(o.read_bytes())
+            gm = {k: v for k, v in new["meta"].items() if k.startswith("garch_")}
+            stuck = any(v is True for k, v in gm.items() if k.endswith("x100_stuck"))
+            gain = max([v for k, v in gm.items() if k.endswith("ll_gain_vs_x100")] or [np.nan])
+            for Rn, Ro in zip(new["results"], old["results"]):
+                qn = {r["모델"]: r["QLIKE"] for r in Rn["rows"]}
+                qo = {r["모델"]: r["QLIKE"] for r in Ro["rows"]}
+                for nm in ("GARCH-t", "GARCH+LightGBM"):
+                    if nm in qn and nm in qo:
+                        rows.append({"시드": s, "종목": new["ticker"], "H": Rn["H"], "모델": nm, "QLIKE_수정전": qo[nm],
+                                     "QLIKE_수정후": qn[nm], "차(후−전)": qn[nm] - qo[nm], "x100_시작값고착": stuck,
+                                     "LL이득": gain})
+    if not rows:
+        return "- 해당 없음(수정 전 저장분이 없다)."
+    d = pd.DataFrame(rows)
+    d.to_csv(RES / f"{STEM}_garchfix_before_after.csv", index=False)
+    d0 = d[d["시드"] == d["시드"].min()]
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.6))
+    for ax, nm in zip(axes, ("GARCH-t", "GARCH+LightGBM")):
+        g = d0[d0["모델"] == nm]
+        big = g["LL이득"] > 1.0
+        lo, hi = float(min(g["QLIKE_수정전"].min(), g["QLIKE_수정후"].min())), float(max(g["QLIKE_수정전"].max(), g["QLIKE_수정후"].max()))
+        ax.plot([lo, hi], [lo, hi], color=MUTED, lw=0.8, ls=":")
+        ax.scatter(g.loc[~big, "QLIKE_수정전"], g.loc[~big, "QLIKE_수정후"], s=18, color="#9aa5b1", label="로그우도 변화 없음(정상 적합 종목)")
+        ax.scatter(g.loc[big, "QLIKE_수정전"], g.loc[big, "QLIKE_수정후"], s=24, color="#c0392b", label="×100 적합이 최대우도가 아니었던 종목")
+        ax.set_title(nm, fontsize=11, loc="left", fontweight="bold")
+        ax.set_xlabel("QLIKE 수정 전(×100 척도 1회 적합)")
+        ax.set_ylabel("QLIKE 수정 후(여러 척도 중 최대우도)")
+        ax.legend(fontsize=8)
+    fig.tight_layout(); fig.savefig(path, dpi=300); plt.close(fig)
+    aff = sorted(d0.loc[d0["LL이득"] > 1.0, "종목"].unique())
+    summ = d0.groupby(["모델", d0["LL이득"] > 1.0])["차(후−전)"].agg(["mean", "min", "max", "count"])
+    L = ["- **무엇이 문제였나**: 26c의 `garch_t_fit`은 수익률 ×100 척도로 arch를 한 번만 적합한다. 일부 종목은 최적화가 arch 시작값(α = 0.1, β = 0.88) "
+         "근처에서 멈춘 채 끝나 최대우도 추정이 아니었다. 28번 내부학습 적합에서 영향받은 종목: " + (", ".join(aff) or "없음") +
+         f"(×100 대비 최대 로그우도 이득 {d0['LL이득'].max():.1f}). 서비스 트랙(S194)이 26c 전체 적합에서 먼저 발견했고(AQT·BTC·MOC·STRAX·XLM·XRP, 26c 저장 모수가 정확히 시작값), 연구 세션이 다시 확인했다.",
+         "- **어떻게 고쳤나**: ×100·×1000·×10 척도로 적합해 수렴 플래그 0이고 시작값이 아닌 해 중 ×100 척도로 환산한 로그우도 최대를 쓴다(`garch_t_fit_robust`). "
+         "합성 GARCH(1,1)-t 복원 시험을 자체 시험에 넣었다. GARCH-t와 그 예측을 특징으로 쓰는 GARCH+LightGBM이 든 CPU 작업(시드 0~4)을 다시 돌렸다. 신경망(GPU)은 GARCH를 쓰지 않아 그대로다.",
+         "- **수정 전후 QLIKE(시드 0, 종목 × 구간)**:", "",
+         "| 모델 | 영향 종목 여부 | 평균 차(후 − 전) | 최소 | 최대 | 칸 수 |", "| :--- | :--- | ---: | ---: | ---: | ---: |"]
+    for (nm, a_), r in summ.iterrows():
+        L.append(f"| {nm} | {'영향 종목' if a_ else '정상 종목'} | {r['mean']:+.4f} | {r['min']:+.4f} | {r['max']:+.4f} | {int(r['count'])} |")
+    L += ["", f"![GARCH 수정 전후]({os.path.relpath(path, RES)})", "",
+          "- **그림 읽는 법**: 점 하나가 (종목, 구간) 하나다. 대각선 아래면 수정 뒤 QLIKE가 작아졌다(좋아졌다). 빨간 점이 ×100 적합이 최대우도가 아니었던 종목이다.",
+          "- **완료 실험에 대한 영향**: 26·26c·27번 GARCH-t(그리고 26c·27번 GARCH+LightGBM)는 같은 함수를 썼으므로 26c 전체 적합 기준 6종목의 수치가 최대우도 결과가 아니다. "
+          "완료 실험은 다시 돌리지 않고 이 절로 영향을 알린다. GARCH 계열이 1위였던 결론(26b·27번 15분)은 28번 수치로 다시 판단한다."]
+    return "\n".join(L)
+
+
 def poster_numbers(tt: pd.DataFrame, sp: pd.DataFrame, S: int) -> str:
     """포스터 6차 요청문에 들어가는 숫자를 결과 표에서 직접 뽑는다(손으로 옮기다 틀리는 것을 막는다).
     27번 포스터의 결과 1(가장 요동칠 때 병렬 딥러닝 비교), 결과 2·표 3(묶음 검정 칸 수), 결론 1(칸별 1위)에 대응한다."""
@@ -1674,6 +1791,10 @@ def write_report(tickers: list[str]) -> None:
     e("- 상한 도달 비율: " + ", ".join(f"{sname(m)} {v:.1%}" for m, v in cap.items()) +
           ". ModernTCN·S-Mamba는 저자 학습 루프가 단계 수를 돌려주지 않아 해당 없음(기록 안 함)이다.")
     e("")
+    e("### 2-1. GARCH-t 수렴 버그와 수정(설계 변경 2)")
+    e("")
+    e(garch_fix_section(IMG / f"{STEM}_garchfix_before_after.png", seeds))
+    e("")
     e("## 3. 예측 구간별 순위(전체 기간)")
     e("")
     e(f"![순위]({rel(figs['rank'])})")
@@ -1794,6 +1915,15 @@ def selftest() -> None:
     # π 교체식: π가 같으면 예측이 그대로
     p27, pi = rng.uniform(.1, 1, 50), rng.uniform(0, .5, 50)
     assert np.allclose(p27 * np.sqrt((1 - pi) / (1 - pi)), p27)
+    # GARCH-t 복원: 15분 수익률 크기(표준편차 약 0.3%)의 합성 GARCH(1,1)-t에서 시작값이 아닌 참값 근처를 찾아야 한다
+    n, om, al, be, nu = 6000, 2e-7, 0.15, 0.80, 5.0
+    e = rng.standard_t(nu, n) * np.sqrt((nu - 2) / nu)
+    r_, h = np.zeros(n), om / (1 - al - be)
+    for i in range(n):
+        r_[i] = np.sqrt(h) * e[i]
+        h = om + al * r_[i] ** 2 + be * h
+    g = garch_t_fit_robust(r_, n - 500)
+    assert abs(g["alpha"] - al) < 0.06 and abs(g["beta"] - be) < 0.08 and np.isfinite(g["cv"]).all(), (g["alpha"], g["beta"])
     print("[자체 시험] 통과", flush=True)
 
 
