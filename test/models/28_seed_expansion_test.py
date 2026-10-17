@@ -739,6 +739,7 @@ def _gpu_task(tk, H, name, seed, quick):
 # 한도는 LIMITS 파일로 실행 중에도 바꿀 수 있다(다른 세션이 무거운 작업을 할 때 낮춘다).
 LIMITS = RES / "parts" / "_limits.json"
 LIMIT_DEFAULT = {"reserve_gb": 6.0, "floor_gb": 4.5, "gpu_reserve_gb": 4.0, "max_gpu_workers": 3, "max_cpu_workers": 4,
+                 "track_ram_gb": 15.0,
                  "est_gb": {"cpu_s0": 6.0, "cpu": 3.0, "gpu": 2.8, "pi": 2.0}}
 # cpu_s0 6.0GB는 커널 2종을 포함한 실측 5.6GB 기준이다. 제외 뒤 첫 작업의 최대 RSS로 다시 재서 낮춘다.
 
@@ -775,6 +776,20 @@ def _pool_rss_gb(pool) -> float:
     return tot
 
 
+def _track_rss_gb() -> float:
+    """연구 대기열 전체(같은 세션 ID = setsid로 띄운 queue.sh와 그 하위 프로세스)의 상주 메모리 합(GB).
+    GPU 줄과 CPU 줄이 서로 다른 프로세스라, 트랙 몫(AGENTS.md 2.14 연구 RAM 15GB)은 세션 단위로 센다."""
+    import psutil
+    sid, tot = os.getsid(0), 0.0
+    for p in psutil.process_iter(["pid"]):
+        try:
+            if os.getsid(p.info["pid"]) == sid:
+                tot += p.memory_info().rss / 1024 ** 3
+        except Exception:
+            pass
+    return tot
+
+
 def run_pool(tasks: list, fn, workers: int, label: str, retries: int = 1, kind: str = "cpu") -> list:
     """작업을 메모리 한도 안에서 병렬로 돌린다. workers는 상한이고, 실제 동시 실행 수는 메모리가 정한다.
     실패한 작업은 retries번 다시 돌리고, 끝까지 실패한 작업 목록을 돌려준다."""
@@ -795,13 +810,14 @@ def run_pool(tasks: list, fn, workers: int, label: str, retries: int = 1, kind: 
                     owed = max(0.0, len(running) * est - _pool_rss_gb(pool))       # 돌고 있는 작업이 더 쓸 몫(추정)
                     room = _avail_gb() - owed
                     gpu_ok = kind != "gpu" or _gpu_free_gb() >= float(L["gpu_reserve_gb"])
+                    track_ok = _track_rss_gb() + owed + est <= float(L["track_ram_gb"])
                     if (not running) and _avail_gb() >= float(L["floor_gb"]) + est and gpu_ok or \
-                            room >= float(L["reserve_gb"]) + est and gpu_ok:
+                            room >= float(L["reserve_gb"]) + est and gpu_ok and track_ok:
                         t = queue.pop(0)
                         running[pool.submit(fn, *t)] = t
                         continue
                     if time.time() - last_note > 600:
-                        print(f"  [{label}] 메모리 대기: 사용 가능 {_avail_gb():.1f}GB, 예약 {owed:.1f}GB, "
+                        print(f"  [{label}] 메모리 대기: 사용 가능 {_avail_gb():.1f}GB, 연구 합계 {_track_rss_gb():.1f}GB, 예약 {owed:.1f}GB, "
                               f"동시 {len(running)}/{cap}", flush=True)
                         last_note = time.time()
                 if not running:
