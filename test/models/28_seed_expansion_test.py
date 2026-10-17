@@ -44,6 +44,14 @@
 # 때까지 이어서 최적화한 로그우도로 τ를 고르는 `fit_tar_garch_robust`로 바꾸고 진단을 남긴다. GARCH-t 수정과 함께 CPU 작업을 다시 돌린다.
 # 같은 날 재사용 적합 함수를 모두 점검했다: MS-GARCH(제약판)는 20종목 수렴 표시이나 9종목이 허용 경계에 닿아 있다(26c부터 기록된 한계).
 #
+# **설계 변경 4(2026-10-18, 사용자 결정, 요청 187).** GARCH 사양을 데이터로 고르는 결정론 모델 `GARCH-BIC`를 순차 묶음에 더한다.
+# 2026-09-07 가정 진단에서 상위 14개 사양이 모두 FIGARCH였는데 번호 실험은 GARCH(1,1)-t만 썼다. 후보(실행 전 고정): 변동성 식
+# GARCH(1,1)·GARCH(2,1)·GARCH(1,2)·GJR-GARCH(1,1,1)·FIGARCH(1,d,1) × 분포 t·skew-t = 10개, 평균 0. 종목마다 내부학습 구간에서 각 후보를
+# ×100·×1000·×10 척도로 적합해(수렴한 해 중 로그우도 최대) ×100 척도 BIC가 가장 작은 사양을 고른다. 예측은 고른 사양을 고정 모수로
+# 전체 계열에 걸어 arch의 해석적 다단계 분산 예측을 쓰고, 보정·두 부분 처리 없음은 GARCH-t와 같다. EGARCH는 해석적 다단계 예측이 없어
+# 후보에서 뺐다. 기존 GARCH(1,1)-t는 그대로 두어 사양 선택의 효과를 비교한다. 게이트: GARCH(1,1)-t 후보의 arch 예측 경로가
+# 26c 닫힌 식 경로(`garch_multistep`)와 같아야 한다(예측 시점 정렬 확인).
+#
 # **고정 조건(26c·27과 같음).** DB `upbit_data_20261005.db`, 20종목(`study_universe`), 15분봉, 창 2023-10-06 ~
 # 2026-10-05, 분할 2025-11-11(전 종목 공통), 내부학습 85%/내부검증 15%(시간순), 예측 구간 15분·30분·1시간·4시간·
 # 12시간, 정시 비겹침 평가, 손실 QLIKE, 가격 정지 두 부분 모형(정지 확률 π × 크기), 모델별 입력 표현은 27번과 같다
@@ -156,16 +164,19 @@ GPU_MODELS = RNN_MODELS + BLOCK_MODELS
 CPU_STOCH = ("Nystroem+Ridge", "LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM")
 STOCHASTIC = CPU_STOCH + GPU_MODELS                       # 15종
 CPU_DET = ("GARCH-t", "MS-GARCH", "TAR-GARCH")
+GARCH_BIC = "GARCH-BIC"            # 설계 변경 4: 시드 0에서 한 번 적합하는 결정론 모델(parts/s0/garchbic)
 # 설계 변경(2026-10-15, 요청 177·179): 학습 데이터를 잘라 쓰는 두 커널 모델은 적합하지 않는다(설계 셀 참고).
 DECISION_EXCLUDED = ("KernelRidge-RBF", "SVR-RBF")
 FM_MODELS = X.FM_MODELS
 TTM_UNSUPPORTED_H = X.TTM_UNSUPPORTED_H
-ALL_MODELS = ("naive",) + CPU_DET + CPU_STOCH + GPU_MODELS + FM_MODELS
+ALL_MODELS = ("naive",) + CPU_DET + (GARCH_BIC,) + CPU_STOCH + GPU_MODELS + FM_MODELS
 R_PAIRS_A = RNN_MODELS
 R_PAIRS_B = BLOCK_MODELS                                  # 학습하는 병렬 딥러닝 8종
 
-FAMILY = {**{m: X.NEW_FAMILY.get(m, M.FAMILY.get(m)) for m in ALL_MODELS}}
-PROCESS = {**M.PROCESS, **X.NEW_PROCESS}
+FAMILY = {**{m: X.NEW_FAMILY.get(m, M.FAMILY.get(m)) for m in ALL_MODELS}, GARCH_BIC: M.FAMILY.get("GARCH-t")}
+PROCESS = {**M.PROCESS, **X.NEW_PROCESS, GARCH_BIC: "다단계 예측(사양 BIC 선택)"}
+M.FAMILY[GARCH_BIC] = M.FAMILY["GARCH-t"]          # 26c Scorer가 행을 만들 때 읽는 사전에도 등록
+M.PROCESS[GARCH_BIC] = PROCESS[GARCH_BIC]
 
 
 def lr_grid(name: str) -> tuple:
@@ -339,6 +350,97 @@ def fit_tar_garch_robust(r_pct: np.ndarray, sw: np.ndarray, split_idx: int, taus
     diag.update(선택_tau=tau, 선택_ll=float(ll), 선택_수렴=conv,
                 최대_ll이득=float(max(c.get("ll이득", 0.0) for c in diag["τ후보"])))
     return tau, info, diag
+
+
+# %% [markdown]
+# ## GARCH 사양 선택(설계 변경 4): GARCH-BIC
+
+# %%
+GARCH_BIC_CANDS = tuple((f"{nm}-{dist}", vol, kw, dist) for nm, vol, kw in (
+    ("GARCH(1,1)", "GARCH", dict(p=1, o=0, q=1)), ("GARCH(2,1)", "GARCH", dict(p=2, o=0, q=1)),
+    ("GARCH(1,2)", "GARCH", dict(p=1, o=0, q=2)), ("GJR(1,1,1)", "GARCH", dict(p=1, o=1, q=1)),
+    ("FIGARCH(1,d,1)", "FIGARCH", dict(p=1, q=1))) for dist in ("t", "skewt"))
+
+
+def fit_garch_spec(x100: np.ndarray, vol: str, kw: dict, dist: str) -> dict:
+    """한 사양을 여러 척도로 적합해 수렴한 해 중 ×100 환산 로그우도 최대를 고른다(P8: 한 번 적합 금지)."""
+    from arch import arch_model
+    n, best, tried = len(x100), None, []
+    for k in GARCH_SCALES:
+        try:
+            r = arch_model(x100 * (k / 100), mean="Zero", vol=vol, dist=dist, **kw).fit(disp="off", show_warning=False)
+        except Exception as e:
+            tried.append(f"×{k} {type(e).__name__}")
+            continue
+        ll = float(r.loglikelihood) + n * np.log(k / 100)
+        tried.append(f"×{k} 플래그 {int(r.convergence_flag)} LL {ll:.1f}")
+        if int(r.convergence_flag) == 0 and np.isfinite(ll) and (best is None or ll > best["LL100"]):
+            best = {"LL100": ll, "scale": k, "params": r.params, "npar": len(r.params)}
+    if best is None:
+        return {"ok": False, "tried": tried}
+    best.update(ok=True, BIC=float(-2 * best["LL100"] + best["npar"] * np.log(n)), tried=tried)
+    return best
+
+
+def garch_spec_paths(dc: np.ndarray, spec: tuple, fit: dict, pos: np.ndarray, m: int) -> np.ndarray:
+    """고정 모수로 전체 계열에 걸어 예측 시점 pos(목표 창 첫 봉)마다 m봉 분산 경로(×100 척도 퍼센트²)."""
+    from arch import arch_model
+    _, vol, kw, dist = spec
+    k = fit["scale"]
+    start = int(pos.min()) - 1
+    am = arch_model(dc * k, mean="Zero", vol=vol, dist=dist, **kw)
+    var = am.forecast(params=fit["params"], horizon=m, start=start, method="analytic", reindex=False).variance.to_numpy()
+    return var[pos - 1 - start] * (100 / k) ** 2
+
+
+def garchbic_job(tk: str, quick: bool) -> dict:
+    t0 = time.time()
+    D = M.build_data(tk)
+    comp, dc, _ = M._compact(D)
+    HDs = {H: M.horizon_data(D, H) for H in M.HORIZONS_H}
+    inner = HDs[M.HORIZONS_H[0]]["inner"]
+    if any(HD["inner"] != inner for HD in HDs.values()):
+        raise AssertionError("구간마다 내부학습 경계가 다르다")
+    ic = int(np.searchsorted(D["grid"][comp], inner))
+    cands = GARCH_BIC_CANDS if not quick else GARCH_BIC_CANDS[:2]
+    fits = {c[0]: fit_garch_spec(dc[:ic] * 100, c[1], c[2], c[3]) for c in cands}
+    ok = {k_: v for k_, v in fits.items() if v["ok"]}
+    if not ok:
+        raise RuntimeError(f"{tk}: GARCH 사양 후보가 모두 수렴 실패")
+    chosen = min(ok, key=lambda k_: ok[k_]["BIC"])
+    spec = next(c for c in cands if c[0] == chosen)
+    # 게이트: GARCH(1,1)-t 후보의 arch 예측 경로 = 닫힌 식 경로(시점 정렬 확인)
+    G = garch_t_fit_robust(dc, ic)
+    HDg = HDs[60] if 60 in HDs else HDs[M.HORIZONS_H[0]]
+    pos_g = M._origin_pos(comp, HDg["j"], HDg["m"])[HDg["te"]][:200]
+    f11 = fit_garch_spec(dc[:ic] * 100, "GARCH", dict(p=1, o=0, q=1), "t")
+    a = garch_spec_paths(dc, GARCH_BIC_CANDS[0], f11, pos_g, HDg["m"])
+    b = M.garch_multistep(G, pos_g, HDg["m"])
+    gap = float(np.max(np.abs(a / b - 1)))
+    if gap > 1e-3:
+        raise AssertionError(f"{tk}: arch 예측 경로와 닫힌 식 경로가 다르다(최대 상대차 {gap:.3g})")
+    results = []
+    for H, HD in HDs.items():
+        S = M.Scorer(tk, HD)
+        j, te, va, m = HD["j"], HD["te"], HD["va"], HD["m"]
+        pos_all = M._origin_pos(comp, j, m)
+        rawv, _ = M.var_to_rv(garch_spec_paths(dc, spec, ok[chosen], pos_all[va], m), D["cfac"], j[va])
+        raw, _ = M.var_to_rv(garch_spec_paths(dc, spec, ok[chosen], pos_all[te], m), D["cfac"], j[te])
+        c = S.calib(rawv)
+        S.score(GARCH_BIC, raw, c=c, note=f"{chosen} · BIC 선택 · 무재적합")
+        results.append(dict(H=H, rows=S.rows, preds=S.preds, act=S.act.astype(np.float32), T=M._ns(HD["T"][te])))
+    table = [{"사양": k_, "수렴": v["ok"], "BIC": v.get("BIC", np.nan), "LL100": v.get("LL100", np.nan),
+              "척도": v.get("scale"), "시도": "; ".join(v["tried"])} for k_, v in fits.items()]
+    return dict(ticker=tk, chosen=chosen, table=table, gate_gap=gap, results=results, elapsed=time.time() - t0)
+
+
+def _garchbic_task(tk, quick):
+    f = PARTS / f"s0{'_quick' if quick else ''}" / "garchbic" / f"{tk}.pkl"
+    if f.exists():
+        return "skip", tk
+    res = garchbic_job(tk, quick)
+    _atomic_write(f, pickle.dumps(res))
+    return f"{res['elapsed']:.0f}s {res['chosen']} 게이트 {res['gate_gap']:.1e}", tk
 
 
 # %% [markdown]
@@ -1019,6 +1121,15 @@ def combine_seed(seed: int, tickers: list[str], quick: bool = False) -> dict:
                     S["preds"][nm] = R["preds"][nm]
             rows += [r for r in R["rows"] if r["모델"] in CPU_STOCH]
         metas.append(cs["meta"])
+        gb_f = PARTS / f"s0{'_quick' if quick else ''}" / "garchbic" / f"{tk}.pkl"
+        if not gb_f.exists():
+            raise RuntimeError(f"[시드 완전성 게이트] {tk}: GARCH-BIC 저장분이 없다(--family garchbic를 먼저 실행)")
+        gb = pickle.loads(gb_f.read_bytes())
+        for R in gb["results"]:
+            if not np.array_equal(R["T"], store[(tk, R["H"])]["T"]):
+                raise RuntimeError(f"[정렬 게이트] {tk} H={R['H']} GARCH-BIC 평가 시각이 다르다")
+            store[(tk, R["H"])]["preds"][GARCH_BIC] = R["preds"][GARCH_BIC]
+            rows += R["rows"]
         for H in M.HORIZONS_H:
             for nm in GPU_MODELS:
                 f = part_path("gpu", tk, seed, H, nm, quick)
@@ -1060,7 +1171,7 @@ def check_complete(store: dict, seed: int, tickers: list[str]) -> list[str]:
     for tk in tickers:
         for H in M.HORIZONS_H:
             have = set(store.get((tk, H), {}).get("preds", {}))
-            for nm in STOCHASTIC + CPU_DET + ("naive",):
+            for nm in STOCHASTIC + CPU_DET + (GARCH_BIC, "naive"):
                 if nm not in have:
                     miss.append(f"{tk}|{H}|{nm}")
     return miss
@@ -1247,7 +1358,7 @@ def measure_and_decide(tickers: list[str]) -> dict:
 # σ²_시드는 시드별 평균 손실차(시각 평균)의 시드 간 분산이다. 결정론 모델끼리는 σ²_시드 = 0이다.
 
 # %%
-SEQ = ("GARCH-t", "MS-GARCH", "TAR-GARCH", "GRU", "LSTM")
+SEQ = ("GARCH-t", "GARCH-BIC", "MS-GARCH", "TAR-GARCH", "GRU", "LSTM")
 PAR_FEAT = ("LightGBM", "XGBoost", "HistGBM", "GARCH+LightGBM", "Nystroem+Ridge")   # 커널 2종 제외(DECISION_EXCLUDED)
 PAR_DEEP = BLOCK_MODELS + tuple(FM_MODELS)
 GROUP_OF = {**{m: "순차" for m in SEQ}, **{m: "병렬(특징 기반)" for m in PAR_FEAT}, **{m: "병렬(딥러닝)" for m in PAR_DEEP}}
@@ -1256,7 +1367,7 @@ COMPARISONS = (("순차 − 병렬 전체", SEQ, PAR_FEAT + PAR_DEEP), ("순차 
                ("순차 − 병렬(딥러닝)", SEQ, PAR_DEEP), ("순환 신경망 − 병렬(딥러닝)", ("GRU", "LSTM"), PAR_DEEP))
 SCOPES = ("전체", "Q1", "Q2", "Q3", "Q4", "Q5")
 ALPHA = 0.05
-SHORT = {**M.SHORT, **X.SHORT, "KernelRidge-RBF": "KRR", "SVR-RBF": "SVR"} if hasattr(X, "SHORT") else dict(M.SHORT)
+SHORT = {**M.SHORT, **(X.SHORT if hasattr(X, "SHORT") else {}), "GARCH-BIC": "G-BIC"}
 
 
 def sname(m: str) -> str:
@@ -2003,7 +2114,7 @@ def main(argv=None) -> None:
     from report_header import study_universe
     ap = argparse.ArgumentParser()
     ap.add_argument("--family", required=True,
-                    choices=["selftest", "pi", "cpu", "gpu", "combine", "rmeasure", "report"])
+                    choices=["selftest", "pi", "cpu", "gpu", "garchbic", "combine", "rmeasure", "report", "interim"])
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--seeds", default="", help="combine·report용 시드 목록(쉼표). 비우면 결정 파일의 S")
     ap.add_argument("--models", default=",".join(GPU_MODELS))
@@ -2032,6 +2143,8 @@ def main(argv=None) -> None:
         hs = [int(h) for h in a.horizons.split(",")]
         tasks = [(tk, H, nm, a.seed, a.quick) for nm in a.models.split(",") for H in hs for tk in tickers]
         left = run_pool(tasks, _gpu_task, a.workers, f"GPU s{a.seed}", a.retries, kind="gpu")
+    elif a.family == "garchbic":
+        left = run_pool([(tk, a.quick) for tk in tickers], _garchbic_task, a.workers, "GARCH-BIC", a.retries, kind="cpu")
     elif a.family == "combine":
         for s in [int(x) for x in a.seeds.split(",")] if a.seeds else [a.seed]:
             save_seed(s, tickers, a.quick)
