@@ -4,13 +4,17 @@
 겹쳤고, 한쪽이 기록 파일을 통째로 커밋해 다른 세션의 커밋 전 행까지 자기 커밋에 넣었다. "한 작업 트리에
 한 세션" 규칙이 문서에만 있고 막는 장치가 없었기 때문이다. 이 도구는 그 규칙을 커밋 단계에서 강제한다.
 
-    python .githooks/records_guard.py claim            # 세션 시작: 이 작업 트리를 이 세션이 쓴다고 잠근다
+    python .githooks/records_guard.py claim --role service   # 세션 시작: 역할을 밝히고 이 작업 트리를 잠근다
     python .githooks/records_guard.py next --track service --summary "요청 요약"   # 잠금 안에서 번호 예약
     python .githooks/records_guard.py status           # 잠금 주인·트랙별 중복 번호
     python .githooks/records_guard.py release          # 세션 끝: 잠금 해제
 
 세션 = 명령을 실행한 프로세스의 조상 중 `claude` 또는 `codex` 프로세스(PID). 사람이 터미널에서 직접 하는
 커밋(조상에 에이전트 없음)은 잠금 검사를 하지 않는다. 잠금 주인 프로세스가 죽었으면 잠금은 무효다.
+
+역할(2026-10-18, AGENTS.md §1 "세션 역할"): service = `llm-agent` 트리, research = `stock` 트리, supervisor = 두 트리를
+읽기만 하는 점검 세션. 역할과 트리 브랜치가 맞지 않으면 claim을 거부하고, supervisor는 어떤 트리도 잠그지 못한다
+(변경은 해당 트랙 세션에 넘긴다). 2026-10-17~18에 점검 세션이 서비스 기록을 직접 써서 번호가 겹쳤던 것을 막는다.
 """
 
 from __future__ import annotations
@@ -33,6 +37,8 @@ TRACKS = {
     "service": {"chat": "chat_history.md", "state": "state.md", "prefix": "S"},
     "research": {"chat": "test/chat_history.md", "state": "test/state.md", "prefix": ""},
 }
+ROLE_BRANCH = {"service": "llm-agent", "research": "stock"}
+ROLES = (*ROLE_BRANCH, "supervisor")
 RECORD_FILES = {
     "chat_history.md", "state.md", "history.md", "process.md",
     "test/chat_history.md", "test/state.md", "test/history.md", "test/process.md",
@@ -101,19 +107,29 @@ def file_lock(root: Path):
             fcntl.flock(fh, fcntl.LOCK_UN)
 
 
-def claim(root: Path, force: bool = False) -> tuple[bool, str]:
+def branch(root: Path) -> str:
+    return subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=root, text=True).strip()
+
+
+def claim(root: Path, role: str, force: bool = False) -> tuple[bool, str]:
     me = agent_pid()
     if me is None:
         return False, "claude/codex 세션 안에서 실행해야 한다(사람의 직접 작업은 잠금이 필요 없다)"
+    if role == "supervisor":
+        return False, ("점검(supervisor) 세션은 작업 트리를 잠그지 않는다. 두 트리를 읽기만 하고, 기록·코드 변경은 "
+                       "해당 트랙 세션에 넘길 인계 프롬프트로 낸다(AGENTS.md §1 세션 역할).")
+    want = ROLE_BRANCH[role]
+    if branch(root) != want:
+        return False, f"역할 {role}은 {want} 브랜치 트리에서만 잠글 수 있다(이 트리: {branch(root)}, {root})"
     with file_lock(root):
         owner = lock_owner(root)
         if owner and int(owner["pid"]) != me and not force:
             return False, (f"다른 세션이 이 작업 트리를 쓰고 있다: {owner['comm']} PID {owner['pid']} "
                            f"(시작 {owner['claimed_at']}). 그 세션을 끝내거나 다른 작업 트리에서 시작하라.")
-        info = {"pid": me, "comm": _comm(me), "claimed_at": datetime.now().isoformat(timespec="seconds"),
+        info = {"pid": me, "comm": _comm(me), "role": role, "claimed_at": datetime.now().isoformat(timespec="seconds"),
                 "root": str(root)}
         (root / LOCK_NAME).write_text(json.dumps(info, ensure_ascii=False))
-    return True, f"잠금: {info['comm']} PID {me}"
+    return True, f"잠금: {role} 세션 {info['comm']} PID {me} ({root})"
 
 
 def release(root: Path) -> tuple[bool, str]:
@@ -142,6 +158,8 @@ def next_index(root: Path, track: str, summary: str, tool: str) -> tuple[bool, s
     owner = lock_owner(root)
     if me is None or not owner or int(owner["pid"]) != me:
         return False, "이 세션이 작업 트리 잠금을 갖고 있지 않다. 먼저 `records_guard.py claim`"
+    if owner.get("role") != track:
+        return False, f"이 세션의 역할({owner.get('role')})과 다른 트랙({track}) 번호는 받지 않는다"
     cfg = TRACKS[track]
     chat, state = root / cfg["chat"], root / cfg["state"]
     with file_lock(root):
@@ -180,8 +198,16 @@ def commit_errors(root: Path, staged: list[str]) -> list[str]:
             errors.append(f"기록 파일({', '.join(rec)})을 커밋하려면 이 세션이 작업 트리 잠금을 가져야 한다: "
                           "`python .githooks/records_guard.py claim`")
         elif int(owner["pid"]) != me:
-            errors.append(f"다른 세션({owner['comm']} PID {owner['pid']})이 이 작업 트리 잠금을 갖고 있다. "
+            errors.append(f"다른 세션({owner.get('role', '?')} {owner['comm']} PID {owner['pid']})이 이 작업 트리 잠금을 갖고 있다. "
                           "그 세션의 커밋 전 행까지 함께 커밋하게 되므로 막는다. 한 작업 트리에는 한 세션만 둔다.")
+        else:
+            # 병합 커밋은 상대 트랙이 이미 커밋한 기록을 정상적으로 가져오므로 다른 트랙 검사에서 뺀다.
+            git_dir = Path(subprocess.check_output(["git", "rev-parse", "--absolute-git-dir"], cwd=root, text=True).strip())
+            merging = (git_dir / "MERGE_HEAD").exists()
+            other = [] if merging else [p for p in rec if (p.startswith("test/")) != (owner.get("role") == "research")]
+            if other:
+                errors.append(f"{owner.get('role')} 세션이 다른 트랙 기록({', '.join(other)})을 커밋하려 한다. "
+                              "한 세션은 다른 트랙의 기록 파일을 고치지 않는다(AGENTS.md §1).")
     for cfg in TRACKS.values():
         for key in ("chat", "state"):
             path = cfg[key]
@@ -198,6 +224,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="기록 4종 충돌 방지 도구")
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("claim")
+    c.add_argument("--role", choices=ROLES, required=True, help="이 세션의 역할(AGENTS.md §1 세션 역할)")
     c.add_argument("--force", action="store_true", help="살아 있는 다른 주인의 잠금을 빼앗는다(사용자 지시 때만)")
     sub.add_parser("release")
     sub.add_parser("status")
@@ -208,14 +235,15 @@ def main() -> int:
     args = ap.parse_args()
     root = repo_root()
     if args.cmd == "claim":
-        ok, msg = claim(root, args.force)
+        ok, msg = claim(root, args.role, args.force)
     elif args.cmd == "release":
         ok, msg = release(root)
     elif args.cmd == "next":
         ok, msg = next_index(root, args.track, args.summary, args.tool or _comm(agent_pid() or 0) or "unknown")
     else:
         owner = lock_owner(root)
-        lines = [f"작업 트리 {root}", f"잠금 주인: {owner['comm']} PID {owner['pid']} ({owner['claimed_at']})" if owner else "잠금 주인: 없음",
+        lines = [f"작업 트리 {root} (브랜치 {branch(root)})",
+                 f"잠금 주인: {owner.get('role', '역할 미기재')} 세션 {owner['comm']} PID {owner['pid']} ({owner['claimed_at']})" if owner else "잠금 주인: 없음",
                  f"이 세션: {_comm(agent_pid() or 0) or '사람(에이전트 아님)'} PID {agent_pid()}"]
         for name, cfg in TRACKS.items():
             for key in ("chat", "state"):
