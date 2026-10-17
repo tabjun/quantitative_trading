@@ -290,6 +290,7 @@ class HistoricalFlowMart:
                     for column in CONTEXT_COLUMNS:
                         df[column] = 0.0
                     return df
+                # 텍스트 특징은 (ticker, KST 15분 라벨)별이다(2026-10-17). 마트 맥락은 시장 전체(MARKET) 행만 쓴다.
                 context = con.execute(
                     """
                     SELECT timestamp,
@@ -303,6 +304,7 @@ class HistoricalFlowMart:
                            text_regulation_count,
                            text_liquidity_count
                     FROM text_features_15m
+                    WHERE ticker = 'MARKET'
                     """
                 ).df()
         except duckdb.IOException:
@@ -767,15 +769,14 @@ class HistoricalFlowMart:
         shape_features = pd.DataFrame([bundle["shape"] for bundle in feature_bundles])
         factor_features = pd.DataFrame([bundle["factor"] for bundle in feature_bundles])
         context_features = pd.DataFrame([bundle["context"] for bundle in feature_bundles])
-        db_path = Path(self.config.mart_db_path)
+        # 서비스 DB는 뉴스·국면 경계·판단 로그 등 다른 테이블과 공유하므로, 열리지 않으면 파일을 지우고
+        # 새로 만들지 않고 그대로 중단한다(S188 지적 7). 손상 여부 확인과 복구는 사람이 한다.
         try:
             con_ctx = duckdb.connect(self.config.mart_db_path)
         except duckdb.IOException as exc:
-            if "not a valid DuckDB database file" not in str(exc):
-                raise
-            if db_path.exists():
-                db_path.unlink()
-            con_ctx = duckdb.connect(self.config.mart_db_path)
+            raise RuntimeError(
+                f"마트 DB를 열 수 없어 중단한다(파일은 보존): {self.config.mart_db_path} ({exc})"
+            ) from exc
 
         with con_ctx as con:
             for relation_name in [FEATURE_TABLE, SHAPE_TABLE, FACTOR_TABLE, CONTEXT_TABLE]:
