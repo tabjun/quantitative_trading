@@ -1103,7 +1103,7 @@ def measure_and_decide(tickers: list[str]) -> dict:
     allp = eb_shrink_R(seed_error_table(stores, STOCHASTIC, STOCHASTIC + CPU_DET))
     allp = allp[allp["A"] != allp["B"]]
     allp.to_csv(RES / f"{STEM}_seed_error_ratio_allpairs.csv", index=False)
-    fig_R(t, R90, S, IMG / f"{STEM}_fig1_seed_error_ratio.png")
+    fig_R(t, R90, S, IMG / f"{STEM}_fig2_seed_error_ratio.png")
     dec = {"R_중앙": float(t["R"].median()), "R90": R90, "R_최대": float(t["R"].max()), "S": S, "근거": why,
            "쌍수": len(t), "축소가중": t.attrs["축소가중"], "R_원시_중앙": float(t["R_원시"].median()),
            "R_원시_90": float(t["R_원시"].quantile(.9)), "결정시각": time.strftime("%F %T"),
@@ -1453,6 +1453,94 @@ def fig_top5(tt: pd.DataFrame, path: Path, S: int) -> None:
     plt.close(fig)
 
 
+def data_target_check(s0: dict, path: Path) -> str:
+    """0절: 타깃(RV)과 이번 회차에 바뀐 정지 확률 π를 점검한다(AGENTS.md 2.9h ①②를 이번 변경분에 다시 적용).
+    타깃·손실 정의는 26c와 같고, 바뀐 것은 π(전체 재적합 분류기 → 내부 분류기)뿐이라 π가 실제 정지 비율을 얼마나 따라가는지 본다."""
+    from report_header import describe_markdown
+    z27 = np.load(FM_SRC) if FM_SRC.exists() else None
+    rows, rv_desc, pi_desc = [], {}, {}
+    for H in M.HORIZONS_H:
+        acts, pis = [], []
+        for (tk, h), S in sorted(s0.items()):
+            if h != H:
+                continue
+            a, pi = S["act"].astype(float), S["pi"].astype(float)
+            p27 = z27[f"{tk}|{H}|정지확률"].astype(float) if z27 is not None and f"{tk}|{H}|정지확률" in z27.files else np.full(len(a), np.nan)
+            rows.append({"H": H, "종목": tk, "실제정지": float(np.mean(a == 0)), "π28": float(pi.mean()), "π27": float(np.nanmean(p27)),
+                         "평가시각": len(a)})
+            acts.append(a); pis.append(pi)
+        rv_desc[hlabel(H)] = pd.Series(np.concatenate(acts) * 100).describe()
+        pi_desc[hlabel(H)] = pd.Series(np.concatenate(pis)).describe()
+    d = pd.DataFrame(rows)
+    d.to_csv(RES / f"{STEM}_data_target_check.csv", index=False)
+    fig, axes = plt.subplots(1, len(M.HORIZONS_H), figsize=(19, 4.2))
+    for ax, H in zip(axes, M.HORIZONS_H):
+        g = d[d["H"] == H]
+        mx = max(0.02, float(np.nanmax(g[["실제정지", "π28", "π27"]].to_numpy())) * 1.1)
+        ax.plot([0, mx], [0, mx], color=MUTED, lw=0.8, ls=":")
+        ax.scatter(g["실제정지"], g["π27"], s=30, facecolor="white", edgecolor="#8a6b2e", label="27번 π(전체 재적합 분류기)")
+        ax.scatter(g["실제정지"], g["π28"], s=30, color="#2a78d6", label="28번 π(내부 분류기, 무재적합)")
+        ax.set_xlim(0, mx); ax.set_ylim(0, mx)
+        ax.set_title(hlabel(H), fontsize=12, loc="left", fontweight="bold")
+        ax.set_xlabel("평가 기간 실제 정지 비율(RV = 0)")
+    axes[0].set_ylabel("평가 기간 평균 정지 확률 π")
+    axes[0].legend(fontsize=8, loc="upper left")
+    fig.tight_layout(); fig.savefig(path, dpi=300); plt.close(fig)
+    m = d.groupby("H")[["실제정지", "π28", "π27"]].mean()
+    L = ["- **이번 회차에 바뀐 것은 정지 확률 π뿐이다.** 타깃(다음 H분 실현변동성 RV)·손실(QLIKE)·두 부분 모형 정의는 26c와 같다. "
+         "26c·27은 π를 학습 구간 전체로 재적합한 분류기로 냈고, 28번은 내부학습 구간 분류기 하나로 보정용·평가용 π를 모두 낸다(random_state 0, 모든 모델·시드 공통).",
+         "- **점검 ① 타깃 분포**: RV = 0(가격 정지)은 관측 실패가 아니라 실제로 가격이 한 칸도 움직이지 않은 구간이다(26c 2.9h 점검). "
+         "QLIKE는 실제값 0에서도 유한하고, 예측값이 0이면 발산하므로 π 상한 0.99와 극단 예측 필터를 그대로 둔다(②).",
+         "", "| 구간 | 실제 정지 비율(종목 평균) | 28번 π 평균 | 27번 π 평균 | 28번 π − 실제 |", "| :--- | ---: | ---: | ---: | ---: |"]
+    for H, r in m.iterrows():
+        L.append(f"| {hlabel(H)} | {r['실제정지']:.4f} | {r['π28']:.4f} | "
+                 + ("해당 없음(27번 파일 없음)" if not np.isfinite(r['π27']) else f"{r['π27']:.4f}") + f" | {r['π28'] - r['실제정지']:+.4f} |")
+    under = d[d["π28"] < d["실제정지"]].groupby("H").size()
+    skip = d[(d["π28"] == 0) & (d["실제정지"] > 0)]
+    L += ["", "- **π 과소예측(26c부터 이어진 한계, 이번 회차 버그 아님)**: 평가 기간 실제 정지 비율보다 π가 낮은 종목 수 = "
+          + ", ".join(f"{hlabel(H)} {int(under.get(H, 0))}/{int((d['H'] == H).sum())}" for H in M.HORIZONS_H)
+          + ". 정지 비율이 학습 기간보다 평가 기간에 크게 늘어난 탓이다(26b EDA: 15분 내부검증 11.3% → 평가 26.7%).",
+          "- **π = 0인데 실제 정지가 있는 칸(내부학습 정지 표본이 부족해 분류기를 생략)**: "
+          + (", ".join(f"{hlabel(r.H)} {r.종목}(실제 {r.실제정지:.3f})" for r in skip.itertuples()) or "없음")
+          + ". 이 칸의 두 부분 모형은 사실상 크기 모형만 쓴다. 모든 로그 타깃 모델이 같은 π를 쓰므로 모델 간 비교에는 공통으로 작용한다."]
+    L += ["", f"![데이터·타깃 점검]({os.path.relpath(path, RES)})", "",
+          "- **그림 읽는 법**: 점 하나가 종목 하나다. 가로 = 평가 기간 실제 정지 비율, 세로 = 평균 π. 대각선 위면 정지를 많게, 아래면 적게 예측한다. "
+          "파랑(28번)과 갈색 빈 점(27번)의 차이가 무재적합으로 바뀐 몫이다. 4·12시간은 정지가 거의 없어 원점에 모인다.",
+          "", "**타깃 RV(%) describe(평가 시점, 20종목 합침)**", "",
+          describe_markdown(pd.DataFrame(rv_desc).T, "구간"), "",
+          "**28번 정지 확률 π describe(평가 시점, 20종목 합침)**", "",
+          describe_markdown(pd.DataFrame(pi_desc).T, "구간")]
+    return "\n".join(L)
+
+
+def fig_calibration(seeds, path: Path) -> None:
+    """시드 0의 모델별 보정 계수 c₊ 분포(종목 × 구간 100칸). CPU 모델은 cpu_meta, GPU 모델은 gpu_meta에서 읽는다."""
+    vals: dict = {}
+    cm = pd.read_csv(_seed_file(0, "cpu_meta.csv"))
+    for col in cm.columns:
+        if col.endswith("_calib_pos") or (col.endswith("_calib") and col.split("_h")[0] in CPU_DET):
+            nm = col.split("_h")[0]
+            vals.setdefault(nm, []).extend(cm[col].dropna().tolist())
+    gm = pd.read_csv(_seed_file(0, "gpu_meta.csv"))
+    for nm, g in gm.groupby("모델"):
+        vals[nm] = g["보정계수"].dropna().tolist()
+    order = [m for m in ALL_MODELS if m in vals and m != "naive"]
+    fig, ax = plt.subplots(figsize=(13, 4.6))
+    bp = ax.boxplot([vals[m] for m in order], patch_artist=True, widths=0.6, showfliers=True)
+    for patch, m in zip(bp["boxes"], order):
+        patch.set_facecolor(GROUP_COLOR[GROUP_OF.get(m, "기준선")]); patch.set_alpha(0.55)
+    ax.axhline(1, color=MUTED, lw=1, ls=":")
+    ax.set_yscale("log")
+    from matplotlib.ticker import FixedLocator, FormatStrFormatter, NullLocator
+    ax.yaxis.set_major_locator(FixedLocator([0.25, 0.5, 1, 2, 4, 8]))
+    ax.yaxis.set_major_formatter(FormatStrFormatter("%g"))
+    ax.yaxis.set_minor_locator(NullLocator())
+    ax.set_xticks(range(1, len(order) + 1), [sname(m) for m in order], rotation=45, ha="right", fontsize=9)
+    ax.set_ylabel("보정 계수 c₊(로그 축, 시드 0)")
+    ax.grid(axis="y", color=GRID)
+    fig.tight_layout(); fig.savefig(path, dpi=300); plt.close(fig)
+
+
 def poster_numbers(tt: pd.DataFrame, sp: pd.DataFrame, S: int) -> str:
     """포스터 6차 요청문에 들어가는 숫자를 결과 표에서 직접 뽑는다(손으로 옮기다 틀리는 것을 막는다).
     27번 포스터의 결과 1(가장 요동칠 때 병렬 딥러닝 비교), 결과 2·표 3(묶음 검정 칸 수), 결론 1(칸별 1위)에 대응한다."""
@@ -1522,10 +1610,14 @@ def write_report(tickers: list[str]) -> None:
     R27["seqpar"].to_csv(RES / f"{STEM}_ref27_seqpar_dm.csv", index=False)
     gm = gpu_meta_all(seeds)
     gm.to_csv(RES / f"{STEM}_gpu_meta_all_seeds.csv", index=False)
-    figs = {"r": IMG / f"{STEM}_fig1_seed_error_ratio.png", "proc": IMG / f"{STEM}_fig2_procedure.png",
-            "rank": IMG / f"{STEM}_fig3_ranking.png", "sp": IMG / f"{STEM}_fig4_seqpar.png",
-            "rg": IMG / f"{STEM}_fig5_regime_best.png", "vs": IMG / f"{STEM}_fig6_vs27_rank.png",
-            "top5": IMG / f"{STEM}_fig7_top5_by_horizon.png", "lines": IMG / f"{STEM}_fig8_regime_lines.png"}
+    # 그림 번호 = 보고서에 나오는 순서(1 데이터·타깃 점검 → 10 27번 대비)
+    figs = {"data": IMG / f"{STEM}_fig1_data_target.png", "r": IMG / f"{STEM}_fig2_seed_error_ratio.png",
+            "proc": IMG / f"{STEM}_fig3_procedure.png", "cal": IMG / f"{STEM}_fig4_calibration.png",
+            "rank": IMG / f"{STEM}_fig5_ranking.png", "top5": IMG / f"{STEM}_fig6_top5_by_horizon.png",
+            "sp": IMG / f"{STEM}_fig7_seqpar.png", "rg": IMG / f"{STEM}_fig8_regime_best.png",
+            "lines": IMG / f"{STEM}_fig9_regime_lines.png", "vs": IMG / f"{STEM}_fig10_vs27_rank.png"}
+    data_md = data_target_check(stores[0], figs["data"])
+    fig_calibration(seeds, figs["cal"])
     fig_procedure(gm, figs["proc"]); fig_ranking(tt, figs["rank"]); fig_seqpar(sp, figs["sp"])
     fig_regime(tt, figs["rg"]); fig_vs27(tt, R27["ties"], figs["vs"])
     fig_top5(tt, figs["top5"], S); fig_regime_lines(tt, figs["lines"], S)
@@ -1543,6 +1635,10 @@ def write_report(tickers: list[str]) -> None:
     e("")
     e(_design_section())
     e(standard_header(tickers))
+    e("")
+    e("## 0. 데이터·타깃 점검(이전 회차 EDA와 같은 방식, 이번 회차에 바뀐 것 중심)")
+    e("")
+    e(data_md)
     e("")
     e("## 1. 시드 수 결정(시범 실행 시드 0~4)")
     e("")
@@ -1569,12 +1665,25 @@ def write_report(tickers: list[str]) -> None:
       "6종은 상한 1,000에서 1~48%).")
     if not gm.empty:
         cap = gm[gm["상한도달"].isin([True, False])].groupby("모델")["상한도달"].mean()
-        e("- 상한 도달 비율: " + ", ".join(f"{sname(m)} {v:.1%}" for m, v in cap.items()) +
+        e("")
+    e(f"![보정 계수]({rel(figs['cal'])})")
+    e("")
+    e("- **그림 읽는 법**: 모델마다 (종목, 구간) 100칸의 보정 계수 c₊(시드 0)다. 무재적합이라 보정 계수를 추정한 모델과 평가 예측을 낸 모델이 같다. "
+      "로그 타깃 모델은 역변환 편향(Jensen) 때문에 1보다 큰 값이 정상이고, 1에서 한 자릿수 배 넘게 벗어나거나 칸마다 크게 흩어지면 적합 이상을 의심한다. "
+      "GARCH 계열은 분산을 직접 예측해 1 근처가 정상이다.")
+    e("- 상한 도달 비율: " + ", ".join(f"{sname(m)} {v:.1%}" for m, v in cap.items()) +
           ". ModernTCN·S-Mamba는 저자 학습 루프가 단계 수를 돌려주지 않아 해당 없음(기록 안 함)이다.")
     e("")
     e("## 3. 예측 구간별 순위(전체 기간)")
     e("")
     e(f"![순위]({rel(figs['rank'])})")
+    e("")
+    e("- **그림 읽는 법**: 예측 구간마다 모든 모델의 1위 대비 QLIKE 격차(시드 평균, 막대 = 시드 표준편차, 가로축 대칭 로그)다. 색 = 처리 방식, ○ = 1위와 구분 안 됨, × = 1위보다 유의하게 나쁨.")
+    e("")
+    e(f"![상위 5개]({rel(figs['top5'])})")
+    e("")
+    e("- **그림 읽는 법(포스터 그림 2 자리, 27d 그림 5와 같은 형식)**: 위는 전체 기간, 아래는 가장 요동칠 때(Q5)의 예측 구간별 상위 5개 모델이다. "
+      "가로축은 1위와의 QLIKE 차이, 색은 처리 방식, 채운 점은 1위와 구분 안 됨, 빈 점은 1위보다 유의하게 나쁨이다. 점선 아래는 5위 밖 병렬 딥러닝 중 가장 나은 모델이다.")
     e("")
     e("- **검정**: 비교 집단은 구간 1위 모델 대 나머지 각 모델, 시각마다 20종목 평균 QLIKE의 차이(대응 표본)다. H0: 두 모델의 기대 QLIKE가 "
       "같다. H1: 같지 않다(양측). 표준오차는 SE_전체(HAC + 시드 항), 정규 근사 p에 모델 전체 Holm 보정. H0를 기각하지 못하면 \"1위와 구분 안 됨\"(동률), "
@@ -1616,11 +1725,7 @@ def write_report(tickers: list[str]) -> None:
     e(f"![국면별 1위]({rel(figs['rg'])})")
     e("")
     e("- 칸마다 1위 모델(색 = 묶음)과 1위와 구분되지 않는 모델 수다. 검정은 3절과 같고 범위만 국면으로 바꿨다.")
-    e("")
-    e(f"![상위 5개]({rel(figs['top5'])})")
-    e("")
-    e("- **그림 읽는 법(포스터 그림 2 자리, 27d 그림 5와 같은 형식)**: 위는 전체 기간, 아래는 가장 요동칠 때(Q5)의 예측 구간별 상위 5개 모델이다. "
-      "가로축은 1위와의 QLIKE 차이, 색은 처리 방식, 채운 점은 1위와 구분 안 됨, 빈 점은 1위보다 유의하게 나쁨이다. 점선 아래는 5위 밖 병렬 딥러닝 중 가장 나은 모델이다.")
+
     e("")
     e(f"![국면별 처리 방식]({rel(figs['lines'])})")
     e("")
