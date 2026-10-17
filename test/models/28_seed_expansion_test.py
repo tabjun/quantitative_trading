@@ -1360,6 +1360,99 @@ def fig_vs27(tt: pd.DataFrame, t27: pd.DataFrame, path: Path) -> None:
     fig.tight_layout(); fig.savefig(path, dpi=300); plt.close(fig)
 
 
+GROUP_ORDER = ("순차", "병렬(특징 기반)", "병렬(딥러닝)")
+INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e5e5e0"
+GROUP_LABEL = ["순차(GARCH·GRU·LSTM)", "병렬 특징 기반(트리·커널 근사)", "병렬 딥러닝(어텐션·합성곱·파운데이션)"]
+
+
+def fig_regime_lines(tt: pd.DataFrame, path: Path, S: int) -> None:
+    """포스터 그림 3 자리(27d fig1b와 같은 형식): 구간마다 처리 방식 묶음별 가장 나은 모델의 1위 대비 격차를 국면 순서로 잇는다."""
+    Hs = list(M.HORIZONS_H)
+    fig, axes = plt.subplots(1, len(Hs), figsize=(19, 5.6))
+    x = np.arange(len(SCOPES) - 1)
+    for ax, H in zip(axes, Hs):
+        for grp in GROUP_ORDER:
+            ys, tie = [], []
+            for sc in SCOPES[1:]:
+                g = tt[(tt["H"] == H) & (tt["범위"] == sc) & tt["모델"].map(GROUP_OF).eq(grp)]
+                ys.append(max(float(g["평균차"].min()), 0.0))
+                tie.append(bool(g["동률"].any()))
+            ax.plot(x, ys, color=GROUP_COLOR[grp], lw=2.4, zorder=2)
+            for xi, yi, ti in zip(x, ys, tie):
+                ax.scatter(xi, yi, s=70, zorder=3, color=GROUP_COLOR[grp] if ti else "white",
+                           edgecolor=GROUP_COLOR[grp], linewidth=2)
+        ax.axhline(0, color=MUTED, lw=1)
+        ax.set_xticks(x, ["Q1\n잔잔", "Q2", "Q3", "Q4", "Q5\n요동"])
+        ax.set_title(hlabel(H), fontsize=13, loc="left", color=INK, fontweight="bold")
+        ax.grid(axis="y", color=GRID)
+        for s_ in ("top", "right"):
+            ax.spines[s_].set_visible(False)
+    fig.supylabel(f"1위 모델 대비 QLIKE 격차(0 = 그 묶음의 모델이 1위, 시드 {S}개 평균)", fontsize=11.5, x=0.0)
+    handles = [plt.Line2D([], [], color=GROUP_COLOR[g_], lw=2.4, marker="o", markersize=8, label=lb)
+               for g_, lb in zip(GROUP_ORDER, GROUP_LABEL)]
+    handles += [plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=8,
+                           label="채운 점 = 그 묶음에 1위와 구분 안 되는 모델이 있음(시드 항 포함 검정, Holm p ≥ 0.05)"),
+                plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=8, markerfacecolor="white",
+                           label="빈 점 = 그 묶음 모델이 모두 1위보다 유의하게 나쁨")]
+    fig.legend(handles=handles, loc="lower center", ncol=3, frameon=False, fontsize=10.5, bbox_to_anchor=(0.5, -0.02))
+    fig.tight_layout(rect=(0, 0.1, 1, 1))
+    fig.savefig(path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+
+def fig_top5(tt: pd.DataFrame, path: Path, S: int) -> None:
+    """포스터 그림 2 자리(27d fig5와 같은 형식): 예측 구간별 상위 5개(위 전체 기간, 아래 가장 요동 Q5)."""
+    Hs = list(M.HORIZONS_H)
+    rows = (("전체", "전체 기간"), ("Q5", "가장 요동칠 때(Q5)"))
+    fig, axes = plt.subplots(len(rows), len(Hs), figsize=(25, 6.3))
+    for r, (sc, rlab) in enumerate(rows):
+        for c, H in enumerate(Hs):
+            ax = axes[r, c]
+            g = tt[(tt["H"] == H) & (tt["범위"] == sc) & (tt["모델"] != "naive")].sort_values("평균QLIKE").reset_index(drop=True)
+            g["등수"] = np.arange(1, len(g) + 1)
+            g["격차"] = g["평균QLIKE"] - g["평균QLIKE"].iloc[0]
+            deep = g[g["모델"].map(GROUP_OF).eq("병렬(딥러닝)")].head(1)
+            extra = deep if len(deep) and int(deep["등수"].iloc[0]) > 5 else deep.iloc[0:0]
+            items = list(g.head(5).itertuples()) + list(extra.itertuples())
+            ys = np.arange(len(items))[::-1].astype(float)
+            if len(extra):
+                ys[-1] -= 0.6
+                ax.axhline(ys[-1] + 0.8, color=MUTED, lw=0.8, ls=(0, (3, 3)))
+            xmax = max(float(it.격차) for it in items) * 1.45 or 1e-3
+            for y, it in zip(ys, items):
+                col = GROUP_COLOR[GROUP_OF[it.모델]]
+                v = max(float(it.격차), 0.0)
+                ax.plot([0, v], [y, y], color=col, lw=2.2, alpha=0.6, zorder=1)
+                ax.scatter(v, y, s=80, zorder=3, color=col if it.동률 else "white", edgecolor=col, linewidth=2.2)
+                lab = "1위" if it.등수 == 1 else (f"+{v:.4f}" if v < 0.001 else f"+{v:.3f}")
+                ax.text(v + xmax * 0.05, y, lab, va="center", fontsize=10.5, color=INK)
+            ax.set_yticks(ys, [f"{it.등수}. {it.모델}" for it in items], fontsize=11.5)
+            for tl, it in zip(ax.get_yticklabels(), items):
+                tl.set_color(GROUP_COLOR[GROUP_OF[it.모델]])
+            ax.set_xlim(-xmax * 0.03, xmax)
+            ax.set_ylim(min(ys) - 0.6, max(ys) + 0.6)
+            ax.grid(axis="x", color=GRID)
+            ax.tick_params(axis="y", length=0)
+            ax.tick_params(axis="x", labelsize=9.5)
+            for s_ in ("top", "right", "left"):
+                ax.spines[s_].set_visible(False)
+            if r == 0:
+                ax.set_title(hlabel(H), fontsize=15, loc="left", color=INK, fontweight="bold", pad=12)
+            if c == 0:
+                ax.annotate(rlab, xy=(-0.78, 0.5), xycoords="axes fraction", rotation=90, va="center", ha="center",
+                            fontsize=14, fontweight="bold", color=INK)
+    fig.supxlabel(f"1위 모델 대비 QLIKE 격차(0 = 1위, 작을수록 좋음, 시드 {S}개 평균, 칸마다 가로축 다름)", fontsize=12.5)
+    handles = [plt.Line2D([], [], color=GROUP_COLOR[g_], lw=0, marker="o", markersize=10, label=lb)
+               for g_, lb in zip(GROUP_ORDER, GROUP_LABEL)]
+    handles += [plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=10, label="채운 점 = 1위와 통계적으로 구분 안 됨(시드 항 포함, Holm p ≥ 0.05)"),
+                plt.Line2D([], [], color=MUTED, lw=0, marker="o", markersize=10, markerfacecolor="white", label="빈 점 = 1위보다 유의하게 나쁨"),
+                plt.Line2D([], [], color=MUTED, lw=0.8, ls=(0, (3, 3)), label="점선 아래 = 5위 밖 병렬 딥러닝 중 가장 나은 모델")]
+    fig.legend(handles=handles, loc="lower center", ncol=3, frameon=False, fontsize=12, bbox_to_anchor=(0.5, -0.1))
+    fig.tight_layout(rect=(0.015, 0.0, 1, 1), h_pad=2.5, w_pad=5.5)
+    fig.savefig(path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+
 def _design_section() -> str:
     from report_header import render_design_section
     return render_design_section(__file__)
@@ -1398,9 +1491,11 @@ def write_report(tickers: list[str]) -> None:
     gm.to_csv(RES / f"{STEM}_gpu_meta_all_seeds.csv", index=False)
     figs = {"r": IMG / f"{STEM}_fig1_seed_error_ratio.png", "proc": IMG / f"{STEM}_fig2_procedure.png",
             "rank": IMG / f"{STEM}_fig3_ranking.png", "sp": IMG / f"{STEM}_fig4_seqpar.png",
-            "rg": IMG / f"{STEM}_fig5_regime_best.png", "vs": IMG / f"{STEM}_fig6_vs27_rank.png"}
+            "rg": IMG / f"{STEM}_fig5_regime_best.png", "vs": IMG / f"{STEM}_fig6_vs27_rank.png",
+            "top5": IMG / f"{STEM}_fig7_top5_by_horizon.png", "lines": IMG / f"{STEM}_fig8_regime_lines.png"}
     fig_procedure(gm, figs["proc"]); fig_ranking(tt, figs["rank"]); fig_seqpar(sp, figs["sp"])
     fig_regime(tt, figs["rg"]); fig_vs27(tt, R27["ties"], figs["vs"])
+    fig_top5(tt, figs["top5"], S); fig_regime_lines(tt, figs["lines"], S)
     rel = lambda p: os.path.relpath(p, RES)
     rt = pd.read_csv(RES / f"{STEM}_seed_error_ratio.csv")
     L: list[str] = []
@@ -1488,6 +1583,16 @@ def write_report(tickers: list[str]) -> None:
     e("")
     e("- 칸마다 1위 모델(색 = 묶음)과 1위와 구분되지 않는 모델 수다. 검정은 3절과 같고 범위만 국면으로 바꿨다.")
     e("")
+    e(f"![상위 5개]({rel(figs['top5'])})")
+    e("")
+    e("- **그림 읽는 법(포스터 그림 2 자리, 27d 그림 5와 같은 형식)**: 위는 전체 기간, 아래는 가장 요동칠 때(Q5)의 예측 구간별 상위 5개 모델이다. "
+      "가로축은 1위와의 QLIKE 차이, 색은 처리 방식, 채운 점은 1위와 구분 안 됨, 빈 점은 1위보다 유의하게 나쁨이다. 점선 아래는 5위 밖 병렬 딥러닝 중 가장 나은 모델이다.")
+    e("")
+    e(f"![국면별 처리 방식]({rel(figs['lines'])})")
+    e("")
+    e("- **그림 읽는 법(포스터 그림 3 자리, 27d 그림 1b와 같은 형식)**: 국면(Q1 가장 잔잔 → Q5 가장 요동)마다 처리 방식 묶음별로 가장 나은 모델이 "
+      "1위와 얼마나 차이 나는지다. 0이면 그 묶음의 모델이 1위다.")
+    e("")
     e("## 6. 27번과의 차이")
     e("")
     e(f"![27번 대비 순위]({rel(figs['vs'])})")
@@ -1510,6 +1615,12 @@ def write_report(tickers: list[str]) -> None:
     e("- KernelRidge-RBF·SVR-RBF는 학습 데이터를 최근 14,188행·8,000행만 잘라 써서 공정 비교가 성립하지 않아 이번 회차에서 "
       "적합하지 않았다(설계 변경, 2026-10-15 사용자 결정). 커널 계열은 학습 데이터 전체를 쓰는 Nystroem+Ridge가 대표한다. "
       "27번 대비 순위 비교에서도 두 모델을 뺐다.")
+    e("- **전처리 통계 범위(2026-10-17 적대적 리뷰, 서비스 트랙 S188에서 확인)**: 26c에서 물려받은 주기 스케일(`build_from_close`, "
+      "`tr_bar = grid < 외부 분할`)과 GRU·LSTM 입력 표준화(`make_sequences`)가 외부 분할(2025-11-11) 이전 전체로 통계를 잡는다. "
+      "그래서 내부검증 15%(학습률 선택·보정 계수 추정에 쓰는 구간)가 전처리 통계에 들어간다. 외부 평가 구간은 쓰지 않으므로 평가 누설은 아니다. "
+      "주기 스케일은 모든 모델이 같이 쓰므로 영향은 공통이고, 내부검증 기반 선택(학습률·보정 계수)이 약간 낙관적일 수 있다. "
+      "트리·커널 근사의 특징 표준화와 블록 입력 신경망의 타깃 표준화는 내부학습 구간까지만 쓴다. 포스터 일정상 28번은 이 설계로 완주했고, "
+      "수정(전처리 통계를 내부학습 구간으로 한정)은 29번 재학습 설계에 반영한다.")
     e("- 무재적합이라 평가 예측 모델이 학습 구간 끝 15%를 학습하지 않는다(입력 창으로는 본다). 27번보다 모든 학습 모델이 같은 정도로 불리하다.")
     e("- 학습률은 시드 0에서 골라 고정했다. 시드 0은 자기 검증 구간에서 고른 학습률을 쓰므로 미세하게 유리할 수 있다.")
     e("- 시드는 같은 데이터·설정 안의 학습 난수만 다룬다. 분할 시점, 하이퍼파라미터 선택, 평가 기간 선택의 변동은 다루지 않는다(Bouthillier 외 2021).")
